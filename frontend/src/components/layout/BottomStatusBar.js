@@ -302,6 +302,21 @@ const BottomStatusBar = () => {
           {/* Spacer */}
           <Box sx={{ flexGrow: 1 }} />
 
+          {/* Copyright Notice */}
+          <Box sx={{ display: 'flex', alignItems: 'center', mr: 3 }}>
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                fontWeight: 400,
+                fontSize: '0.65rem',
+                color: theme.bottomBarColor,
+                opacity: 0.7
+              }}
+            >
+              © 2025 Enabled Enterprises LLC
+            </Typography>
+          </Box>
+
           {/* UTC Clock */}
           <Box sx={{ display: 'flex', alignItems: 'center', mr: 3 }}>
             <Typography 

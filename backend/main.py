@@ -1,3 +1,10 @@
+"""
+OpsConductor - Enterprise Automation Orchestration Platform
+Copyright © 2025 Enabled Enterprises LLC. All rights reserved.
+
+Licensed under the MIT License.
+"""
+
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -24,7 +31,7 @@ Base.metadata.create_all(bind=engine)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print("🚀 ENABLEDRM Platform starting up...")
+    print("🚀 OpsConductor Platform starting up...")
     
     # Initialize cache service
     from app.shared.infrastructure.cache import cache_service
@@ -32,10 +39,10 @@ async def lifespan(app: FastAPI):
     
     yield
     # Shutdown
-    print("🛑 ENABLEDRM Platform shutting down...")
+    print("🛑 OpsConductor Platform shutting down...")
 
 app = FastAPI(
-    title="ENABLEDRM Universal Automation Orchestration Platform",
+    title="OpsConductor Enterprise Automation Orchestration Platform",
     description="Job-centric automation platform for orchestrating tasks across any type of target system",
     version="1.0.0",
     lifespan=lifespan,

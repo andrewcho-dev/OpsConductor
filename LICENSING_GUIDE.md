@@ -160,5 +160,5 @@ This licensing guide should be reviewed and updated:
 
 ---
 
-**Last Updated**: January 2024  
-**Next Review**: January 2025
+**Last Updated**: January 2025  
+**Next Review**: January 2026

@@ -184,6 +184,23 @@ const LoginScreen = () => {
             </Button>
           </Box>
         </Paper>
+        
+        {/* Copyright Footer */}
+        <Box
+          sx={{
+            mt: 4,
+            textAlign: 'center',
+            color: '#666',
+            fontSize: '0.875rem',
+          }}
+        >
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            © 2025 Enabled Enterprises LLC. All rights reserved.
+          </Typography>
+          <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+            OpsConductor Enterprise Automation Platform
+          </Typography>
+        </Box>
       </Box>
     </Container>
   );

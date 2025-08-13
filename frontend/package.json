@@ -1,7 +1,10 @@
 {
-  "name": "enabledrm-frontend",
+  "name": "opsconductor-frontend",
   "version": "1.0.0",
-  "description": "ENABLEDRM Universal Automation Orchestration Platform Frontend",
+  "description": "OpsConductor Enterprise Automation Orchestration Platform Frontend",
+  "author": "Enabled Enterprises LLC",
+  "copyright": "Copyright © 2025 Enabled Enterprises LLC. All rights reserved.",
+  "license": "MIT",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.11.1",
