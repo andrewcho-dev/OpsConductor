@@ -206,11 +206,12 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
     <Dialog 
       open={open} 
       onClose={onClose} 
-      maxWidth="md" 
+      maxWidth="sm" 
       fullWidth
       PaperProps={{
         sx: { 
-          maxHeight: '90vh',
+          maxHeight: '80vh',
+          width: '500px',
           '& .MuiDialogContent-root': {
             padding: '16px 24px',
           }
@@ -297,7 +298,7 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
               }}
             >
               {selectedTargets.length === 0 
-                ? 'Select Targets (Systems, Servers, Devices)' 
+                ? 'Select Targets' 
                 : `${selectedTargets.length} target${selectedTargets.length > 1 ? 's' : ''} selected`
               }
             </Button>
@@ -368,7 +369,7 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
               }}
             >
               {formData.actions.length === 0 
-                ? 'Configure Actions (Commands, Scripts, APIs, Files, etc.)' 
+                ? 'Configure Actions' 
                 : `${formData.actions.length} action${formData.actions.length > 1 ? 's' : ''} configured`
               }
             </Button>
@@ -440,7 +441,7 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
                       scheduleConfig.recurringType === 'weekly' ? 'week(s)' : 'month(s)'
                     }` : 
                   'Cron Expression'}` 
-                : 'Configure Schedule (One-time, Recurring, Cron)'}
+                : 'Configure Schedule'}
             </Button>
 
             {/* Schedule Preview */}

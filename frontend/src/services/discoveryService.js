@@ -14,7 +14,7 @@ class DiscoveryService {
   async createDiscoveryJob(jobData) {
     try {
       const response = await apiService.post(`${this.baseUrl}/jobs`, jobData);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error creating discovery job:', error);
       throw error;
@@ -29,7 +29,7 @@ class DiscoveryService {
       if (params.status) queryParams.append('status_filter', params.status);
 
       const response = await apiService.get(`${this.baseUrl}/jobs?${queryParams}`);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error fetching discovery jobs:', error);
       throw error;
@@ -39,7 +39,7 @@ class DiscoveryService {
   async getDiscoveryJob(jobId) {
     try {
       const response = await apiService.get(`${this.baseUrl}/jobs/${jobId}`);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error fetching discovery job:', error);
       throw error;
@@ -49,7 +49,7 @@ class DiscoveryService {
   async updateDiscoveryJob(jobId, jobData) {
     try {
       const response = await apiService.put(`${this.baseUrl}/jobs/${jobId}`, jobData);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error updating discovery job:', error);
       throw error;
@@ -69,7 +69,7 @@ class DiscoveryService {
   async runDiscoveryJob(jobId) {
     try {
       const response = await apiService.post(`${this.baseUrl}/jobs/${jobId}/run`);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error running discovery job:', error);
       throw error;
@@ -79,7 +79,7 @@ class DiscoveryService {
   async cancelDiscoveryJob(jobId) {
     try {
       const response = await apiService.post(`${this.baseUrl}/jobs/${jobId}/cancel`);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error cancelling discovery job:', error);
       throw error;
@@ -97,7 +97,7 @@ class DiscoveryService {
       if (params.limit) queryParams.append('limit', params.limit);
 
       const response = await apiService.get(`${this.baseUrl}/devices?${queryParams}`);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error fetching discovered devices:', error);
       throw error;
@@ -107,7 +107,7 @@ class DiscoveryService {
   async getDiscoveredDevice(deviceId) {
     try {
       const response = await apiService.get(`${this.baseUrl}/devices/${deviceId}`);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error fetching discovered device:', error);
       throw error;
@@ -117,7 +117,7 @@ class DiscoveryService {
   async updateDiscoveredDeviceStatus(deviceId, status) {
     try {
       const response = await apiService.put(`${this.baseUrl}/devices/${deviceId}/status`, { status });
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error updating device status:', error);
       throw error;
@@ -133,34 +133,80 @@ class DiscoveryService {
       if (params.limit) queryParams.append('limit', params.limit);
 
       const response = await apiService.get(`${this.baseUrl}/devices/importable?${queryParams}`);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error fetching importable devices:', error);
       throw error;
     }
   }
 
-  // Run in-memory discovery (no persistence)
-  async runInMemoryDiscovery(discoveryConfig) {
+  // Run in-memory discovery (no persistence) using Celery
+  async runInMemoryDiscovery(discoveryConfig, progressCallback = null) {
     try {
-      const response = await apiService.post(`${this.baseUrl}/discover-memory`, discoveryConfig);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (progressCallback) {
+        progressCallback(0, 'Starting discovery task...');
       }
       
-      const data = await response.json();
-      return data || [];
+      // Start the Celery task
+      const startResponse = await apiService.post(`${this.baseUrl}/discover-memory`, discoveryConfig);
+      const taskData = await startResponse.json();
+      
+      if (!taskData.task_id) {
+        throw new Error('Failed to start discovery task');
+      }
+      
+      if (progressCallback) {
+        progressCallback(5, 'Discovery task started, scanning network...');
+      }
+      
+      // Poll for results
+      return await this.pollDiscoveryTask(taskData.task_id, progressCallback);
+      
     } catch (error) {
       console.error('Error running in-memory discovery:', error);
       throw error;
     }
   }
 
+  // Poll discovery task for completion
+  async pollDiscoveryTask(taskId, progressCallback = null) {
+    const maxAttempts = 120; // 2 minutes max (120 * 1 second)
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const response = await apiService.get(`${this.baseUrl}/discover-memory/${taskId}`);
+        const result = await response.json();
+        
+        if (progressCallback) {
+          const progress = result.progress || 0;
+          const message = result.message || 'Discovery in progress...';
+          progressCallback(progress, message);
+        }
+        
+        if (result.status === 'completed') {
+          return result.devices || [];
+        } else if (result.status === 'failed') {
+          throw new Error(result.error || 'Discovery task failed');
+        }
+        
+        // Wait 1 second before next poll
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        attempts++;
+        
+      } catch (error) {
+        console.error('Error polling discovery task:', error);
+        throw error;
+      }
+    }
+    
+    throw new Error('Discovery task timed out');
+  }
+
   async importDiscoveredDevices(importData) {
     try {
       const response = await apiService.post(`${this.baseUrl}/devices/import`, importData);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error importing devices:', error);
       throw error;
@@ -170,7 +216,7 @@ class DiscoveryService {
   async importConfiguredDevices(importData) {
     try {
       const response = await apiService.post(`${this.baseUrl}/devices/import-configured`, importData);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error importing configured devices:', error);
       throw error;
@@ -197,7 +243,7 @@ class DiscoveryService {
   async createDiscoveryTemplate(templateData) {
     try {
       const response = await apiService.post(`${this.baseUrl}/templates`, templateData);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error creating discovery template:', error);
       throw error;
@@ -207,7 +253,7 @@ class DiscoveryService {
   async getDiscoveryTemplates(activeOnly = true) {
     try {
       const response = await apiService.get(`${this.baseUrl}/templates?active_only=${activeOnly}`);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error fetching discovery templates:', error);
       throw error;
@@ -217,7 +263,7 @@ class DiscoveryService {
   async getDiscoveryTemplate(templateId) {
     try {
       const response = await apiService.get(`${this.baseUrl}/templates/${templateId}`);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error fetching discovery template:', error);
       throw error;
@@ -228,7 +274,7 @@ class DiscoveryService {
   async getDiscoveryStats() {
     try {
       const response = await apiService.get(`${this.baseUrl}/stats`);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error fetching discovery stats:', error);
       throw error;
@@ -238,7 +284,7 @@ class DiscoveryService {
   async quickNetworkScan(scanData) {
     try {
       const response = await apiService.post(`${this.baseUrl}/scan`, scanData);
-      return response.data;
+      return await response.json();
     } catch (error) {
       console.error('Error performing quick scan:', error);
       throw error;

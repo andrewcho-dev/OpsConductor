@@ -303,8 +303,22 @@ class DiscoveryService:
             discovered_hosts = []
         
         # Convert NetworkDiscoveryService DiscoveredDevice objects to database model objects (in-memory only)
+        # Also filter out devices that already exist as active targets
         devices = []
+        excluded_count = 0
+        device_counter = 0
+        
         for i, network_device in enumerate(discovered_hosts):
+            # Check if this IP already exists as an active target
+            existing_target = self.target_service._check_duplicate_active_ip(network_device.ip_address)
+            if existing_target:
+                logger.info(f"Excluding {network_device.ip_address} from discovery results - already exists as target '{existing_target.name}' (ID: {existing_target.id})")
+                excluded_count += 1
+                continue
+            
+            # Use hostname as device name if available, otherwise use IP-based name
+            device_name = network_device.hostname or f"device-{network_device.ip_address.replace('.', '-')}"
+            
             device = DiscoveredDevice(
                 ip_address=network_device.ip_address,
                 hostname=network_device.hostname,
@@ -323,9 +337,82 @@ class DiscoveryService:
                 imported_at=None,
                 imported_by=None
             )
-            # Set a temporary ID for frontend use (negative to avoid conflicts)
-            device.id = -(i + 1)
+            # Set a unique temporary ID for frontend use (negative to avoid conflicts)
+            device_counter += 1
+            device.id = -device_counter
             devices.append(device)
+        
+        if excluded_count > 0:
+            logger.info(f"Excluded {excluded_count} devices from discovery results (already exist as active targets)")
+        
+        return devices
+    
+    async def run_in_memory_discovery_with_progress(self, discovery_config: dict, progress_callback=None) -> List[DiscoveredDevice]:
+        """
+        Run network discovery without persisting results to database, with progress reporting.
+        Returns discovered devices as in-memory objects for immediate use.
+        """
+        # Create discovery config
+        config = DiscoveryConfig(
+            network_ranges=discovery_config.get('network_ranges', []),
+            port_ranges=[],
+            common_ports=discovery_config.get('common_ports', [22, 80, 443]),
+            timeout=discovery_config.get('timeout', 3.0),
+            max_concurrent=discovery_config.get('max_concurrent', 50),
+            snmp_communities=['public'] if discovery_config.get('enable_snmp', False) else [],
+            enable_snmp=discovery_config.get('enable_snmp', False),
+            enable_service_detection=discovery_config.get('enable_service_detection', True),
+            enable_hostname_resolution=discovery_config.get('enable_hostname_resolution', True)
+        )
+        
+        # Run discovery and get results with progress callback
+        discovered_hosts = await self.network_service.discover_network(config, progress_callback)
+        
+        # Ensure we have a valid list
+        if not discovered_hosts or not isinstance(discovered_hosts, list):
+            discovered_hosts = []
+        
+        # Convert NetworkDiscoveryService DiscoveredDevice objects to database model objects (in-memory only)
+        # Also filter out devices that already exist as active targets
+        devices = []
+        excluded_count = 0
+        device_counter = 0
+        
+        for i, network_device in enumerate(discovered_hosts):
+            # Check if this IP already exists as an active target
+            existing_target = self.target_service._check_duplicate_active_ip(network_device.ip_address)
+            if existing_target:
+                logger.info(f"Excluding {network_device.ip_address} from discovery results - already exists as target '{existing_target.name}' (ID: {existing_target.id})")
+                excluded_count += 1
+                continue
+            
+            # Use hostname as device name if available, otherwise use IP-based name
+            device_name = network_device.hostname or f"device-{network_device.ip_address.replace('.', '-')}"
+            
+            device = DiscoveredDevice(
+                ip_address=network_device.ip_address,
+                hostname=network_device.hostname,
+                mac_address=network_device.mac_address,
+                open_ports=network_device.open_ports,
+                services=network_device.services,
+                snmp_info=network_device.snmp_info,
+                device_type=network_device.device_type or 'unknown',
+                os_type=network_device.os_type,
+                confidence_score=network_device.confidence_score,
+                suggested_communication_methods=network_device.suggested_communication_methods,
+                discovered_at=datetime.utcnow(),
+                status='discovered',
+                # Don't set discovery_job_id for in-memory discovery
+                discovery_job_id=None,
+                target_id=None
+            )
+            # Set a unique temporary ID for frontend use (negative to avoid conflicts)
+            device_counter += 1
+            device.id = -device_counter
+            devices.append(device)
+        
+        if excluded_count > 0:
+            logger.info(f"Excluded {excluded_count} devices from discovery results (already exist as active targets)")
         
         return devices
     

@@ -329,28 +329,102 @@ async def update_discovered_device_status(
 
 # In-Memory Discovery (no persistence)
 
-@router.post("/discover-memory", response_model=List[DiscoveredDeviceResponse])
+@router.post("/discover-memory")
 async def run_in_memory_discovery(
-    discovery_config: dict,
-    discovery_service: DiscoveryService = Depends(get_discovery_service)
+    discovery_config: dict
 ):
     """
-    Run network discovery without persisting results.
-    Returns discovered devices directly for immediate selection.
+    Start network discovery as a Celery task without persisting results.
+    Returns task ID for polling progress.
     
     Args:
         discovery_config: Discovery configuration
         
     Returns:
-        List[DiscoveredDeviceResponse]: List of discovered devices
+        dict: Task ID and status
     """
     try:
-        devices = await discovery_service.run_in_memory_discovery(discovery_config)
-        return [DiscoveredDeviceResponse.from_orm(device) for device in devices]
+        from app.tasks.discovery_tasks import run_in_memory_discovery_task
+        
+        # Start Celery task
+        task = run_in_memory_discovery_task.delay(discovery_config)
+        
+        return {
+            "task_id": task.id,
+            "status": "started",
+            "message": "Discovery task started successfully"
+        }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Discovery failed: {str(e)}"
+            detail=f"Failed to start discovery task: {str(e)}"
+        )
+
+
+@router.get("/discover-memory/{task_id}")
+async def get_in_memory_discovery_result(task_id: str):
+    """
+    Get the result of an in-memory discovery task.
+    
+    Args:
+        task_id: Celery task ID
+        
+    Returns:
+        dict: Task status and results
+    """
+    try:
+        from app.core.celery_app import celery_app
+        
+        # Get task result
+        task_result = celery_app.AsyncResult(task_id)
+        
+        if task_result.state == 'PENDING':
+            return {
+                "task_id": task_id,
+                "status": "pending",
+                "progress": 0,
+                "message": "Discovery task is pending..."
+            }
+        elif task_result.state == 'PROGRESS':
+            return {
+                "task_id": task_id,
+                "status": "running",
+                "progress": task_result.info.get('progress', 0),
+                "message": task_result.info.get('message', 'Discovery in progress...')
+            }
+        elif task_result.state == 'SUCCESS':
+            result = task_result.result
+            devices = result.get('devices', [])
+            
+            # Convert devices to response format
+            device_responses = []
+            for device_data in devices:
+                if isinstance(device_data, dict):
+                    device_responses.append(device_data)
+                else:
+                    device_responses.append(device_data.__dict__)
+            
+            return {
+                "task_id": task_id,
+                "status": "completed",
+                "progress": 100,
+                "devices": device_responses,
+                "message": result.get('message', f'Discovery completed - found {len(devices)} devices')
+            }
+        else:
+            # FAILURE or other states
+            return {
+                "task_id": task_id,
+                "status": "failed",
+                "progress": 0,
+                "error": str(task_result.info),
+                "message": f"Discovery failed: {str(task_result.info)}"
+            }
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get task result: {str(e)}"
         )
 
 

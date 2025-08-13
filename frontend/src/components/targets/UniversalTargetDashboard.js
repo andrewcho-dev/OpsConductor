@@ -153,6 +153,15 @@ const UniversalTargetDashboard = () => {
       if (discoveryResult && discoveryResult.message) {
         // This is an import completion result
         addAlert(discoveryResult.message, 'success', 5000);
+        
+        // Refresh the target list to show newly imported targets
+        if (discoveryResult.imported_count && discoveryResult.imported_count > 0) {
+          console.log('Refreshing target list after importing', discoveryResult.imported_count, 'targets');
+          // Add a small delay to ensure backend has processed the import
+          setTimeout(() => {
+            loadTargets();
+          }, 500);
+        }
       } else if (discoveryResult) {
         // This is a discovery job start
         const jobName = discoveryResult.name || `Job ${discoveryResult.id}` || 'Network Discovery';

@@ -48,15 +48,16 @@ class DiscoveryConfig:
     port_ranges: List[Tuple[int, int]] = field(default_factory=lambda: [(1, 1024)])
     common_ports: List[int] = field(default_factory=lambda: [
         22, 23, 25, 53, 80, 110, 143, 443, 993, 995,  # Common services
-        135, 139, 445, 3389, 5985, 5986,              # Windows
+        135, 139, 445, 3389, 5985, 5986,              # Windows (enhanced)
         161, 162,                                       # SNMP
         1433, 3306, 5432, 27017,                      # Databases
         8080, 8443, 9000, 9090,                       # Web services
         6443, 2379, 2380,                             # Kubernetes
-        8006, 8080,                                    # Proxmox
+        8006,                                          # Proxmox (removed duplicate 8080)
+        49152, 49153, 49154, 49155,                   # Windows dynamic ports
     ])
-    timeout: float = 3.0
-    max_concurrent: int = 100
+    timeout: float = 2.0
+    max_concurrent: int = 200
     snmp_communities: List[str] = field(default_factory=lambda: ['public', 'private'])
     enable_snmp: bool = True
     enable_service_detection: bool = True
@@ -81,15 +82,20 @@ class NetworkDiscoveryService:
                 'keywords': ['linux', 'ubuntu', 'centos', 'redhat', 'debian']
             },
             'windows': {
-                'ports': [135, 139, 445, 3389, 5985],
-                'banners': ['Microsoft', 'Windows', 'IIS'],
+                'ports': [135, 139, 445, 3389, 5985, 5986],
+                'banners': ['Microsoft', 'Windows', 'IIS', 'Server'],
                 'snmp_oids': ['1.3.6.1.2.1.1.1.0'],
-                'keywords': ['windows', 'microsoft', 'iis']
+                'keywords': ['windows', 'microsoft', 'iis', 'server']
             },
             'windows_desktop': {
                 'ports': [135, 139, 445, 3389],
                 'banners': ['Microsoft', 'Windows'],
-                'keywords': ['windows 10', 'windows 11', 'workstation']
+                'keywords': ['windows 10', 'windows 11', 'workstation', 'desktop']
+            },
+            'windows_server': {
+                'ports': [135, 139, 445, 3389, 5985, 5986, 80, 443],
+                'banners': ['Microsoft', 'Windows', 'IIS', 'Server'],
+                'keywords': ['windows server', 'server 2019', 'server 2022', 'iis']
             },
             # Network Infrastructure
             'cisco_switch': {
@@ -145,12 +151,13 @@ class NetworkDiscoveryService:
             }
         }
     
-    async def discover_network(self, config: DiscoveryConfig) -> List[DiscoveredDevice]:
+    async def discover_network(self, config: DiscoveryConfig, progress_callback=None) -> List[DiscoveredDevice]:
         """
         Discover devices on the network using the provided configuration.
         
         Args:
             config: Discovery configuration
+            progress_callback: Optional callback function for progress updates
             
         Returns:
             List of discovered devices
@@ -162,26 +169,56 @@ class NetworkDiscoveryService:
         for network_range in config.network_ranges:
             ip_addresses.extend(self._generate_ip_list(network_range))
         
-        self.logger.info(f"Scanning {len(ip_addresses)} IP addresses")
+        total_ips = len(ip_addresses)
+        self.logger.info(f"Scanning {total_ips} IP addresses")
+        
+        if progress_callback:
+            await progress_callback(0, total_ips, 0, "Starting scan...")
         
         # Create semaphore to limit concurrent connections
         semaphore = asyncio.Semaphore(config.max_concurrent)
         
-        # Scan all IP addresses concurrently
-        tasks = [
-            self._scan_host(ip, config, semaphore)
-            for ip in ip_addresses
-        ]
+        # Track progress
+        completed = 0
+        discovered_count = 0
+        discovered_devices = []
         
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Process IPs in larger batches for better performance
+        batch_size = min(config.max_concurrent, 100)
         
-        # Filter out exceptions and None results
-        discovered_devices = [
-            result for result in results
-            if isinstance(result, DiscoveredDevice)
-        ]
+        for i in range(0, total_ips, batch_size):
+            batch_ips = ip_addresses[i:i + batch_size]
+            
+            # Scan batch concurrently
+            tasks = [
+                self._scan_host(ip, config, semaphore)
+                for ip in batch_ips
+            ]
+            
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process batch results
+            for result in batch_results:
+                completed += 1
+                if isinstance(result, DiscoveredDevice):
+                    discovered_devices.append(result)
+                    discovered_count += 1
+            
+            # Update progress less frequently (only after each batch)
+            if progress_callback:
+                progress_percent = (completed / total_ips) * 100
+                await progress_callback(
+                    progress_percent, 
+                    total_ips, 
+                    discovered_count,
+                    f"Scanned {completed}/{total_ips} IPs, found {discovered_count} devices"
+                )
         
         self.logger.info(f"Discovery complete. Found {len(discovered_devices)} devices")
+        
+        if progress_callback:
+            await progress_callback(100, total_ips, discovered_count, "Discovery complete")
+        
         return discovered_devices
     
     def _generate_ip_list(self, network_range: str) -> List[str]:
@@ -237,13 +274,28 @@ class NetworkDiscoveryService:
     
     async def _is_host_alive(self, ip: str, timeout: float) -> bool:
         """Quick check if host is alive using common ports."""
-        common_check_ports = [22, 80, 443, 135, 161]
+        # Enhanced port list with better Windows support
+        common_check_ports = [
+            22,    # SSH (Linux)
+            80,    # HTTP
+            135,   # Windows RPC
+            139,   # NetBIOS
+            443,   # HTTPS
+            445,   # SMB (Windows file sharing)
+            3389,  # RDP (Windows Remote Desktop)
+            5985,  # WinRM HTTP
+            5986,  # WinRM HTTPS
+            161    # SNMP
+        ]
+        
+        # Use shorter timeout per port for faster scanning
+        port_timeout = min(timeout / len(common_check_ports), 0.5)
         
         for port in common_check_ports:
             try:
                 reader, writer = await asyncio.wait_for(
                     asyncio.open_connection(ip, port),
-                    timeout=timeout / len(common_check_ports)
+                    timeout=port_timeout
                 )
                 writer.close()
                 await writer.wait_closed()
@@ -272,7 +324,7 @@ class NetworkDiscoveryService:
             ports_to_scan.update(range(start, end + 1))
         
         # Limit concurrent port scans per host
-        port_semaphore = asyncio.Semaphore(50)
+        port_semaphore = asyncio.Semaphore(20)
         
         tasks = [
             self._scan_port(ip, port, config.timeout, port_semaphore)

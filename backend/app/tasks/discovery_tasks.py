@@ -77,6 +77,90 @@ def run_discovery_job_task(self, job_id: int):
             pass
 
 
+@celery_app.task(bind=True, name="app.tasks.discovery_tasks.run_in_memory_discovery_task")
+def run_in_memory_discovery_task(self, discovery_config: dict):
+    """
+    Celery task to run in-memory network discovery.
+    
+    Args:
+        discovery_config: Discovery configuration dictionary
+        
+    Returns:
+        dict: Task execution result with discovered devices
+    """
+    logger.info(f"🔍 Starting in-memory discovery task")
+    
+    try:
+        # Get database session
+        db = next(get_db())
+        
+        # Create discovery service
+        discovery_service = DiscoveryService(db)
+        
+        # Create progress callback for Celery task updates
+        def progress_callback(percent, total_ips, found_devices, message):
+            self.update_state(
+                state='PROGRESS',
+                meta={
+                    'progress': percent,
+                    'total_ips': total_ips,
+                    'found_devices': found_devices,
+                    'message': message
+                }
+            )
+        
+        # Run the in-memory discovery with progress callback
+        import asyncio
+        
+        # Create async wrapper for progress callback
+        async def async_progress_callback(percent, total_ips, found_devices, message):
+            progress_callback(percent, total_ips, found_devices, message)
+        
+        devices = asyncio.run(discovery_service.run_in_memory_discovery_with_progress(discovery_config, async_progress_callback))
+        
+        logger.info(f"✅ In-memory discovery completed successfully - found {len(devices)} devices")
+        
+        # Convert devices to serializable format
+        serializable_devices = []
+        for device in devices:
+            device_dict = {
+                'id': device.id,  # ✅ CRITICAL: Include the ID field!
+                'ip_address': device.ip_address,
+                'hostname': device.hostname,
+                'mac_address': device.mac_address,
+                'open_ports': device.open_ports,
+                'services': device.services,
+                'snmp_info': device.snmp_info,
+                'device_type': device.device_type,
+                'os_type': device.os_type,
+                'confidence_score': device.confidence_score,
+                'suggested_communication_methods': device.suggested_communication_methods,
+                'discovered_at': device.discovered_at.isoformat() if device.discovered_at else None,
+                'status': device.status
+            }
+            serializable_devices.append(device_dict)
+        
+        return {
+            'status': 'success',
+            'devices': serializable_devices,
+            'message': f'Discovery completed - found {len(devices)} devices'
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ In-memory discovery failed: {str(e)}")
+        return {
+            'status': 'failed',
+            'devices': [],
+            'error': str(e),
+            'message': f'Discovery failed: {str(e)}'
+        }
+    finally:
+        try:
+            db.close()
+        except:
+            pass
+
+
 @celery_app.task(bind=True, name="app.tasks.discovery_tasks.cleanup_old_discovery_jobs")
 def cleanup_old_discovery_jobs(self):
     """

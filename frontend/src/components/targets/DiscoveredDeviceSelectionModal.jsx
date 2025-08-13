@@ -43,6 +43,7 @@ import discoveryService from '../../services/discoveryService';
 
 const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devices = [] }) => {
   const [selectedDevices, setSelectedDevices] = useState(new Set());
+  const [expandedDevices, setExpandedDevices] = useState(new Set());
   const [deviceConfigs, setDeviceConfigs] = useState({});
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -69,6 +70,15 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
     }
   }, [devices]);
 
+  // Reset state when modal opens/closes
+  useEffect(() => {
+    if (!open) {
+      setSelectedDevices(new Set());
+      setExpandedDevices(new Set());
+      setError(null);
+    }
+  }, [open]);
+
   const handleDeviceSelect = (deviceId, selected) => {
     const newSelected = new Set(selectedDevices);
     if (selected) {
@@ -77,6 +87,16 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
       newSelected.delete(deviceId);
     }
     setSelectedDevices(newSelected);
+  };
+
+  const handleAccordionToggle = (deviceId, expanded) => {
+    const newExpanded = new Set(expandedDevices);
+    if (expanded) {
+      newExpanded.add(deviceId);
+    } else {
+      newExpanded.delete(deviceId);
+    }
+    setExpandedDevices(newExpanded);
   };
 
   const handleSelectAll = (selected) => {
@@ -244,11 +264,17 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
 
             {/* Device List */}
             <Box>
-              {devices && devices.map((device) => (
+              {devices && devices.map((device, index) => (
                 <Accordion 
-                  key={device.id}
-                  expanded={selectedDevices.has(device.id)}
-                  onChange={(e, expanded) => handleDeviceSelect(device.id, expanded)}
+                  key={`device-${device.id}-${device.ip_address}`}
+                  expanded={expandedDevices.has(device.id)}
+                  onChange={(e, expanded) => handleAccordionToggle(device.id, expanded)}
+                  sx={{
+                    backgroundColor: selectedDevices.has(device.id) ? 'action.selected' : 'background.paper',
+                    '&:hover': {
+                      backgroundColor: selectedDevices.has(device.id) ? 'action.selected' : 'action.hover'
+                    }
+                  }}
                 >
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Box display="flex" alignItems="center" width="100%">
@@ -263,7 +289,14 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
                       <Box display="flex" alignItems="center" ml={1} flex={1}>
                         {getDeviceIcon(device.device_type)}
                         <Box ml={2}>
-                          <Typography variant="subtitle1">
+                          <Typography 
+                            variant="subtitle1"
+                            sx={{
+                              fontWeight: selectedDevices.has(device.id) ? 'bold' : 'normal',
+                              color: selectedDevices.has(device.id) ? 'primary.main' : 'text.primary'
+                            }}
+                          >
+                            {selectedDevices.has(device.id) && '✓ '}
                             {device.hostname || device.ip_address}
                           </Typography>
                           <Box display="flex" gap={1} mt={0.5}>
@@ -343,17 +376,18 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
                               onChange={(e) => handleConfigChange(device.id, 'communication_method', e.target.value)}
                               disabled={importing}
                             >
-                              {device.suggested_communication_methods?.map(method => (
+                              {/* Always include common methods, plus any suggested ones */}
+                              <MenuItem value="ssh">SSH</MenuItem>
+                              <MenuItem value="winrm">WinRM</MenuItem>
+                              <MenuItem value="snmp">SNMP</MenuItem>
+                              <MenuItem value="rest_api">REST API</MenuItem>
+                              {device.suggested_communication_methods?.filter(method => 
+                                !['ssh', 'winrm', 'snmp', 'rest_api'].includes(method)
+                              ).map(method => (
                                 <MenuItem key={method} value={method}>
                                   {method.toUpperCase()}
                                 </MenuItem>
-                              )) || (
-                                <>
-                                  <MenuItem value="ssh">SSH</MenuItem>
-                                  <MenuItem value="winrm">WinRM</MenuItem>
-                                  <MenuItem value="snmp">SNMP</MenuItem>
-                                </>
-                              )}
+                              ))}
                             </Select>
                           </FormControl>
                         </Grid>

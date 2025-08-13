@@ -40,12 +40,13 @@ const SimpleNetworkDiscoveryModal = ({ open, onClose, onDiscoveryStarted }) => {
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
 
   const portPresets = {
+    quick: { name: 'Quick Scan (Essential Windows/Linux)', ports: [22, 80, 135, 139, 445, 3389, 5985, 5986] },
     basic: { name: 'Basic (22,80,443,3389)', ports: [22, 80, 443, 3389] },
     extended: { name: 'Extended (+21,23,25,53,110,143,993,995)', ports: [21, 22, 23, 25, 53, 80, 110, 143, 443, 993, 995, 3389] },
     comprehensive: { name: 'Comprehensive (Top 100)', ports: [] } // Will use service's default
   };
 
-  const [selectedPreset, setSelectedPreset] = useState('basic');
+  const [selectedPreset, setSelectedPreset] = useState('quick');
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -63,8 +64,14 @@ const SimpleNetworkDiscoveryModal = ({ open, onClose, onDiscoveryStarted }) => {
       setDiscoveryProgress(0);
       setDevicesFound(0);
       
-      // Call the new in-memory discovery endpoint
-      const result = await discoveryService.runInMemoryDiscovery(discoveryConfig);
+      // Progress callback function
+      const progressCallback = (progress, message) => {
+        setDiscoveryProgress(progress);
+        setDiscoveryStatus(message);
+      };
+      
+      // Call the new in-memory discovery endpoint with progress callback
+      const result = await discoveryService.runInMemoryDiscovery(discoveryConfig, progressCallback);
       
       // Ensure result is an array
       const devices = Array.isArray(result) ? result : [];
@@ -72,6 +79,7 @@ const SimpleNetworkDiscoveryModal = ({ open, onClose, onDiscoveryStarted }) => {
       setDiscoveryProgress(100);
       setDevicesFound(devices.length);
       setDiscoveredDevices(devices);
+      setDiscoveryStatus('Discovery complete');
       setRunning(false);
       
       if (devices.length > 0) {
@@ -83,6 +91,7 @@ const SimpleNetworkDiscoveryModal = ({ open, onClose, onDiscoveryStarted }) => {
     } catch (err) {
       console.error('Error running discovery:', err);
       setRunning(false);
+      setDiscoveryStatus('Discovery failed');
       setError(`Discovery failed: ${err.message || 'Please try again.'}`);
     }
   };
@@ -182,7 +191,7 @@ const SimpleNetworkDiscoveryModal = ({ open, onClose, onDiscoveryStarted }) => {
             <Alert severity="info" sx={{ mb: 2 }}>
               <Box>
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  Discovery Status: <strong>{discoveryStatus.toUpperCase()}</strong>
+                  <strong>{discoveryStatus}</strong>
                 </Typography>
                 <Box display="flex" alignItems="center" gap={1} sx={{ mb: 1 }}>
                   <CircularProgress 
@@ -300,10 +309,7 @@ const SimpleNetworkDiscoveryModal = ({ open, onClose, onDiscoveryStarted }) => {
             startIcon={running ? <CircularProgress size={16} /> : <SearchIcon />}
           >
             {running 
-              ? (discoveryStatus === 'running' 
-                  ? `Discovering... ${Math.round(discoveryProgress)}%` 
-                  : 'Starting Discovery...'
-                ) 
+              ? `${discoveryStatus || 'Starting'}... ${Math.round(discoveryProgress)}%`
               : 'Start Discovery'
             }
           </Button>
