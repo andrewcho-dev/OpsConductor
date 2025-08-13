@@ -233,7 +233,10 @@ alembic upgrade head
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Third-Party Licenses
+This software incorporates several third-party libraries and components. See the [NOTICE](NOTICE) file for detailed attribution and license information for all third-party components.
 
 ## 🤝 Contributing
 
