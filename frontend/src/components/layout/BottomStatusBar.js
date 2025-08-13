@@ -13,7 +13,6 @@ import {
 } from '@mui/material';
 import {
   Circle as CircleIcon,
-  Refresh as RefreshIcon,
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
   Clear as ClearIcon,
@@ -118,9 +117,7 @@ const BottomStatusBar = () => {
     }
   };
 
-  const handleRefresh = () => {
-    window.location.reload();
-  };
+
 
   const toggleAlerts = () => {
     setAlertsExpanded(!alertsExpanded);
@@ -154,7 +151,7 @@ const BottomStatusBar = () => {
         <Box
           sx={{
             position: 'fixed',
-            bottom: '28px',
+            bottom: '40px',
             left: 0,
             right: 0,
             maxHeight: '200px',
@@ -222,8 +219,8 @@ const BottomStatusBar = () => {
         <Toolbar 
           variant="dense" 
           sx={{ 
-            minHeight: '28px !important',
-            height: '28px',
+            minHeight: '40px !important',
+            height: '40px',
             px: 2,
           }}
         >
@@ -303,7 +300,7 @@ const BottomStatusBar = () => {
           <Box sx={{ flexGrow: 1 }} />
 
           {/* Copyright Notice */}
-          <Box sx={{ display: 'flex', alignItems: 'center', mr: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Typography 
               variant="caption" 
               sx={{ 
@@ -317,99 +314,98 @@ const BottomStatusBar = () => {
             </Typography>
           </Box>
 
-          {/* UTC Clock */}
-          <Box sx={{ display: 'flex', alignItems: 'center', mr: 3 }}>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                mr: 1,
-                fontWeight: 400,
-                fontSize: '0.7rem',
-                color: theme.bottomBarColor,
-                opacity: 0.8
-              }}
-            >
-              UTC:
-            </Typography>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                mr: 1,
-                fontWeight: 400,
-                fontSize: '0.7rem',
-                color: theme.bottomBarColor
-              }}
-            >
-              {formatDate(currentTime, 'UTC')}
-            </Typography>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                fontWeight: 400,
-                fontSize: '0.7rem',
-                minWidth: '70px',
-                letterSpacing: '0.5px',
-                color: theme.bottomBarColor
-              }}
-            >
-              {formatTime(currentTime, 'UTC')}
-            </Typography>
-          </Box>
+          {/* Vertical Separator */}
+          <Divider 
+            orientation="vertical" 
+            flexItem 
+            sx={{ 
+              mx: 3, 
+              backgroundColor: 'rgba(255,255,255,0.3)',
+              height: '16px',
+              alignSelf: 'center'
+            }} 
+          />
 
-          {/* Local Clock */}
-          <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                mr: 1,
-                fontWeight: 400,
-                fontSize: '0.7rem',
-                color: theme.bottomBarColor,
-                opacity: 0.8
-              }}
-            >
-              Local:
-            </Typography>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                mr: 1,
-                fontWeight: 400,
-                fontSize: '0.7rem',
-                color: theme.bottomBarColor
-              }}
-            >
-              {formatDate(currentTime)}
-            </Typography>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                fontWeight: 400,
-                fontSize: '0.7rem',
-                minWidth: '70px',
-                letterSpacing: '0.5px',
-                color: theme.bottomBarColor
-              }}
-            >
-              {formatTime(currentTime)}
-            </Typography>
-          </Box>
+          {/* Stacked Clocks */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            {/* UTC Clock */}
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  mr: 1,
+                  fontWeight: 400,
+                  fontSize: '0.65rem',
+                  color: theme.bottomBarColor,
+                  opacity: 0.8
+                }}
+              >
+                UTC:
+              </Typography>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  mr: 1,
+                  fontWeight: 400,
+                  fontSize: '0.65rem',
+                  color: theme.bottomBarColor
+                }}
+              >
+                {formatDate(currentTime, 'UTC')}
+              </Typography>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  fontWeight: 400,
+                  fontSize: '0.65rem',
+                  minWidth: '65px',
+                  letterSpacing: '0.5px',
+                  color: theme.bottomBarColor
+                }}
+              >
+                {formatTime(currentTime, 'UTC')}
+              </Typography>
+            </Box>
 
-          {/* Refresh Button */}
-          <Tooltip title="Refresh Page">
-            <IconButton
-              size="small"
-              onClick={handleRefresh}
-              sx={{ 
-                color: theme.bottomBarColor,
-                '&:hover': {
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                }
-              }}
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+            {/* Local Clock */}
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  mr: 1,
+                  fontWeight: 400,
+                  fontSize: '0.65rem',
+                  color: theme.bottomBarColor,
+                  opacity: 0.8
+                }}
+              >
+                Local:
+              </Typography>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  mr: 1,
+                  fontWeight: 400,
+                  fontSize: '0.65rem',
+                  color: theme.bottomBarColor
+                }}
+              >
+                {formatDate(currentTime)}
+              </Typography>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  fontWeight: 400,
+                  fontSize: '0.65rem',
+                  minWidth: '65px',
+                  letterSpacing: '0.5px',
+                  color: theme.bottomBarColor
+                }}
+              >
+                {formatTime(currentTime)}
+              </Typography>
+            </Box>
+          </Box>
         </Toolbar>
       </AppBar>
     </>

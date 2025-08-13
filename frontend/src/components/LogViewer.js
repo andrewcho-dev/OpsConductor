@@ -7,12 +7,6 @@ import {
   TextField,
   Button,
   Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   Chip,
   IconButton,
@@ -35,13 +29,16 @@ import {
   Search as SearchIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Visibility as ViewIcon,
   FilterList as FilterIcon,
   Download as DownloadIcon,
   Refresh as RefreshIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  ContentCopy as CopyIcon,
+  Save as SaveIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import { authService } from '../services/authService';
+import '../styles/dashboard.css';
 
 const LogViewer = () => {
   const { token } = useAuth();
@@ -51,10 +48,14 @@ const LogViewer = () => {
   const [searchPattern, setSearchPattern] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [results, setResults] = useState([]);
+  const [hierarchicalData, setHierarchicalData] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [expandedRows, setExpandedRows] = useState(new Set());
+  const [expandedJobs, setExpandedJobs] = useState(new Set());
+  const [expandedExecutions, setExpandedExecutions] = useState(new Set());
+  const [expandedTargets, setExpandedTargets] = useState(new Set());
+  const [expandedActions, setExpandedActions] = useState(new Set());
   const [selectedAction, setSelectedAction] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -77,21 +78,97 @@ const LogViewer = () => {
 
   // API call helper
   const apiCall = async (url, options = {}) => {
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error: ${response.status} ${errorText}`);
+    try {
+      const response = await authService.api.get(url.replace('/api', ''), options);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || error.message || 'API call failed');
     }
+  };
 
-    return response.json();
+  // Transform flat results into hierarchical structure
+  const transformToHierarchical = (flatResults) => {
+    const jobMap = new Map();
+    
+    flatResults.forEach(action => {
+      const jobKey = action.job_serial;
+      const executionKey = `${jobKey}.${action.execution_serial}`;
+      const targetKey = `${executionKey}.${action.target_serial}`;
+      
+      // Initialize job if not exists
+      if (!jobMap.has(jobKey)) {
+        jobMap.set(jobKey, {
+          id: jobKey,
+          job_serial: action.job_serial,
+          job_name: action.job_name,
+          executions: new Map(),
+          totalActions: 0,
+          completedActions: 0,
+          failedActions: 0,
+          runningActions: 0
+        });
+      }
+      
+      const job = jobMap.get(jobKey);
+      job.totalActions++;
+      if (action.status === 'completed') job.completedActions++;
+      else if (action.status === 'failed') job.failedActions++;
+      else if (action.status === 'running') job.runningActions++;
+      
+      // Initialize execution if not exists
+      if (!job.executions.has(executionKey)) {
+        job.executions.set(executionKey, {
+          id: executionKey,
+          execution_serial: action.execution_serial,
+          targets: new Map(),
+          totalActions: 0,
+          completedActions: 0,
+          failedActions: 0,
+          runningActions: 0
+        });
+      }
+      
+      const execution = job.executions.get(executionKey);
+      execution.totalActions++;
+      if (action.status === 'completed') execution.completedActions++;
+      else if (action.status === 'failed') execution.failedActions++;
+      else if (action.status === 'running') execution.runningActions++;
+      
+      // Initialize target if not exists
+      if (!execution.targets.has(targetKey)) {
+        execution.targets.set(targetKey, {
+          id: targetKey,
+          target_serial: action.target_serial,
+          target_name: action.target_name,
+          target_type: action.target_type,
+          actions: [],
+          totalActions: 0,
+          completedActions: 0,
+          failedActions: 0,
+          runningActions: 0
+        });
+      }
+      
+      const target = execution.targets.get(targetKey);
+      target.totalActions++;
+      if (action.status === 'completed') target.completedActions++;
+      else if (action.status === 'failed') target.failedActions++;
+      else if (action.status === 'running') target.runningActions++;
+      
+      // Add action to target
+      target.actions.push(action);
+    });
+    
+    // Convert Maps to Arrays for easier rendering
+    const hierarchical = Array.from(jobMap.values()).map(job => ({
+      ...job,
+      executions: Array.from(job.executions.values()).map(execution => ({
+        ...execution,
+        targets: Array.from(execution.targets.values())
+      }))
+    }));
+    
+    return hierarchical;
   };
 
   // Search function
@@ -113,8 +190,10 @@ const LogViewer = () => {
       
       const response = await apiCall(`/api/log-viewer/search?${params}`);
       
-      setResults(response.results || []);
-      setTotalPages(Math.ceil(((response.results || []).length === ITEMS_PER_PAGE ? (offset + ITEMS_PER_PAGE + 1) : offset + (response.results || []).length) / ITEMS_PER_PAGE));
+      const flatResults = response.results || [];
+      setResults(flatResults);
+      setHierarchicalData(transformToHierarchical(flatResults));
+      setTotalPages(Math.ceil(((flatResults).length === ITEMS_PER_PAGE ? (offset + ITEMS_PER_PAGE + 1) : offset + (flatResults).length) / ITEMS_PER_PAGE));
       
       // Get stats
       const statsParams = pattern.trim() ? `?pattern=${encodeURIComponent(pattern.trim())}` : '';
@@ -158,22 +237,48 @@ const LogViewer = () => {
     performSearch(searchPattern, statusFilter, value);
   };
 
-  // Toggle row expansion
-  const toggleRowExpansion = (id) => {
-    const newExpanded = new Set(expandedRows);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
+  // Toggle functions for each level
+  const toggleJob = (jobId) => {
+    const newExpanded = new Set(expandedJobs);
+    if (newExpanded.has(jobId)) {
+      newExpanded.delete(jobId);
     } else {
-      newExpanded.add(id);
+      newExpanded.add(jobId);
     }
-    setExpandedRows(newExpanded);
+    setExpandedJobs(newExpanded);
   };
 
-  // Show action details
-  const showActionDetails = (action) => {
-    setSelectedAction(action);
-    setDetailsOpen(true);
+  const toggleExecution = (executionId) => {
+    const newExpanded = new Set(expandedExecutions);
+    if (newExpanded.has(executionId)) {
+      newExpanded.delete(executionId);
+    } else {
+      newExpanded.add(executionId);
+    }
+    setExpandedExecutions(newExpanded);
   };
+
+  const toggleTarget = (targetId) => {
+    const newExpanded = new Set(expandedTargets);
+    if (newExpanded.has(targetId)) {
+      newExpanded.delete(targetId);
+    } else {
+      newExpanded.add(targetId);
+    }
+    setExpandedTargets(newExpanded);
+  };
+
+  const toggleAction = (actionId) => {
+    const newExpanded = new Set(expandedActions);
+    if (newExpanded.has(actionId)) {
+      newExpanded.delete(actionId);
+    } else {
+      newExpanded.add(actionId);
+    }
+    setExpandedActions(newExpanded);
+  };
+
+
 
   // Get status color
   const getStatusColor = (status) => {
@@ -198,6 +303,29 @@ const LogViewer = () => {
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return 'N/A';
     return new Date(timestamp).toLocaleString();
+  };
+
+  // Copy text to clipboard
+  const copyToClipboard = async (text, type = 'text') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      console.log(`${type} copied to clipboard`);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
+  };
+
+  // Save text as file
+  const saveAsFile = (content, filename, type = 'text/plain') => {
+    const blob = new Blob([content], { type });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   // Export results
@@ -231,128 +359,77 @@ const LogViewer = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Log Viewer
-      </Typography>
+    <div className="dashboard-container">
+      {/* Page Header */}
+      <div className="page-header">
+        <Typography className="page-title">
+          Log Viewer
+        </Typography>
+        <div className="page-actions">
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={() => performSearch(searchPattern, statusFilter, page)}
+            disabled={loading}
+            size="small"
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={exportResults}
+            disabled={results.length === 0}
+            size="small"
+          >
+            Export
+          </Button>
+        </div>
+      </div>
       
       {/* Search Controls */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
-              <Autocomplete
-                freeSolo
-                options={patternExamples}
-                value={searchPattern}
-                onInputChange={(event, newValue) => setSearchPattern(newValue || '')}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Search Pattern"
-                    placeholder="Enter serial pattern or search term..."
-                    fullWidth
-                    helperText="Examples: J20250000001, J2025*.0001.*.*, setup"
-                  />
-                )}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  label="Status"
-                >
-                  <MenuItem value="all">All</MenuItem>
-                  <MenuItem value="completed">Completed</MenuItem>
-                  <MenuItem value="failed">Failed</MenuItem>
-                  <MenuItem value="running">Running</MenuItem>
-                  <MenuItem value="scheduled">Scheduled</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={4}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="contained"
-                  startIcon={<SearchIcon />}
-                  onClick={handleSearch}
-                  disabled={loading}
-                >
-                  Search
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<RefreshIcon />}
-                  onClick={() => performSearch(searchPattern, statusFilter, page)}
-                  disabled={loading}
-                >
-                  Refresh
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<DownloadIcon />}
-                  onClick={exportResults}
-                  disabled={results.length === 0}
-                >
-                  Export
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
-
-      {/* Stats Summary */}
-      {stats && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Search Results Summary
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={6} md={2}>
-                <Typography variant="body2" color="textSecondary">Total Actions</Typography>
-                <Typography variant="h6">{stats.total_actions.toLocaleString()}</Typography>
-              </Grid>
-              <Grid item xs={6} md={2}>
-                <Typography variant="body2" color="textSecondary">Unique Jobs</Typography>
-                <Typography variant="h6">{stats.unique_jobs.toLocaleString()}</Typography>
-              </Grid>
-              <Grid item xs={6} md={2}>
-                <Typography variant="body2" color="textSecondary">Unique Executions</Typography>
-                <Typography variant="h6">{stats.unique_executions.toLocaleString()}</Typography>
-              </Grid>
-              <Grid item xs={6} md={2}>
-                <Typography variant="body2" color="textSecondary">Unique Branches</Typography>
-                <Typography variant="h6">{stats.unique_branches.toLocaleString()}</Typography>
-              </Grid>
-              <Grid item xs={6} md={2}>
-                <Typography variant="body2" color="textSecondary">Unique Targets</Typography>
-                <Typography variant="h6">{stats.unique_targets.toLocaleString()}</Typography>
-              </Grid>
-              <Grid item xs={6} md={2}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {Object.entries(stats.status_counts).map(([status, count]) => (
-                    count > 0 && (
-                      <Chip
-                        key={status}
-                        label={`${status}: ${count}`}
-                        color={getStatusColor(status)}
-                        size="small"
-                      />
-                    )
-                  ))}
-                </Box>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      )}
+      <div className="filters-container">
+        <Autocomplete
+          freeSolo
+          options={patternExamples}
+          value={searchPattern}
+          onInputChange={(event, newValue) => setSearchPattern(newValue || '')}
+          className="search-field"
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Search Pattern"
+              placeholder="Enter serial pattern or search term..."
+              size="small"
+            />
+          )}
+        />
+        
+        <FormControl className="filter-item" size="small">
+          <InputLabel>Status</InputLabel>
+          <Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            label="Status"
+          >
+            <MenuItem value="all">All</MenuItem>
+            <MenuItem value="completed">Completed</MenuItem>
+            <MenuItem value="failed">Failed</MenuItem>
+            <MenuItem value="running">Running</MenuItem>
+            <MenuItem value="scheduled">Scheduled</MenuItem>
+          </Select>
+        </FormControl>
+        
+        <Button
+          variant="contained"
+          startIcon={<SearchIcon />}
+          onClick={handleSearch}
+          disabled={loading}
+          size="small"
+        >
+          Search
+        </Button>
+      </div>
 
       {/* Error Display */}
       {error && (
@@ -361,196 +438,298 @@ const LogViewer = () => {
         </Alert>
       )}
 
-      {/* Results Table */}
+      {/* Hierarchical Results View */}
       <Card>
         <CardContent>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell width="50px"></TableCell>
-                  <TableCell>Action Serial</TableCell>
-                  <TableCell>Action Name</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Exit Code</TableCell>
-                  <TableCell>Duration</TableCell>
-                  <TableCell>Job</TableCell>
-                  <TableCell>Target</TableCell>
-                  <TableCell>Started</TableCell>
-                  <TableCell width="100px">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={10} align="center">
-                      <Typography>Loading...</Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : results.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} align="center">
-                      <Typography color="textSecondary">
-                        No results found. Try adjusting your search pattern.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  results.map((result) => (
-                    <React.Fragment key={result.id}>
-                      <TableRow hover>
-                        <TableCell>
-                          <IconButton
-                            size="small"
-                            onClick={() => toggleRowExpansion(result.id)}
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <Typography>Loading...</Typography>
+            </Box>
+          ) : hierarchicalData.length === 0 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <Typography color="textSecondary">
+                No results found. Try adjusting your search pattern.
+              </Typography>
+            </Box>
+          ) : (
+            <Box>
+              {hierarchicalData.map((job) => (
+                <Box key={job.id} sx={{ mb: 1 }}>
+                  {/* Job Level */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      p: 1,
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'grey.200' }
+                    }}
+                    onClick={() => toggleJob(job.id)}
+                  >
+                    <IconButton size="small" sx={{ mr: 1 }}>
+                      {expandedJobs.has(job.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </IconButton>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', mr: 2 }}>
+                      {job.job_serial}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mr: 2, color: 'text.secondary' }}>
+                      {job.job_name}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      ({job.executions.length} executions)
+                    </Typography>
+                  </Box>
+
+                  {/* Executions Level */}
+                  <Collapse in={expandedJobs.has(job.id)}>
+                    <Box sx={{ ml: 2, mt: 0.5 }}>
+                      {job.executions.map((execution) => (
+                        <Box key={execution.id} sx={{ mb: 0.5 }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              p: 0.75,
+                              bgcolor: 'grey.50',
+                              borderRadius: 1,
+                              cursor: 'pointer',
+                              '&:hover': { bgcolor: 'grey.100' }
+                            }}
+                            onClick={() => toggleExecution(execution.id)}
                           >
-                            {expandedRows.has(result.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                          </IconButton>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontFamily="monospace">
-                            {result.action_serial}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{result.action_name}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={result.status}
-                            color={getStatusColor(result.status)}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={result.exit_code}
-                            color={result.exit_code === 0 ? 'success' : 'error'}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{formatDuration(result.execution_time_ms)}</TableCell>
-                        <TableCell>
-                          <Tooltip title={result.job_serial}>
-                            <Typography variant="body2" noWrap>
-                              {result.job_name}
+                            <IconButton size="small" sx={{ mr: 1 }}>
+                              {expandedExecutions.has(execution.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            </IconButton>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', mr: 2 }}>
+                              {execution.execution_serial}
                             </Typography>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell>
-                          <Tooltip title={result.target_serial}>
-                            <Typography variant="body2" noWrap>
-                              {result.target_name}
+                            <Typography variant="body2" sx={{ mr: 2, color: 'text.secondary' }}>
+                              {execution.targets.length > 0 && execution.targets[0].actions.length > 0 
+                                ? formatTimestamp(execution.targets[0].actions[0].started_at)
+                                : 'N/A'}
                             </Typography>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell>{formatTimestamp(result.started_at)}</TableCell>
-                        <TableCell>
-                          <IconButton
-                            size="small"
-                            onClick={() => showActionDetails(result)}
-                            title="View Details"
-                          >
-                            <ViewIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                      
-                      {/* Expanded Row Content */}
-                      <TableRow>
-                        <TableCell colSpan={10} sx={{ py: 0 }}>
-                          <Collapse in={expandedRows.has(result.id)} timeout="auto" unmountOnExit>
-                            <Box sx={{ p: 2, bgcolor: 'grey.50' }}>
-                              <Grid container spacing={2}>
-                                <Grid item xs={12} md={6}>
-                                  <Typography variant="subtitle2" gutterBottom>
-                                    Command Executed:
-                                  </Typography>
-                                  <Typography
-                                    variant="body2"
-                                    fontFamily="monospace"
-                                    sx={{ bgcolor: 'grey.100', p: 1, borderRadius: 1 }}
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              ({execution.totalActions} actions)
+                            </Typography>
+                          </Box>
+
+                          {/* Targets Level */}
+                          <Collapse in={expandedExecutions.has(execution.id)}>
+                            <Box sx={{ ml: 2, mt: 0.5 }}>
+                              {execution.targets.map((target) => (
+                                <Box key={target.id} sx={{ mb: 0.5 }}>
+                                  <Box
+                                    sx={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      p: 0.75,
+                                      bgcolor: 'background.paper',
+                                      border: '1px solid',
+                                      borderColor: 'divider',
+                                      borderRadius: 1,
+                                      cursor: 'pointer',
+                                      '&:hover': { bgcolor: 'grey.50' }
+                                    }}
+                                    onClick={() => toggleTarget(target.id)}
                                   >
-                                    {result.command_executed || 'N/A'}
-                                  </Typography>
-                                </Grid>
-                                <Grid item xs={12} md={6}>
-                                  <Typography variant="subtitle2" gutterBottom>
-                                    Context:
-                                  </Typography>
-                                  <Typography variant="body2">
-                                    <strong>Execution:</strong> {result.execution_serial}<br />
-                                    <strong>Branch:</strong> {result.branch_serial}<br />
-                                    <strong>Target Type:</strong> {result.target_type}<br />
-                                    <strong>Action Order:</strong> {result.action_order}
-                                  </Typography>
-                                </Grid>
-                                {result.result_output && (
-                                  <Grid item xs={12}>
-                                    <Typography variant="subtitle2" gutterBottom>
-                                      Output:
+                                    <IconButton size="small" sx={{ mr: 1 }}>
+                                      {expandedTargets.has(target.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                    </IconButton>
+                                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', mr: 2 }}>
+                                      {target.target_serial}
                                     </Typography>
-                                    <Typography
-                                      variant="body2"
-                                      fontFamily="monospace"
-                                      sx={{ 
-                                        bgcolor: 'grey.100', 
-                                        p: 1, 
-                                        borderRadius: 1,
-                                        maxHeight: 200,
-                                        overflow: 'auto',
-                                        whiteSpace: 'pre-wrap'
-                                      }}
-                                    >
-                                      {result.result_output}
+                                    <Typography variant="body2" sx={{ mr: 2, color: 'text.secondary' }}>
+                                      {target.target_name}
                                     </Typography>
-                                  </Grid>
-                                )}
-                                {result.result_error && (
-                                  <Grid item xs={12}>
-                                    <Typography variant="subtitle2" gutterBottom color="error">
-                                      Error:
-                                    </Typography>
-                                    <Typography
-                                      variant="body2"
-                                      fontFamily="monospace"
-                                      sx={{ 
-                                        bgcolor: 'error.light', 
-                                        color: 'error.contrastText',
-                                        p: 1, 
-                                        borderRadius: 1,
-                                        maxHeight: 200,
-                                        overflow: 'auto',
-                                        whiteSpace: 'pre-wrap'
-                                      }}
-                                    >
-                                      {result.result_error}
-                                    </Typography>
-                                  </Grid>
-                                )}
-                              </Grid>
+                                    <Chip 
+                                      label={target.failedActions > 0 ? 'Failed' : target.completedActions > 0 ? 'Success' : 'Running'} 
+                                      size="small" 
+                                      color={target.failedActions > 0 ? 'error' : target.completedActions > 0 ? 'success' : 'default'}
+                                      variant="outlined"
+                                    />
+                                  </Box>
+
+                                  {/* Action Results Level */}
+                                  <Collapse in={expandedTargets.has(target.id)}>
+                                    <Box sx={{ ml: 2, mt: 0.5, p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                                      {target.actions.map((action, index) => (
+                                        <Box key={action.id} sx={{ mb: index < target.actions.length - 1 ? 2 : 0 }}>
+                                          <Box sx={{ mb: 1 }}>
+                                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', mb: 0.5 }}>
+                                              {action.action_serial} - {action.action_name}
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                                              <Chip
+                                                label={action.status}
+                                                color={getStatusColor(action.status)}
+                                                size="small"
+                                                variant="outlined"
+                                              />
+                                              <Chip
+                                                label={`Exit: ${action.exit_code}`}
+                                                color={action.exit_code === 0 ? 'success' : 'error'}
+                                                size="small"
+                                                variant="outlined"
+                                              />
+                                              <Typography variant="caption" sx={{ alignSelf: 'center', color: 'text.secondary' }}>
+                                                {formatDuration(action.execution_time_ms)}
+                                              </Typography>
+                                            </Box>
+                                          </Box>
+                                          
+                                          {action.command_executed && (
+                                            <Box sx={{ mb: 1 }}>
+                                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+                                                  Command:
+                                                </Typography>
+                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                  <IconButton
+                                                    size="small"
+                                                    onClick={() => copyToClipboard(action.command_executed, 'Command')}
+                                                    title="Copy command"
+                                                  >
+                                                    <CopyIcon fontSize="small" />
+                                                  </IconButton>
+                                                  <IconButton
+                                                    size="small"
+                                                    onClick={() => saveAsFile(action.command_executed, `${action.action_serial}-command.txt`)}
+                                                    title="Save command as file"
+                                                  >
+                                                    <SaveIcon fontSize="small" />
+                                                  </IconButton>
+                                                </Box>
+                                              </Box>
+                                              <Typography
+                                                variant="body2"
+                                                sx={{ 
+                                                  fontFamily: 'monospace', 
+                                                  bgcolor: 'background.paper', 
+                                                  p: 1, 
+                                                  borderRadius: 1,
+                                                  border: '1px solid',
+                                                  borderColor: 'divider'
+                                                }}
+                                              >
+                                                {action.command_executed}
+                                              </Typography>
+                                            </Box>
+                                          )}
+                                          
+                                          {action.result_output && (
+                                            <Box sx={{ mb: 1 }}>
+                                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+                                                  Output:
+                                                </Typography>
+                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                  <IconButton
+                                                    size="small"
+                                                    onClick={() => copyToClipboard(action.result_output, 'Output')}
+                                                    title="Copy output"
+                                                  >
+                                                    <CopyIcon fontSize="small" />
+                                                  </IconButton>
+                                                  <IconButton
+                                                    size="small"
+                                                    onClick={() => saveAsFile(action.result_output, `${action.action_serial}-output.txt`)}
+                                                    title="Save output as file"
+                                                  >
+                                                    <SaveIcon fontSize="small" />
+                                                  </IconButton>
+                                                </Box>
+                                              </Box>
+                                              <Typography
+                                                variant="body2"
+                                                sx={{
+                                                  fontFamily: 'monospace',
+                                                  bgcolor: 'background.paper',
+                                                  p: 1,
+                                                  borderRadius: 1,
+                                                  border: '1px solid',
+                                                  borderColor: 'divider',
+                                                  maxHeight: 150,
+                                                  overflow: 'auto',
+                                                  whiteSpace: 'pre-wrap'
+                                                }}
+                                              >
+                                                {action.result_output}
+                                              </Typography>
+                                            </Box>
+                                          )}
+                                          
+                                          {action.result_error && (
+                                            <Box sx={{ mb: 1 }}>
+                                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'error.main' }}>
+                                                  Error:
+                                                </Typography>
+                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                  <IconButton
+                                                    size="small"
+                                                    onClick={() => copyToClipboard(action.result_error, 'Error')}
+                                                    title="Copy error"
+                                                  >
+                                                    <CopyIcon fontSize="small" />
+                                                  </IconButton>
+                                                  <IconButton
+                                                    size="small"
+                                                    onClick={() => saveAsFile(action.result_error, `${action.action_serial}-error.txt`)}
+                                                    title="Save error as file"
+                                                  >
+                                                    <SaveIcon fontSize="small" />
+                                                  </IconButton>
+                                                </Box>
+                                              </Box>
+                                              <Typography
+                                                variant="body2"
+                                                sx={{
+                                                  fontFamily: 'monospace',
+                                                  bgcolor: 'error.light',
+                                                  color: 'error.contrastText',
+                                                  p: 1,
+                                                  borderRadius: 1,
+                                                  maxHeight: 150,
+                                                  overflow: 'auto',
+                                                  whiteSpace: 'pre-wrap'
+                                                }}
+                                              >
+                                                {action.result_error}
+                                              </Typography>
+                                            </Box>
+                                          )}
+                                        </Box>
+                                      ))}
+                                    </Box>
+                                  </Collapse>
+                                </Box>
+                              ))}
                             </Box>
                           </Collapse>
-                        </TableCell>
-                      </TableRow>
-                    </React.Fragment>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          
-          {/* Pagination */}
-          {results.length > 0 && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-              <Pagination
-                count={totalPages}
-                page={page}
-                onChange={handlePageChange}
-                color="primary"
-              />
+                        </Box>
+                      ))}
+                    </Box>
+                  </Collapse>
+                </Box>
+              ))}
             </Box>
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {results.length > 0 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+          <Pagination
+            count={totalPages}
+            page={page}
+            onChange={handlePageChange}
+            color="primary"
+          />
+        </Box>
+      )}
 
       {/* Action Details Dialog */}
       <Dialog
@@ -648,7 +827,7 @@ const LogViewer = () => {
           <Button onClick={() => setDetailsOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 };
 

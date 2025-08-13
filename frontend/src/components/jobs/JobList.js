@@ -146,6 +146,8 @@ const JobList = ({
         setShowScheduleModal(true);
     }, []);
 
+
+
     const handleScheduleSubmit = useCallback(async (scheduledAt) => {
         if (jobToSchedule) {
             await onScheduleJob(jobToSchedule.id, scheduledAt);
@@ -153,6 +155,8 @@ const JobList = ({
             setJobToSchedule(null);
         }
     }, [jobToSchedule, onScheduleJob]);
+
+
 
     const handleEditClick = useCallback((job, e) => {
         e.stopPropagation();
@@ -758,6 +762,8 @@ const JobList = ({
                     onSubmit={handleScheduleSubmit}
                 />
             )}
+
+
             
             {showEditModal && jobToEdit && (
                 <JobEditModal

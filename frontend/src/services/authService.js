@@ -68,6 +68,9 @@ api.interceptors.response.use(
 );
 
 export const authService = {
+  // Expose the api instance for direct use
+  api,
+
   // Login user
   async login(username, password) {
     console.log('Making login request to:', '/auth/login');

@@ -33,28 +33,28 @@ import {
   ExpandMore as ExpandMoreIcon,
   Work as WorkIcon,
   Computer as ComputerIcon,
-  Code as CodeIcon
+  Code as CodeIcon,
+  Schedule as ScheduleIcon
 } from '@mui/icons-material';
 
 import { useAuth } from '../../contexts/AuthContext';
 import TargetSelectionModal from './TargetSelectionModal';
+import ScheduleConfigModal from './ScheduleConfigModal';
+import ActionsWorkspaceModal from './ActionsWorkspaceModal';
 
 const JobCreateModal = ({ open, onClose, onCreateJob }) => {
   const { token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [targets, setTargets] = useState([]);
   const [showTargetModal, setShowTargetModal] = useState(false);
+  const [showActionsModal, setShowActionsModal] = useState(false);
+  const [showSchedulingModal, setShowSchedulingModal] = useState(false);
+  const [scheduleConfig, setScheduleConfig] = useState(null);
   const [systemTimezone, setSystemTimezone] = useState('UTC');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    job_type: 'command',
-    actions: [{
-      action_order: 1,
-      action_type: 'command',
-      action_name: 'Execute Command',
-      action_parameters: { command: '' }
-    }],
+    actions: [],
     target_ids: [],
     scheduled_at: null
   });
@@ -103,39 +103,7 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
     }
   };
 
-  const handleActionChange = (index, field, value) => {
-    const updatedActions = [...formData.actions];
-    if (field === 'command') {
-      updatedActions[index].action_parameters.command = value;
-    } else {
-      updatedActions[index][field] = value;
-    }
-    setFormData(prev => ({ ...prev, actions: updatedActions }));
-  };
 
-  const addAction = () => {
-    const newAction = {
-      action_order: formData.actions.length + 1,
-      action_type: 'command',
-      action_name: `Action ${formData.actions.length + 1}`,
-      action_parameters: { command: '' }
-    };
-    setFormData(prev => ({
-      ...prev,
-      actions: [...prev.actions, newAction]
-    }));
-  };
-
-  const removeAction = (index) => {
-    if (formData.actions.length > 1) {
-      const updatedActions = formData.actions.filter((_, i) => i !== index);
-      // Reorder action_order
-      updatedActions.forEach((action, i) => {
-        action.action_order = i + 1;
-      });
-      setFormData(prev => ({ ...prev, actions: updatedActions }));
-    }
-  };
 
   const handleTargetSelectionChange = (selectedTargetIds) => {
     setFormData(prev => ({ ...prev, target_ids: selectedTargetIds }));
@@ -144,12 +112,28 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
     }
   };
 
+  const handleScheduleConfiguration = (scheduleData) => {
+    setScheduleConfig(scheduleData);
+    // If it's a simple one-time schedule, also set the scheduled_at field for backward compatibility
+    if (scheduleData && scheduleData.scheduleType === 'once' && scheduleData.executeAt) {
+      setFormData(prev => ({ ...prev, scheduled_at: scheduleData.executeAt }));
+    } else {
+      setFormData(prev => ({ ...prev, scheduled_at: null }));
+    }
+    setShowSchedulingModal(false);
+  };
+
+  const handleActionsConfiguration = (actionsData) => {
+    setFormData(prev => ({ ...prev, actions: actionsData }));
+    setShowActionsModal(false);
+  };
+
   const validateForm = () => {
     const newErrors = {};
     
     if (!formData.name.trim()) newErrors.name = 'Job name is required';
-    if (formData.actions.some(action => !action.action_parameters.command.trim())) {
-      newErrors.actions = 'All actions must have a command';
+    if (formData.actions.length === 0) {
+      newErrors.actions = 'At least one action must be defined';
     }
     if (formData.target_ids.length === 0) {
       newErrors.targets = 'At least one target must be selected';
@@ -194,25 +178,22 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
         });
       }
       
-      const success = await onCreateJob(submitData);
+      // Pass both job data and schedule configuration
+      const success = await onCreateJob(submitData, scheduleConfig);
       console.log('📤 Job creation result:', success);
+      console.log('📅 Schedule config:', scheduleConfig);
       if (success) {
         onClose();
         // Reset form
         setFormData({
           name: '',
           description: '',
-          job_type: 'command',
-          actions: [{
-            action_order: 1,
-            action_type: 'command',
-            action_name: 'Execute Command',
-            action_parameters: { command: '' }
-          }],
+          actions: [],
           target_ids: [],
           scheduled_at: null
         });
         setErrors({});
+        setScheduleConfig(null);
       }
     } finally {
       setLoading(false);
@@ -262,7 +243,7 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
               BASIC INFORMATION
             </Typography>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={8}>
+              <Grid item xs={12}>
                 <TextField
                   fullWidth
                   size="small"
@@ -273,21 +254,6 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
                   helperText={errors.name}
                   required
                 />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Job Type</InputLabel>
-                  <Select
-                    value={formData.job_type}
-                    label="Job Type"
-                    onChange={(e) => handleInputChange('job_type', e.target.value)}
-                  >
-                    <MenuItem value="command">Command</MenuItem>
-                    <MenuItem value="script">Script</MenuItem>
-                    <MenuItem value="file_transfer">File Transfer</MenuItem>
-                    <MenuItem value="composite">Composite</MenuItem>
-                  </Select>
-                </FormControl>
               </Grid>
               <Grid item xs={12}>
                 <TextField
@@ -305,92 +271,7 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
 
           <Divider />
 
-          {/* Actions - Compact Accordion */}
-          <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.8rem', color: 'text.secondary' }}>
-                ACTIONS ({formData.actions.length})
-              </Typography>
-              <Button
-                size="small"
-                startIcon={<AddIcon fontSize="small" />}
-                onClick={addAction}
-                sx={{ fontSize: '0.75rem' }}
-              >
-                Add Action
-              </Button>
-            </Box>
-            
-            {formData.actions.map((action, index) => (
-              <Accordion key={index} sx={{ mb: 1, '&:before': { display: 'none' } }}>
-                <AccordionSummary 
-                  expandIcon={<ExpandMoreIcon fontSize="small" />}
-                  sx={{ 
-                    minHeight: '40px',
-                    '& .MuiAccordionSummary-content': { 
-                      margin: '8px 0',
-                      alignItems: 'center'
-                    }
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                    <CodeIcon fontSize="small" color="primary" />
-                    <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-                      {action.action_name || `Action ${index + 1}`}
-                    </Typography>
-                    {formData.actions.length > 1 && (
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeAction(index);
-                        }}
-                        sx={{ ml: 'auto', mr: 1 }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 0 }}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        label="Action Name"
-                        value={action.action_name}
-                        onChange={(e) => handleActionChange(index, 'action_name', e.target.value)}
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        label="Command"
-                        value={action.action_parameters.command}
-                        onChange={(e) => handleActionChange(index, 'command', e.target.value)}
-                        multiline
-                        rows={3}
-                        required
-                        placeholder="Enter command to execute..."
-                      />
-                    </Grid>
-                  </Grid>
-                </AccordionDetails>
-              </Accordion>
-            ))}
-            
-            {errors.actions && (
-              <Alert severity="error" sx={{ mt: 1, fontSize: '0.75rem' }}>
-                {errors.actions}
-              </Alert>
-            )}
-          </Box>
-
-          <Divider />
-
-          {/* Targets - Modal Selection */}
+          {/* Targets - Modal Selection (moved up) */}
           <Box>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, fontSize: '0.8rem', color: 'text.secondary' }}>
               TARGETS ({selectedTargets.length} selected)
@@ -405,11 +286,18 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
                 justifyContent: 'flex-start',
                 textAlign: 'left',
                 py: 1.5,
-                fontSize: '0.8rem'
+                borderStyle: 'dashed',
+                borderColor: 'grey.400',
+                color: 'text.secondary',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                  color: 'primary.main',
+                  bgcolor: 'primary.50'
+                }
               }}
             >
               {selectedTargets.length === 0 
-                ? 'Select Targets...' 
+                ? 'Select Targets (Systems, Servers, Devices)' 
                 : `${selectedTargets.length} target${selectedTargets.length > 1 ? 's' : ''} selected`
               }
             </Button>
@@ -453,63 +341,152 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
 
           <Divider />
 
-          {/* Schedule - Compact */}
+          {/* Actions Workspace */}
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, fontSize: '0.8rem', color: 'text.secondary' }}>
+              ACTIONS ({formData.actions.length} configured)
+            </Typography>
+            
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={() => setShowActionsModal(true)}
+              startIcon={<CodeIcon />}
+              sx={{ 
+                justifyContent: 'flex-start',
+                textAlign: 'left',
+                py: 1.5,
+                px: 2,
+                borderStyle: 'dashed',
+                borderColor: 'grey.400',
+                color: 'text.secondary',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                  color: 'primary.main',
+                  bgcolor: 'primary.50'
+                }
+              }}
+            >
+              {formData.actions.length === 0 
+                ? 'Configure Actions (Commands, Scripts, APIs, Files, etc.)' 
+                : `${formData.actions.length} action${formData.actions.length > 1 ? 's' : ''} configured`
+              }
+            </Button>
+
+            {/* Actions Preview */}
+            {formData.actions.length > 0 && (
+              <Box sx={{ mt: 1, p: 1.5, bgcolor: 'info.50', borderRadius: 1, border: '1px solid', borderColor: 'info.200' }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: 'info.dark' }}>
+                  ACTIONS CONFIGURED:
+                </Typography>
+                {formData.actions.slice(0, 3).map((action, index) => (
+                  <Typography key={index} variant="body2" sx={{ fontSize: '0.75rem', mt: 0.5, color: 'info.dark' }}>
+                    {index + 1}. <strong>{action.action_name || action.name}</strong> ({action.action_type || action.type})
+                  </Typography>
+                ))}
+                {formData.actions.length > 3 && (
+                  <Typography variant="body2" sx={{ fontSize: '0.75rem', mt: 0.5, color: 'info.main' }}>
+                    ... and {formData.actions.length - 3} more actions
+                  </Typography>
+                )}
+                <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'info.main', mt: 0.5 }}>
+                  ✅ Workflow ready for execution
+                </Typography>
+              </Box>
+            )}
+            
+            {errors.actions && (
+              <Alert severity="error" sx={{ mt: 1, fontSize: '0.75rem' }}>
+                {errors.actions}
+              </Alert>
+            )}
+          </Box>
+
+          <Divider />
+
+          {/* Schedule Configuration */}
           <Box>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, fontSize: '0.8rem', color: 'text.secondary' }}>
               SCHEDULE (OPTIONAL)
             </Typography>
-            <TextField
-              size="small"
-              type="datetime-local"
-              label={`Schedule Time (${systemTimezone})`}
-              value={formData.scheduled_at || ''}
-              onChange={(e) => handleInputChange('scheduled_at', e.target.value || null)}
-              InputLabelProps={{ shrink: true }}
-              helperText={`Leave empty to create as draft. Time will be in ${systemTimezone}`}
-              inputProps={{
-                min: (() => {
-                  // Get current local time for min attribute
-                  const now = new Date();
-                  // Add 1 minute to avoid immediate past time issues
-                  now.setMinutes(now.getMinutes() + 1);
-                  // Format as local datetime string for datetime-local input
-                  const year = now.getFullYear();
-                  const month = String(now.getMonth() + 1).padStart(2, '0');
-                  const day = String(now.getDate()).padStart(2, '0');
-                  const hours = String(now.getHours()).padStart(2, '0');
-                  const minutes = String(now.getMinutes()).padStart(2, '0');
-                  return `${year}-${month}-${day}T${hours}:${minutes}`;
-                })()
-              }}
-            />
             
-            {/* SIMPLE PREVIEW - Just show the raw numbers */}
-            {formData.scheduled_at && (
-              <Box sx={{ mt: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.300' }}>
-                <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                  SCHEDULE PREVIEW:
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={() => setShowSchedulingModal(true)}
+              startIcon={<ScheduleIcon />}
+              sx={{ 
+                justifyContent: 'flex-start',
+                textAlign: 'left',
+                py: 1.5,
+                px: 2,
+                borderStyle: 'dashed',
+                borderColor: 'grey.400',
+                color: 'text.secondary',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                  color: 'primary.main',
+                  bgcolor: 'primary.50'
+                }
+              }}
+            >
+              {scheduleConfig ? 
+                `Schedule Configured: ${scheduleConfig.scheduleType === 'once' ? 'One-time' : 
+                  scheduleConfig.scheduleType === 'recurring' ? 
+                    `Every ${scheduleConfig.interval} ${
+                      scheduleConfig.recurringType === 'minutes' ? 'minute(s)' :
+                      scheduleConfig.recurringType === 'hours' ? 'hour(s)' :
+                      scheduleConfig.recurringType === 'daily' ? 'day(s)' : 
+                      scheduleConfig.recurringType === 'weekly' ? 'week(s)' : 'month(s)'
+                    }` : 
+                  'Cron Expression'}` 
+                : 'Configure Schedule (One-time, Recurring, Cron)'}
+            </Button>
+
+            {/* Schedule Preview */}
+            {scheduleConfig && (
+              <Box sx={{ mt: 1, p: 1.5, bgcolor: 'success.50', borderRadius: 1, border: '1px solid', borderColor: 'success.200' }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: 'success.dark' }}>
+                  SCHEDULE CONFIGURED:
                 </Typography>
-                <Typography variant="body2" sx={{ fontSize: '0.75rem', mt: 0.5 }}>
-                  📅 <strong>Date:</strong> {formData.scheduled_at.split('T')[0]}
+                <Typography variant="body2" sx={{ fontSize: '0.75rem', mt: 0.5, color: 'success.dark' }}>
+                  📅 <strong>Type:</strong> {scheduleConfig.scheduleType === 'once' ? 'One-time execution' : 
+                    scheduleConfig.scheduleType === 'recurring' ? `Recurring (${scheduleConfig.recurringType})` : 
+                    'Cron expression'}
                 </Typography>
-                <Typography variant="body2" sx={{ fontSize: '0.75rem', mt: 0.5 }}>
-                  🕐 <strong>Time:</strong> {formData.scheduled_at.split('T')[1]} (24-hour format)
-                </Typography>
-                <Typography variant="body2" sx={{ fontSize: '0.75rem', mt: 0.5 }}>
-                  🕐 <strong>Time in 12-hour:</strong> {(() => {
-                    const timePart = formData.scheduled_at.split('T')[1];
-                    const [hourStr, minuteStr] = timePart.split(':');
-                    const hour = parseInt(hourStr);
-                    const minute = minuteStr;
-                    
-                    if (hour === 0) return `12:${minute} AM`;
-                    if (hour < 12) return `${hour}:${minute} AM`;
-                    if (hour === 12) return `12:${minute} PM`;
-                    return `${hour - 12}:${minute} PM`;
-                  })()}
-                </Typography>
-                <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'success.main' }}>
-                  ✅ This is exactly what you selected!
+                {scheduleConfig.scheduleType === 'once' && scheduleConfig.executeAt && (
+                  <Typography variant="body2" sx={{ fontSize: '0.75rem', mt: 0.5, color: 'success.dark' }}>
+                    🕐 <strong>Execute at:</strong> {new Date(scheduleConfig.executeAt).toLocaleString()}
+                  </Typography>
+                )}
+                {scheduleConfig.scheduleType === 'recurring' && (
+                  <>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem', mt: 0.5, color: 'success.dark' }}>
+                      🔄 <strong>Pattern:</strong> Every {scheduleConfig.interval} {
+                        scheduleConfig.recurringType === 'minutes' ? 'minute(s)' :
+                        scheduleConfig.recurringType === 'hours' ? 'hour(s)' :
+                        scheduleConfig.recurringType === 'daily' ? 'day(s)' : 
+                        scheduleConfig.recurringType === 'weekly' ? 'week(s)' : 'month(s)'
+                      } 
+                      {!['minutes', 'hours'].includes(scheduleConfig.recurringType) && ` at ${scheduleConfig.time}`}
+                      {scheduleConfig.recurringType === 'weekly' && scheduleConfig.daysOfWeek?.length > 0 && 
+                        ` on ${scheduleConfig.daysOfWeek.map(d => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d-1]).join(', ')}`}
+                      {scheduleConfig.recurringType === 'monthly' && ` on day ${scheduleConfig.dayOfMonth}`}
+                    </Typography>
+                    {scheduleConfig.startDate && (
+                      <Typography variant="body2" sx={{ fontSize: '0.75rem', mt: 0.5, color: 'success.dark' }}>
+                        🚀 <strong>First run:</strong> {new Date(scheduleConfig.startDate + 'T' + scheduleConfig.startTime).toLocaleString()}
+                      </Typography>
+                    )}
+                  </>
+                )}
+                {scheduleConfig.scheduleType === 'cron' && (
+                  <Typography variant="body2" sx={{ fontSize: '0.75rem', mt: 0.5, color: 'success.dark' }}>
+                    ⚙️ <strong>Cron:</strong> {scheduleConfig.cronExpression}
+                  </Typography>
+                )}
+                <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'success.main', mt: 0.5 }}>
+                  ✅ Schedule ready to apply after job creation
                 </Typography>
               </Box>
             )}
@@ -538,6 +515,23 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
         onClose={() => setShowTargetModal(false)}
         selectedTargetIds={formData.target_ids}
         onSelectionChange={handleTargetSelectionChange}
+      />
+
+      {/* Actions Workspace Modal */}
+      <ActionsWorkspaceModal
+        open={showActionsModal}
+        onClose={() => setShowActionsModal(false)}
+        onActionsConfigured={handleActionsConfiguration}
+        initialActions={formData.actions}
+        selectedTargets={selectedTargets}
+      />
+
+      {/* Schedule Configuration Modal */}
+      <ScheduleConfigModal
+        open={showSchedulingModal}
+        onClose={() => setShowSchedulingModal(false)}
+        onConfigurationComplete={handleScheduleConfiguration}
+        initialConfig={scheduleConfig}
       />
     </Dialog>
   );

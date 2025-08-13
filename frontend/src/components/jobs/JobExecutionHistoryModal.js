@@ -47,7 +47,6 @@ import {
   Error as ErrorIcon,
   Schedule as ScheduleIcon,
   Cancel as CancelIcon,
-  Computer as ComputerIcon,
   Timeline as TimelineIcon,
   Assessment as AssessmentIcon,
   ExpandLess,
@@ -59,7 +58,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { formatLocalDateTime } from '../../utils/timeUtils';
 import { getExecutionActionResults, formatExecutionTime, getActionStatusColor } from '../../services/jobService';
-import SimpleTargetResultsModal from './SimpleTargetResultsModal';
+
 import './JobExecutionHistoryModal.css';
 
 const JobExecutionHistoryModal = ({ open, onClose, job }) => {
@@ -78,7 +77,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
   const [testExpanded, setTestExpanded] = useState(false);
   const [actionResults, setActionResults] = useState({});
   const [loadingActionResults, setLoadingActionResults] = useState({});
-  const [targetResultsModal, setTargetResultsModal] = useState({ open: false, executionSerial: null });
+
   
   console.log('Current expandedBranches state in render:', expandedBranches);
 
@@ -788,30 +787,15 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
                       </Typography>
                     </TableCell>
                     <TableCell className="table-cell" align="center">
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-
-                        <IconButton 
-                          className="btn-icon"
-                          size="small"
-                          onClick={() => setTargetResultsModal({ 
-                            open: true, 
-                            executionSerial: execution.execution_serial 
-                          })}
-                          title="View Target Results (Serialization)"
-                          sx={{ color: 'primary.main' }}
-                        >
-                          <ComputerIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          className="btn-icon"
-                          size="small"
-                          onClick={() => openInLogViewer(execution.execution_serial)}
-                          title="View in Log Viewer"
-                          sx={{ color: 'secondary.main' }}
-                        >
-                          <FindInPageIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
+                      <IconButton
+                        className="btn-icon"
+                        size="small"
+                        onClick={() => openInLogViewer(execution.execution_serial)}
+                        title="View in Log Viewer"
+                        sx={{ color: 'secondary.main' }}
+                      >
+                        <FindInPageIcon fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 );
@@ -867,7 +851,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <ComputerIcon sx={{ color: 'primary.main', fontSize: '1.5rem' }} />
+                <TimelineIcon sx={{ color: 'primary.main', fontSize: '1.5rem' }} />
               </Box>
               <Box>
                 <Typography variant="h5" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.5, fontFamily: 'monospace' }}>
@@ -1136,12 +1120,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
       execution={executionDetailsModal.execution}
     />
 
-    {/* Simple Target Results Modal - JUST SHOW THE FUCKING SERIALIZATION! */}
-    <SimpleTargetResultsModal
-      open={targetResultsModal.open}
-      onClose={() => setTargetResultsModal({ open: false, executionSerial: null })}
-      executionSerial={targetResultsModal.executionSerial}
-    />
+
     </>
   );
 };

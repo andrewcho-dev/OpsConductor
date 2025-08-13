@@ -38,10 +38,13 @@ Default credentials:
 - **Nginx** - Reverse proxy with SSL termination
 
 ### Key Features
-- **Job Orchestration** - Execute commands across multiple targets
+- **Advanced Workflow Engine** - Create sophisticated automation workflows with conditional logic
+- **Actions Workspace** - Visual workflow designer with 8+ action types (commands, scripts, APIs, files, etc.)
+- **Conditional Logic & Dependencies** - Build complex workflows with branching logic and action dependencies
 - **Target Management** - Manage servers, network devices, and cloud resources
 - **Network Discovery** - Automated device discovery and scanning
-- **Real-time Monitoring** - Live job execution tracking
+- **Real-time Monitoring** - Live job execution tracking with hierarchical serialization
+- **Variable System** - Powerful templating with system and custom variables
 - **User Management** - Role-based access control
 - **Audit Logging** - Comprehensive activity tracking
 - **System Health** - Service monitoring and restart capabilities
@@ -110,12 +113,21 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ## 🎯 Core Features
 
+### Advanced Workflow Engine
+- **Actions Workspace** - Visual workflow designer with drag-and-drop interface
+- **8+ Action Types** - Commands, scripts, APIs, databases, files, email, conditions, parallel execution
+- **Conditional Logic** - Execute actions based on runtime conditions and previous results
+- **Action Dependencies** - Define execution order and prerequisites
+- **Variable System** - System and custom variables with templating support
+- **Retry & Error Handling** - Sophisticated error recovery and rollback mechanisms
+- **Workflow Validation** - Real-time validation with circular dependency detection
+
 ### Job Management
-- Create and execute jobs across multiple targets
-- Support for commands, scripts, and file transfers
+- Create sophisticated multi-step workflows across multiple targets
+- Target-first workflow design for better compatibility
 - Hierarchical execution tracking with serial identifiers
-- Real-time execution monitoring
-- Comprehensive execution history
+- Real-time execution monitoring with detailed logging
+- Comprehensive execution history and audit trails
 
 ### Target Management
 - Universal target support (SSH, WinRM, API endpoints)
@@ -142,6 +154,83 @@ docker-compose -f docker-compose.prod.yml up -d
 - User activity auditing
 - Session management
 
+## 📚 Documentation
+
+### User Guides
+- **[Actions Workspace Guide](docs/ACTIONS_WORKSPACE_GUIDE.md)** - Complete guide to creating workflows
+- **[Actions Quick Reference](docs/ACTIONS_QUICK_REFERENCE.md)** - Quick reference card for workflow creation
+- **[API Reference](docs/API_REFERENCE.md)** - Comprehensive API documentation
+- **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)** - Production deployment instructions
+- **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Development setup and contribution guide
+- **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
+
+### Quick Start Workflows
+
+#### Simple Command Execution
+```json
+{
+  "name": "System Health Check",
+  "actions": [
+    {
+      "type": "command",
+      "name": "Check Disk Space",
+      "parameters": {
+        "command": "df -h"
+      }
+    }
+  ],
+  "target_ids": [1, 2, 3]
+}
+```
+
+#### Multi-Step Deployment
+```json
+{
+  "name": "Application Deployment",
+  "actions": [
+    {
+      "id": "health-check",
+      "type": "command",
+      "name": "Pre-deployment Check",
+      "parameters": {
+        "command": "curl -f http://localhost/health"
+      }
+    },
+    {
+      "id": "deploy",
+      "type": "script",
+      "name": "Deploy Application",
+      "parameters": {
+        "scriptType": "bash",
+        "scriptContent": "#!/bin/bash\necho 'Deploying...'\n# Deployment logic here"
+      },
+      "dependencies": [
+        {
+          "actionId": "health-check",
+          "status": "success"
+        }
+      ]
+    },
+    {
+      "id": "notify",
+      "type": "email",
+      "name": "Send Notification",
+      "parameters": {
+        "to": "ops-team@company.com",
+        "subject": "Deployment Complete",
+        "body": "Deployment of ${JOB_NAME} completed on ${TARGET_HOST}"
+      },
+      "dependencies": [
+        {
+          "actionId": "deploy",
+          "status": "success"
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## 🔌 API Reference
 
 ### Authentication
@@ -153,12 +242,14 @@ curl -H "Authorization: Bearer <jwt_token>" \
 
 ### Key Endpoints
 - `POST /api/auth/login` - User authentication
-- `GET /api/jobs` - List jobs
-- `POST /api/jobs` - Create job
+- `GET /api/jobs` - List jobs with workflow details
+- `POST /api/jobs` - Create workflow-based jobs
 - `GET /api/targets` - List targets
 - `POST /api/targets` - Create target
 - `GET /api/discovery/scan` - Network discovery
 - `GET /api/system/health` - System health
+
+For complete API documentation, see [API Reference](docs/API_REFERENCE.md).
 
 ## 🛠️ Development
 

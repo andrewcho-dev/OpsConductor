@@ -22,6 +22,7 @@ import JobList from './JobList';
 import JobSafetyControls from './JobSafetyControls';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAlert } from '../layout/BottomStatusBar';
+import { authService } from '../../services/authService';
 
 const JobDashboard = () => {
     const { addAlert } = useAlert();
@@ -42,30 +43,13 @@ const JobDashboard = () => {
         try {
             setLoading(true);
             
-            // Add timeout to prevent hanging
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-            
-            const response = await fetch(`/api/jobs/`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                const data = await response.json();
-                setJobs(data.jobs || []);
-                addAlert(`Loaded ${data.jobs?.length || 0} jobs successfully`, 'success', 3000);
-            } else {
-                addAlert('Failed to fetch jobs', 'error', 0);
-            }
+            const response = await authService.api.get('/jobs/');
+            setJobs(response.data.jobs || []);
+            addAlert(`Loaded ${response.data.jobs?.length || 0} jobs successfully`, 'success', 3000);
         } catch (error) {
-            if (error.name === 'AbortError') {
-                addAlert('Request timed out - please try again', 'error', 5000);
+            console.error('Error fetching jobs:', error);
+            if (error.response?.status === 401) {
+                addAlert('Authentication failed - please log in again', 'error', 0);
             } else {
                 addAlert(`Error fetching jobs: ${error.message}`, 'error', 0);
             }
@@ -76,104 +60,71 @@ const JobDashboard = () => {
 
     const fetchWorkerStats = async () => {
         try {
-            // Add timeout to prevent hanging
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-            
-            const response = await fetch('/api/celery/workers', {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                const data = await response.json();
-                const activeWorkers = data.workers ? data.workers.length : 0;
-                setWorkerStats({ active: activeWorkers, total: activeWorkers });
-            }
+            const response = await authService.api.get('/celery/workers');
+            const activeWorkers = response.data.workers ? response.data.workers.length : 0;
+            setWorkerStats({ active: activeWorkers, total: activeWorkers });
         } catch (error) {
             // Silently fail - monitoring is optional
-            console.log('Worker stats unavailable:', error.name);
+            console.log('Worker stats unavailable:', error.message);
         }
     };
 
-    const handleCreateJob = async (jobData) => {
+    const handleCreateJob = async (jobData, scheduleConfig) => {
         try {
-            const response = await fetch(`/api/jobs/`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(jobData)
-            });
-
-            if (response.ok) {
-                const newJob = await response.json();
-                setJobs(prevJobs => [newJob, ...prevJobs]);
-                setShowCreateModal(false);
-                addAlert(`Job "${newJob.name}" created successfully!`, 'success', 3000);
-                return true;
+            // First create the job
+            const response = await authService.api.post('/jobs/', jobData);
+            const newJob = response.data;
+            setJobs(prevJobs => [newJob, ...prevJobs]);
+            
+            // If there's advanced schedule configuration, create the schedule
+            if (scheduleConfig && scheduleConfig.scheduleType !== 'once') {
+                try {
+                    const scheduleData = {
+                        job_id: newJob.id,
+                        schedule_type: scheduleConfig.scheduleType,
+                        enabled: true,
+                        timezone: scheduleConfig.timezone || 'UTC',
+                        description: `Auto-created schedule for job: ${newJob.name}`,
+                        ...scheduleConfig
+                    };
+                    
+                    await authService.api.post('/api/schedules', scheduleData);
+                    addAlert(`Job "${newJob.name}" created with ${scheduleConfig.scheduleType} schedule!`, 'success', 3000);
+                } catch (scheduleError) {
+                    console.error('Failed to create schedule:', scheduleError);
+                    addAlert(`Job "${newJob.name}" created, but schedule setup failed. You can configure it later.`, 'warning', 5000);
+                }
             } else {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to create job');
+                addAlert(`Job "${newJob.name}" created successfully!`, 'success', 3000);
             }
+            
+            setShowCreateModal(false);
+            return true;
         } catch (error) {
-            addAlert(`Failed to create job: ${error.message}`, 'error', 5000);
+            addAlert(`Failed to create job: ${error.response?.data?.detail || error.message}`, 'error', 5000);
             return false;
         }
     };
 
     const handleExecuteJob = async (jobId, targetIds = null) => {
         try {
-            const response = await fetch(`/api/jobs/${jobId}/execute`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ target_ids: targetIds })
-            });
-
-            if (response.ok) {
-                const execution = await response.json();
-                fetchJobs(); // Refresh job list
-                addAlert(`Job execution started successfully`, 'success', 3000);
-                return true;
-            } else {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to execute job');
-            }
+            const response = await authService.api.post(`/jobs/${jobId}/execute`, { target_ids: targetIds });
+            fetchJobs(); // Refresh job list
+            addAlert(`Job execution started successfully`, 'success', 3000);
+            return true;
         } catch (error) {
-            addAlert(`Failed to execute job: ${error.message}`, 'error', 0);
+            addAlert(`Failed to execute job: ${error.response?.data?.detail || error.message}`, 'error', 0);
             return false;
         }
     };
 
     const handleScheduleJob = async (jobId, scheduledAt) => {
         try {
-            const response = await fetch(`/api/jobs/${jobId}/schedule`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ scheduled_at: scheduledAt })
-            });
-
-            if (response.ok) {
-                fetchJobs(); // Refresh job list
-                return true;
-            } else {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to schedule job');
-            }
+            const response = await authService.api.post(`/jobs/${jobId}/schedule`, { scheduled_at: scheduledAt });
+            fetchJobs(); // Refresh job list
+            return true;
         } catch (error) {
-            addAlert(`Failed to schedule job: ${error.message}`, 'error', 0);
+            addAlert(`Failed to schedule job: ${error.response?.data?.detail || error.message}`, 'error', 0);
             return false;
         }
     };
@@ -182,63 +133,39 @@ const JobDashboard = () => {
 
     const handleUpdateJob = async (updatedJobData) => {
         try {
-            const response = await fetch(`/api/jobs/${updatedJobData.id || updatedJobData.job_id}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    name: updatedJobData.name,
-                    description: updatedJobData.description,
-                    job_type: updatedJobData.job_type,
-                    actions: updatedJobData.actions,
-                    target_ids: updatedJobData.target_ids,
-                    scheduled_at: updatedJobData.scheduled_at
-                })
-            });
-
-            if (response.ok) {
-                const updatedJob = await response.json();
-                // Update the job in the local state
-                setJobs(prevJobs => 
-                    prevJobs.map(job => 
-                        job.id === updatedJob.id ? updatedJob : job
-                    )
-                );
-                addAlert('Job updated successfully!', 'success');
-                fetchJobs(); // Refresh the job list to get latest data
-                return true;
-            } else {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to update job');
-            }
+            const jobData = {
+                name: updatedJobData.name,
+                description: updatedJobData.description,
+                job_type: updatedJobData.job_type,
+                actions: updatedJobData.actions,
+                target_ids: updatedJobData.target_ids,
+                scheduled_at: updatedJobData.scheduled_at
+            };
+            const response = await authService.api.put(`/jobs/${updatedJobData.id || updatedJobData.job_id}`, jobData);
+            const updatedJob = response.data;
+            // Update the job in the local state
+            setJobs(prevJobs => 
+                prevJobs.map(job => 
+                    job.id === updatedJob.id ? updatedJob : job
+                )
+            );
+            addAlert('Job updated successfully!', 'success');
+            fetchJobs(); // Refresh the job list to get latest data
+            return true;
         } catch (error) {
-            addAlert(`Failed to update job: ${error.message}`, 'error');
+            addAlert(`Failed to update job: ${error.response?.data?.detail || error.message}`, 'error');
             return false;
         }
     };
 
     const handleDeleteJob = async (jobId) => {
         try {
-            const response = await fetch(`/api/jobs/${jobId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                // Remove the job from the local state
-                setJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
-                addAlert(`Job deleted successfully`, 'success', 3000);
-            } else {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to delete job');
-            }
+            await authService.api.delete(`/jobs/${jobId}`);
+            // Remove the job from the local state
+            setJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
+            addAlert(`Job deleted successfully`, 'success', 3000);
         } catch (error) {
-            addAlert(`Failed to delete job: ${error.message}`, 'error', 0);
+            addAlert(`Failed to delete job: ${error.response?.data?.detail || error.message}`, 'error', 0);
         }
     };
 

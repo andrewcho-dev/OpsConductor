@@ -2,16 +2,40 @@
 Audit API v1 for security and compliance logging.
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 
 from app.database.database import get_db
-from main import get_current_user
 from app.models.user_models import User
+from app.core.security import verify_token
+from app.services.user_service import UserService
 from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 
 router = APIRouter(prefix="/api/v1/audit")
+security = HTTPBearer()
+
+
+def get_current_user(credentials: HTTPBearer = Depends(security), 
+                    db: Session = Depends(get_db)):
+    """Get current authenticated user."""
+    token = credentials.credentials
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+    
+    user_id = payload.get("user_id")
+    user = UserService.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return user
 
 
 def get_audit_service(db: Session = Depends(get_db)) -> AuditService:

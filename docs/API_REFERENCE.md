@@ -33,18 +33,76 @@ POST /api/jobs
 Content-Type: application/json
 
 {
-  "name": "System Update",
-  "description": "Update all production servers",
-  "job_type": "command",
+  "name": "System Update Workflow",
+  "description": "Comprehensive system update with health checks",
   "actions": [
     {
-      "action_type": "command",
-      "action_name": "update_system",
-      "action_parameters": {
+      "id": "health-check",
+      "name": "Pre-update Health Check",
+      "type": "command",
+      "order": 1,
+      "parameters": {
+        "command": "systemctl status nginx && df -h"
+      },
+      "timeout": 30,
+      "continueOnError": false
+    },
+    {
+      "id": "system-update",
+      "name": "Update System Packages",
+      "type": "command",
+      "order": 2,
+      "parameters": {
         "command": "sudo apt update && sudo apt upgrade -y"
-      }
+      },
+      "dependencies": [
+        {
+          "actionId": "health-check",
+          "status": "success"
+        }
+      ],
+      "conditions": [
+        {
+          "variable": "PREVIOUS_ACTION_EXIT_CODE",
+          "operator": "==",
+          "value": "0"
+        }
+      ],
+      "retryCount": 2,
+      "retryDelay": 10
+    },
+    {
+      "id": "post-update-check",
+      "name": "Post-update Verification",
+      "type": "script",
+      "order": 3,
+      "parameters": {
+        "scriptType": "bash",
+        "scriptContent": "#!/bin/bash\necho 'Verifying system after update...'\nsystemctl status nginx\necho 'Update completed successfully'"
+      },
+      "dependencies": [
+        {
+          "actionId": "system-update",
+          "status": "success"
+        }
+      ]
     }
   ],
+  "variables": [
+    {
+      "key": "MAINTENANCE_WINDOW",
+      "value": "2025-01-08T10:00:00Z",
+      "type": "string",
+      "description": "Scheduled maintenance window"
+    }
+  ],
+  "settings": {
+    "continueOnError": false,
+    "parallelExecution": false,
+    "timeout": 3600,
+    "retryCount": 1,
+    "logLevel": "info"
+  },
   "target_ids": [1, 2, 3],
   "scheduled_at": "2025-01-08T10:00:00Z"
 }
@@ -56,13 +114,43 @@ Content-Type: application/json
   "id": 1,
   "job_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "job_serial": "J20250001",
-  "name": "System Update",
-  "description": "Update all production servers",
-  "job_type": "command",
+  "name": "System Update Workflow",
+  "description": "Comprehensive system update with health checks",
   "status": "scheduled",
   "created_at": "2025-01-08T09:00:00Z",
   "scheduled_at": "2025-01-08T10:00:00Z",
-  "actions": [...]
+  "actions": [
+    {
+      "id": "health-check",
+      "name": "Pre-update Health Check",
+      "type": "command",
+      "order": 1,
+      "parameters": {
+        "command": "systemctl status nginx && df -h"
+      },
+      "timeout": 30,
+      "continueOnError": false,
+      "conditions": [],
+      "dependencies": [],
+      "retryCount": 0,
+      "retryDelay": 5
+    }
+  ],
+  "variables": [
+    {
+      "key": "MAINTENANCE_WINDOW",
+      "value": "2025-01-08T10:00:00Z",
+      "type": "string",
+      "description": "Scheduled maintenance window"
+    }
+  ],
+  "settings": {
+    "continueOnError": false,
+    "parallelExecution": false,
+    "timeout": 3600,
+    "retryCount": 1,
+    "logLevel": "info"
+  }
 }
 ```
 
@@ -367,6 +455,265 @@ Content-Type: application/json
   "not_found": []
 }
 ```
+
+## Action Types Reference
+
+The Actions Workspace supports multiple action types, each with specific parameters and capabilities.
+
+### Command Actions
+
+Execute shell commands on target systems.
+
+```json
+{
+  "type": "command",
+  "name": "System Health Check",
+  "parameters": {
+    "command": "df -h && free -m && uptime",
+    "workingDirectory": "/home/user",
+    "expectedExitCodes": [0, 1]
+  },
+  "timeout": 300,
+  "continueOnError": false
+}
+```
+
+### Script Actions
+
+Execute scripts in various languages.
+
+```json
+{
+  "type": "script",
+  "name": "Deployment Script",
+  "parameters": {
+    "scriptType": "python",
+    "scriptContent": "#!/usr/bin/env python3\nimport sys\nprint('Deploying application...')",
+    "arguments": ["--env=production", "--version=1.2.3"]
+  },
+  "timeout": 600
+}
+```
+
+**Supported Script Types:**
+- `bash` - Bash shell scripts
+- `python` - Python scripts
+- `powershell` - PowerShell scripts
+- `batch` - Windows batch files
+- `javascript` - Node.js JavaScript
+
+### API Actions
+
+Make HTTP requests to REST APIs.
+
+```json
+{
+  "type": "api",
+  "name": "Update Load Balancer",
+  "parameters": {
+    "method": "POST",
+    "url": "https://api.example.com/loadbalancer/update",
+    "headers": {
+      "Authorization": "Bearer ${API_TOKEN}",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "server": "${TARGET_HOST}",
+      "status": "active"
+    }
+  },
+  "timeout": 30
+}
+```
+
+### Database Actions
+
+Execute SQL queries and database operations.
+
+```json
+{
+  "type": "database",
+  "name": "Update Deployment Status",
+  "parameters": {
+    "connectionString": "postgresql://user:pass@db.example.com:5432/mydb",
+    "queryType": "UPDATE",
+    "query": "UPDATE deployments SET status = 'completed' WHERE job_id = '${JOB_NAME}'"
+  },
+  "timeout": 60
+}
+```
+
+### File Actions
+
+Perform file system operations.
+
+```json
+{
+  "type": "file",
+  "name": "Deploy Application Files",
+  "parameters": {
+    "operation": "copy",
+    "source": "/tmp/app-${VERSION}.tar.gz",
+    "destination": "/opt/apps/",
+    "preservePermissions": true
+  },
+  "timeout": 300
+}
+```
+
+**Supported Operations:**
+- `copy` - Copy files/directories
+- `move` - Move files/directories
+- `delete` - Delete files/directories
+- `chmod` - Change permissions
+- `chown` - Change ownership
+- `mkdir` - Create directories
+
+### Email Actions
+
+Send email notifications.
+
+```json
+{
+  "type": "email",
+  "name": "Deployment Notification",
+  "parameters": {
+    "to": "ops-team@company.com,manager@company.com",
+    "subject": "Deployment Complete - ${JOB_NAME}",
+    "body": "The deployment job '${JOB_NAME}' has completed successfully on ${TARGET_HOST}.\n\nExecution ID: ${EXECUTION_ID}\nStart Time: ${EXECUTION_TIME}"
+  },
+  "timeout": 30
+}
+```
+
+### Condition Actions
+
+Create conditional execution logic.
+
+```json
+{
+  "type": "condition",
+  "name": "Check Previous Success",
+  "parameters": {
+    "conditionType": "if",
+    "expression": "${PREVIOUS_ACTION_EXIT_CODE} == 0"
+  },
+  "conditions": [
+    {
+      "variable": "PREVIOUS_ACTION_EXIT_CODE",
+      "operator": "==",
+      "value": "0"
+    }
+  ]
+}
+```
+
+### Parallel Actions
+
+Execute multiple actions concurrently.
+
+```json
+{
+  "type": "parallel",
+  "name": "Parallel Health Checks",
+  "parameters": {
+    "maxConcurrency": 5,
+    "waitForAll": true
+  },
+  "timeout": 300
+}
+```
+
+## Action Configuration Options
+
+### Common Properties
+
+All actions support these common properties:
+
+```json
+{
+  "id": "unique-action-id",
+  "name": "Human-readable action name",
+  "type": "action_type",
+  "order": 1,
+  "parameters": {},
+  "timeout": 300,
+  "continueOnError": false,
+  "conditions": [],
+  "dependencies": [],
+  "retryCount": 0,
+  "retryDelay": 5,
+  "onFailureAction": "stop"
+}
+```
+
+### Conditions
+
+Actions can have conditions that determine execution:
+
+```json
+{
+  "conditions": [
+    {
+      "variable": "PREVIOUS_ACTION_EXIT_CODE",
+      "operator": "==",
+      "value": "0"
+    },
+    {
+      "variable": "TARGET_OS",
+      "operator": "contains",
+      "value": "linux"
+    }
+  ]
+}
+```
+
+**Available Operators:**
+- `==` - Equals
+- `!=` - Not equals
+- `>` - Greater than
+- `<` - Less than
+- `contains` - String contains
+- `matches` - Regular expression match
+
+### Dependencies
+
+Define execution order and prerequisites:
+
+```json
+{
+  "dependencies": [
+    {
+      "actionId": "health-check",
+      "status": "success"
+    },
+    {
+      "actionId": "backup-data",
+      "status": "completed"
+    }
+  ]
+}
+```
+
+**Dependency Status Options:**
+- `success` - Action completed successfully
+- `failure` - Action failed
+- `completed` - Action finished (any status)
+- `skipped` - Action was skipped
+
+### System Variables
+
+These variables are automatically available in all actions:
+
+| Variable | Description |
+|----------|-------------|
+| `${JOB_NAME}` | Name of the current job |
+| `${EXECUTION_ID}` | Unique execution identifier |
+| `${TARGET_HOST}` | Current target hostname |
+| `${TARGET_OS}` | Target operating system |
+| `${EXECUTION_TIME}` | Job execution start time |
+| `${PREVIOUS_ACTION_EXIT_CODE}` | Exit code of previous action |
+| `${PREVIOUS_ACTION_OUTPUT}` | Output of previous action |
 
 ## Error Responses
 

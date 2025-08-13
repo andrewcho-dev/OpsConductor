@@ -33,6 +33,7 @@ import {
   Download as DownloadIcon,
   Verified as VerifiedIcon
 } from '@mui/icons-material';
+import '../../styles/dashboard.css';
 
 function AuditDashboard() {
   const [tabValue, setTabValue] = useState(0);
@@ -396,18 +397,24 @@ function AuditDashboard() {
   );
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Audit & Compliance</Typography>
-        <Button
-          variant="outlined"
-          startIcon={<SecurityIcon />}
-          onClick={fetchAuditData}
-          disabled={loading}
-        >
-          Refresh
-        </Button>
-      </Box>
+    <div className="dashboard-container">
+      {/* Page Header */}
+      <div className="page-header">
+        <Typography className="page-title">
+          Audit & Compliance
+        </Typography>
+        <div className="page-actions">
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<SecurityIcon />}
+            onClick={fetchAuditData}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+        </div>
+      </div>
 
       <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
         <Tab label="Overview" />
@@ -473,7 +480,7 @@ function AuditDashboard() {
           <Button onClick={() => setSelectedEvent(null)}>Close</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 }
 
