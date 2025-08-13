@@ -1,8 +1,10 @@
-# EnableDRM Deployment Guide
+# OpsConductor Deployment Guide
 
 ## Overview
 
-This guide covers deploying EnableDRM with the complete execution serialization system in production environments.
+This guide covers deploying OpsConductor with the complete execution serialization system in production environments.
+
+**Note**: For the latest deployment instructions, see the main [DEPLOYMENT.md](../DEPLOYMENT.md) file in the root directory.
 
 ## Prerequisites
 

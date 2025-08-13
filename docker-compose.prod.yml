@@ -3,31 +3,31 @@ version: '3.8'
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: enabledrm-postgres-prod
+    container_name: opsconductor-postgres-prod
     environment:
-      POSTGRES_DB: enabledrm
-      POSTGRES_USER: enabledrm
+      POSTGRES_DB: opsconductor
+      POSTGRES_USER: opsconductor
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data_prod:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - enabledrm-network-prod
+      - opsconductor-network-prod
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U enabledrm"]
+      test: ["CMD-SHELL", "pg_isready -U opsconductor"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   redis:
     image: redis:7-alpine
-    container_name: enabledrm-redis-prod
+    container_name: opsconductor-redis-prod
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data_prod:/data
     networks:
-      - enabledrm-network-prod
+      - opsconductor-network-prod
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
@@ -39,10 +39,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: enabledrm-backend-prod
-    container_name: enabledrm-backend-prod
+    image: opsconductor-backend-prod
+    container_name: opsconductor-backend-prod
     environment:
-      - DATABASE_URL=postgresql://enabledrm:${POSTGRES_PASSWORD}@postgres:5432/enabledrm
+      - DATABASE_URL=postgresql://opsconductor:${POSTGRES_PASSWORD}@postgres:5432/opsconductor
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
       - ENVIRONMENT=production
@@ -51,7 +51,7 @@ services:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
     networks:
-      - enabledrm-network-prod
+      - opsconductor-network-prod
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,11 +68,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: enabledrm-celery-worker-prod
-    container_name: enabledrm-celery-worker-prod
+    image: opsconductor-celery-worker-prod
+    container_name: opsconductor-celery-worker-prod
     command: celery -A app.celery_app worker --loglevel=info --concurrency=4
     environment:
-      - DATABASE_URL=postgresql://enabledrm:${POSTGRES_PASSWORD}@postgres:5432/enabledrm
+      - DATABASE_URL=postgresql://opsconductor:${POSTGRES_PASSWORD}@postgres:5432/opsconductor
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
       - ENVIRONMENT=production
@@ -80,7 +80,7 @@ services:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
     networks:
-      - enabledrm-network-prod
+      - opsconductor-network-prod
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,18 +92,18 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: enabledrm-scheduler-prod
-    container_name: enabledrm-scheduler-prod
+    image: opsconductor-scheduler-prod
+    container_name: opsconductor-scheduler-prod
     command: celery -A app.celery_app beat --loglevel=info
     environment:
-      - DATABASE_URL=postgresql://enabledrm:${POSTGRES_PASSWORD}@postgres:5432/enabledrm
+      - DATABASE_URL=postgresql://opsconductor:${POSTGRES_PASSWORD}@postgres:5432/opsconductor
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
       - ENVIRONMENT=production
     volumes:
       - ./logs:/app/logs
     networks:
-      - enabledrm-network-prod
+      - opsconductor-network-prod
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,10 +118,10 @@ services:
       args:
         - REACT_APP_API_URL=https://${DOMAIN_NAME}/api
         - REACT_APP_WS_URL=wss://${DOMAIN_NAME}/ws
-    image: enabledrm-frontend-prod
-    container_name: enabledrm-frontend-prod
+    image: opsconductor-frontend-prod
+    container_name: opsconductor-frontend-prod
     networks:
-      - enabledrm-network-prod
+      - opsconductor-network-prod
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
@@ -131,7 +131,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: enabledrm-nginx-prod
+    container_name: opsconductor-nginx-prod
     ports:
       - "80:80"
       - "443:443"
@@ -140,7 +140,7 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl
       - ./logs/nginx:/var/log/nginx
     networks:
-      - enabledrm-network-prod
+      - opsconductor-network-prod
     depends_on:
       - backend
       - frontend
@@ -154,7 +154,7 @@ services:
   # Monitoring stack
   prometheus:
     image: prom/prometheus:latest
-    container_name: enabledrm-prometheus-prod
+    container_name: opsconductor-prometheus-prod
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -166,14 +166,14 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data_prod:/prometheus
     networks:
-      - enabledrm-network-prod
+      - opsconductor-network-prod
     restart: unless-stopped
     ports:
       - "9090:9090"
 
   grafana:
     image: grafana/grafana:latest
-    container_name: enabledrm-grafana-prod
+    container_name: opsconductor-grafana-prod
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -182,7 +182,7 @@ services:
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
     networks:
-      - enabledrm-network-prod
+      - opsconductor-network-prod
     restart: unless-stopped
     ports:
       - "3001:3000"
@@ -198,7 +198,7 @@ volumes:
     driver: local
 
 networks:
-  enabledrm-network-prod:
+  opsconductor-network-prod:
     driver: bridge
     ipam:
       config:

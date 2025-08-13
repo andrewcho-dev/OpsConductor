@@ -1,8 +1,8 @@
-# EnableDRM API Reference
+# OpsConductor API Reference
 
 ## Overview
 
-The EnableDRM API provides comprehensive access to job management, target administration, and execution monitoring with hierarchical serialization support.
+The OpsConductor API provides comprehensive access to job management, target administration, and execution monitoring with hierarchical serialization support.
 
 ## Base URL
 ```

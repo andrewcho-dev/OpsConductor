@@ -1,9 +1,9 @@
 # =============================================================================
-# ENABLEDRM - DEVELOPMENT ENVIRONMENT WITH HTTPS
+# OPSCONDUCTOR - ENTERPRISE AUTOMATION ORCHESTRATION PLATFORM
 # =============================================================================
-# This is the ONLY docker-compose file - no confusion!
+# Complete Docker Compose setup for OpsConductor platform
 # All services run behind nginx with SSL termination
-# Access: https://192.168.50.100 (or your server IP)
+# Access: https://localhost or https://your-server-ip
 
 services:
   # =============================================================================
@@ -11,7 +11,7 @@ services:
   # =============================================================================
   postgres:
     image: postgres:15-alpine
-    container_name: enabledrm-postgres
+    container_name: opsconductor-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -24,7 +24,7 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - enabledrm-network
+      - opsconductor-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -37,13 +37,13 @@ services:
   # =============================================================================
   redis:
     image: redis:7-alpine
-    container_name: enabledrm-redis
+    container_name: opsconductor-redis
     # Port exposed for development/debugging only
     # In production, only nginx should expose ports
     ports:
       - "6379:6379"
     networks:
-      - enabledrm-network
+      - opsconductor-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -58,7 +58,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
-    container_name: enabledrm-backend
+    container_name: opsconductor-backend
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
@@ -79,7 +79,7 @@ services:
       - ./backend:/app
       - ./backend/uploads:/app/uploads
     networks:
-      - enabledrm-network
+      - opsconductor-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -99,7 +99,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-    container_name: enabledrm-frontend
+    container_name: opsconductor-frontend
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
@@ -114,7 +114,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     networks:
-      - enabledrm-network
+      - opsconductor-network
     depends_on:
       - backend
     restart: unless-stopped
@@ -133,7 +133,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
-    container_name: enabledrm-celery-worker
+    container_name: opsconductor-celery-worker
     command: celery -A app.celery worker --loglevel=info
     environment:
       - DATABASE_URL=${DATABASE_URL}
@@ -155,7 +155,7 @@ services:
       - ./backend:/app
       - ./backend/uploads:/app/uploads
     networks:
-      - enabledrm-network
+      - opsconductor-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -170,7 +170,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
-    container_name: enabledrm-scheduler
+    container_name: opsconductor-scheduler
     command: celery -A app.celery beat --loglevel=info
     environment:
       - DATABASE_URL=${DATABASE_URL}
@@ -191,7 +191,7 @@ services:
     volumes:
       - ./backend:/app
     networks:
-      - enabledrm-network
+      - opsconductor-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -204,7 +204,7 @@ services:
   # =============================================================================
   nginx:
     image: nginx:alpine
-    container_name: enabledrm-nginx
+    container_name: opsconductor-nginx
     command: sh -c "apk add --no-cache curl && nginx -g 'daemon off;'"
     ports:
       - "${NGINX_HTTP_PORT}:80"
@@ -213,7 +213,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./nginx/ssl:/etc/nginx/ssl
     networks:
-      - enabledrm-network
+      - opsconductor-network
     depends_on:
       - frontend
       - backend
@@ -228,7 +228,7 @@ services:
 # NETWORKS & VOLUMES
 # =============================================================================
 networks:
-  enabledrm-network:
+  opsconductor-network:
     driver: bridge
 
 volumes:

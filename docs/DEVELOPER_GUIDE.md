@@ -1,8 +1,8 @@
-# EnableDRM Developer Guide
+# OpsConductor Developer Guide
 
 ## Getting Started with Execution Serialization
 
-This guide covers how to work with EnableDRM's hierarchical execution serialization system in your applications.
+This guide covers how to work with OpsConductor's hierarchical execution serialization system in your applications.
 
 ## Understanding the Serialization Hierarchy
 
