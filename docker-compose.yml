@@ -1,0 +1,236 @@
+# =============================================================================
+# ENABLEDRM - DEVELOPMENT ENVIRONMENT WITH HTTPS
+# =============================================================================
+# This is the ONLY docker-compose file - no confusion!
+# All services run behind nginx with SSL termination
+# Access: https://192.168.50.100 (or your server IP)
+
+services:
+  # =============================================================================
+  # DATABASE - PostgreSQL
+  # =============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: enabledrm-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    # Port exposed for development/debugging only
+    # In production, only nginx should expose ports
+    ports:
+      - "5432:5432"
+    networks:
+      - enabledrm-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # CACHE - Redis
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: enabledrm-redis
+    # Port exposed for development/debugging only
+    # In production, only nginx should expose ports
+    ports:
+      - "6379:6379"
+    networks:
+      - enabledrm-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # BACKEND - FastAPI
+  # =============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: enabledrm-backend
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - MAX_CONCURRENT_TARGETS=${MAX_CONCURRENT_TARGETS}
+      - CONNECTION_TIMEOUT=${CONNECTION_TIMEOUT}
+      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT}
+      - ENABLE_RETRY=${ENABLE_RETRY}
+      - MAX_RETRIES=${MAX_RETRIES}
+      - RETRY_BACKOFF_BASE=${RETRY_BACKOFF_BASE}
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+    networks:
+      - enabledrm-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # FRONTEND - React Development Server
+  # =============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: enabledrm-frontend
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - FAST_REFRESH=false
+      - WDS_SOCKET_HOST=0.0.0.0
+      - WDS_SOCKET_PORT=${FRONTEND_PORT}
+      - HTTPS=false
+      - REACT_APP_API_URL=${REACT_APP_API_URL}
+      - REACT_APP_WS_URL=${REACT_APP_WS_URL}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - enabledrm-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # CELERY WORKER - Background Tasks
+  # =============================================================================
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: enabledrm-celery-worker
+    command: celery -A app.celery worker --loglevel=info
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - MAX_CONCURRENT_TARGETS=${MAX_CONCURRENT_TARGETS}
+      - CONNECTION_TIMEOUT=${CONNECTION_TIMEOUT}
+      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT}
+      - ENABLE_RETRY=${ENABLE_RETRY}
+      - MAX_RETRIES=${MAX_RETRIES}
+      - RETRY_BACKOFF_BASE=${RETRY_BACKOFF_BASE}
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+    networks:
+      - enabledrm-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # =============================================================================
+  # CELERY SCHEDULER - Scheduled Tasks
+  # =============================================================================
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: enabledrm-scheduler
+    command: celery -A app.celery beat --loglevel=info
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - MAX_CONCURRENT_TARGETS=${MAX_CONCURRENT_TARGETS}
+      - CONNECTION_TIMEOUT=${CONNECTION_TIMEOUT}
+      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT}
+      - ENABLE_RETRY=${ENABLE_RETRY}
+      - MAX_RETRIES=${MAX_RETRIES}
+      - RETRY_BACKOFF_BASE=${RETRY_BACKOFF_BASE}
+    volumes:
+      - ./backend:/app
+    networks:
+      - enabledrm-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # =============================================================================
+  # NGINX REVERSE PROXY - FIREWALL & SSL TERMINATION
+  # =============================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: enabledrm-nginx
+    command: sh -c "apk add --no-cache curl && nginx -g 'daemon off;'"
+    ports:
+      - "${NGINX_HTTP_PORT}:80"
+      - "${NGINX_HTTPS_PORT}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    networks:
+      - enabledrm-network
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# =============================================================================
+# NETWORKS & VOLUMES
+# =============================================================================
+networks:
+  enabledrm-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

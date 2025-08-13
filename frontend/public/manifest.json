@@ -1,0 +1,17 @@
+{
+  "short_name": "ENABLEDRM",
+  "name": "ENABLEDRM Platform",
+  "description": "Universal Automation Orchestration Platform",
+  "icons": [
+    {
+      "src": "logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#003c82",
+  "background_color": "#ffffff"
+}

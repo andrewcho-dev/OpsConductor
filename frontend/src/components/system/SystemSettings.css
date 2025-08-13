@@ -1,0 +1,227 @@
+.system-settings {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.system-settings h1 {
+  color: #2c3e50;
+  margin-bottom: 30px;
+  font-size: 2.5rem;
+  font-weight: 300;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 10px;
+}
+
+.system-settings h2 {
+  color: #34495e;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+
+.settings-section {
+  background: #ffffff;
+  border: 1px solid #e1e8ed;
+  border-radius: 8px;
+  padding: 25px;
+  margin-bottom: 25px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.current-time-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 8px;
+  padding: 25px;
+  margin-bottom: 25px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.current-time-section h2 {
+  color: white;
+  margin-bottom: 15px;
+}
+
+.time-display {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.time-item {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 15px;
+  border-radius: 6px;
+  backdrop-filter: blur(10px);
+}
+
+.time-item strong {
+  color: #f8f9fa;
+  margin-right: 8px;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+}
+
+.setting-item label {
+  font-weight: 500;
+  color: #2c3e50;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+
+.setting-item input,
+.setting-item select {
+  padding: 10px 12px;
+  border: 2px solid #e1e8ed;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 200px;
+  transition: border-color 0.3s ease;
+}
+
+.setting-item input:focus,
+.setting-item select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.setting-item button {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  min-width: 120px;
+}
+
+.setting-item button:hover:not(:disabled) {
+  background: #2980b9;
+}
+
+.setting-item button:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.setting-help {
+  color: #7f8c8d;
+  font-size: 14px;
+  margin-top: 5px;
+  font-style: italic;
+}
+
+.timezone-info {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 15px;
+  margin-top: 15px;
+}
+
+.timezone-info p {
+  margin: 5px 0;
+  color: #495057;
+}
+
+.system-info {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 15px;
+}
+
+.system-info p {
+  margin: 8px 0;
+  color: #495057;
+}
+
+.error-message {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.system-settings-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  font-size: 18px;
+  color: #7f8c8d;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .system-settings {
+    padding: 15px;
+  }
+  
+  .system-settings h1 {
+    font-size: 2rem;
+  }
+  
+  .setting-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .setting-item label {
+    min-width: auto;
+    margin-bottom: 5px;
+  }
+  
+  .setting-item input,
+  .setting-item select {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .setting-item button {
+    width: 100%;
+  }
+  
+  .time-display {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Animation for loading states */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.system-settings-loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Success feedback */
+.setting-item button:active {
+  transform: translateY(1px);
+}
+
+/* Focus states for accessibility */
+.setting-item input:focus,
+.setting-item select:focus,
+.setting-item button:focus {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
+} 
