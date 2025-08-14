@@ -2,7 +2,6 @@
 (function() {
   const originalWebSocket = window.WebSocket;
   window.WebSocket = function(url, protocols) {
-    console.log('WebSocket connection blocked:', url);
     // Return a mock WebSocket that doesn't actually connect
     return {
       readyState: 3, // CLOSED

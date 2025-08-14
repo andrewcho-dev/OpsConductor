@@ -28,10 +28,10 @@ Create production environment file:
 ```bash
 # .env.production
 # Database Configuration
-DATABASE_URL=postgresql://enabledrm:secure_password@postgres:5432/enabledrm
-POSTGRES_USER=enabledrm
+DATABASE_URL=postgresql://opsconductor:secure_password@postgres:5432/opsconductor
+POSTGRES_USER=opsconductor
 POSTGRES_PASSWORD=secure_password
-POSTGRES_DB=enabledrm
+POSTGRES_DB=opsconductor
 
 # Redis Configuration
 REDIS_URL=redis://redis:6379/0
@@ -210,11 +210,11 @@ sleep 30
 
 # Run database migrations
 echo "📊 Running database migrations..."
-docker-compose -f docker-compose.prod.yml exec postgres psql -U enabledrm -d enabledrm -f /backups/schema.sql
+docker-compose -f docker-compose.prod.yml exec postgres psql -U opsconductor -d opsconductor -f /backups/schema.sql
 
 # Apply execution serialization migration
 echo "🔢 Applying execution serialization migration..."
-docker-compose -f docker-compose.prod.yml exec postgres psql -U enabledrm -d enabledrm < migrations/add_execution_serialization.sql
+docker-compose -f docker-compose.prod.yml exec postgres psql -U opsconductor -d opsconductor < migrations/add_execution_serialization.sql
 
 # Start all services
 echo "🏃 Starting all services..."
@@ -457,9 +457,9 @@ from functools import wraps
 from prometheus_client import Counter, Histogram, generate_latest
 
 # Metrics
-execution_counter = Counter('enabledrm_executions_total', 'Total executions', ['status'])
-execution_duration = Histogram('enabledrm_execution_duration_seconds', 'Execution duration')
-serial_generation_counter = Counter('enabledrm_serials_generated_total', 'Serials generated', ['type'])
+execution_counter = Counter('opsconductor_executions_total', 'Total executions', ['status'])
+execution_duration = Histogram('opsconductor_execution_duration_seconds', 'Execution duration')
+serial_generation_counter = Counter('opsconductor_serials_generated_total', 'Serials generated', ['type'])
 
 def monitor_execution(func):
     @wraps(func)
@@ -522,7 +522,7 @@ class StructuredFormatter(logging.Formatter):
 logging.basicConfig(
     level=logging.INFO,
     handlers=[
-        logging.FileHandler('/app/logs/enabledrm.log'),
+        logging.FileHandler('/app/logs/opsconductor.log'),
         logging.StreamHandler()
     ]
 )
@@ -600,18 +600,18 @@ async def health_check(db: Session = Depends(get_db)):
 
 BACKUP_DIR="/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-DB_NAME="enabledrm"
+DB_NAME="opsconductor"
 
 # Create backup directory
 mkdir -p $BACKUP_DIR
 
 # Full database backup
 echo "Creating full database backup..."
-docker exec enabledrm-postgres pg_dump -U enabledrm -d $DB_NAME > $BACKUP_DIR/full_backup_$TIMESTAMP.sql
+docker exec opsconductor-postgres pg_dump -U opsconductor -d $DB_NAME > $BACKUP_DIR/full_backup_$TIMESTAMP.sql
 
 # Execution data backup (for serialization recovery)
 echo "Creating execution serialization backup..."
-docker exec enabledrm-postgres pg_dump -U enabledrm -d $DB_NAME \
+docker exec opsconductor-postgres pg_dump -U opsconductor -d $DB_NAME \
   --table=jobs \
   --table=job_executions \
   --table=job_execution_branches \
@@ -635,7 +635,7 @@ echo "Backup completed: $TIMESTAMP"
 # restore.sh
 
 BACKUP_FILE=$1
-DB_NAME="enabledrm"
+DB_NAME="opsconductor"
 
 if [ -z "$BACKUP_FILE" ]; then
     echo "Usage: $0 <backup_file>"
@@ -649,14 +649,14 @@ docker-compose -f docker-compose.prod.yml stop backend celery celery-beat
 
 # Restore database
 if [[ $BACKUP_FILE == *.gz ]]; then
-    gunzip -c $BACKUP_FILE | docker exec -i enabledrm-postgres psql -U enabledrm -d $DB_NAME
+    gunzip -c $BACKUP_FILE | docker exec -i opsconductor-postgres psql -U opsconductor -d $DB_NAME
 else
-    docker exec -i enabledrm-postgres psql -U enabledrm -d $DB_NAME < $BACKUP_FILE
+    docker exec -i opsconductor-postgres psql -U opsconductor -d $DB_NAME < $BACKUP_FILE
 fi
 
 # Verify serialization integrity
 echo "Verifying execution serialization integrity..."
-docker exec enabledrm-postgres psql -U enabledrm -d $DB_NAME -c "
+docker exec opsconductor-postgres psql -U opsconductor -d $DB_NAME -c "
 SELECT 
     COUNT(*) as total_executions,
     COUNT(execution_serial) as serialized_executions,

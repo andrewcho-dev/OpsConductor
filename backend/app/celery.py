@@ -1,5 +1,5 @@
 """
-Celery app instance for ENABLEDRM
+Celery app instance for OpsConductor
 This module provides the main Celery app instance that can be imported by workers
 """
 

@@ -4,10 +4,14 @@ RESTful API endpoints for network discovery functionality.
 """
 import asyncio
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 
 from app.database.database import get_db
+from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
+from app.models.user_models import User
+from app.core.security import verify_token
+from fastapi.security import HTTPBearer
 from app.services.discovery_service import DiscoveryService
 from app.schemas.discovery_schemas import (
     DiscoveryJobCreate, DiscoveryJobUpdate, DiscoveryJobResponse, DiscoveryJobSummary,
@@ -28,6 +32,19 @@ router = APIRouter(
     }
 )
 
+security = HTTPBearer()
+
+def get_current_user(credentials = Depends(security), db: Session = Depends(get_db)):
+    """Get current authenticated user."""
+    token = credentials.credentials
+    user = verify_token(token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
 
 def get_discovery_service(db: Session = Depends(get_db)) -> DiscoveryService:
     """Dependency to get discovery service instance."""
@@ -39,7 +56,10 @@ def get_discovery_service(db: Session = Depends(get_db)) -> DiscoveryService:
 @router.post("/jobs", response_model=DiscoveryJobResponse, status_code=status.HTTP_201_CREATED)
 async def create_discovery_job(
     job_data: DiscoveryJobCreate,
-    discovery_service: DiscoveryService = Depends(get_discovery_service)
+    request: Request,
+    discovery_service: DiscoveryService = Depends(get_discovery_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Create a new network discovery job.
@@ -52,6 +72,29 @@ async def create_discovery_job(
     """
     try:
         job = discovery_service.create_discovery_job(job_data)
+        
+        # Log discovery job creation audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.SYSTEM_CONFIG_CHANGED,  # Using closest available type
+            user_id=current_user.id,
+            resource_type="discovery_job",
+            resource_id=str(job.id),
+            action="create_discovery_job",
+            details={
+                "job_name": job.name,
+                "network_range": job_data.network_range,
+                "discovery_type": job_data.discovery_type,
+                "created_by": current_user.username
+            },
+            severity=AuditSeverity.MEDIUM,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
         return DiscoveryJobResponse.from_orm(job)
     except Exception as e:
         raise HTTPException(
@@ -433,7 +476,10 @@ async def get_in_memory_discovery_result(task_id: str):
 @router.post("/devices/import-memory", response_model=DeviceImportResponse)
 async def import_in_memory_devices(
     import_request: dict,
-    discovery_service: DiscoveryService = Depends(get_discovery_service)
+    request: Request,
+    discovery_service: DiscoveryService = Depends(get_discovery_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Import in-memory discovered devices as targets.
@@ -446,6 +492,29 @@ async def import_in_memory_devices(
     """
     try:
         result = discovery_service.import_in_memory_devices(import_request)
+        
+        # Log device import audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.BULK_OPERATION,
+            user_id=current_user.id,
+            resource_type="target",
+            resource_id="bulk_import_memory",
+            action="import_in_memory_devices",
+            details={
+                "device_count": len(import_request.get("device_data", [])),
+                "imported_count": result.success_count if hasattr(result, 'success_count') else 0,
+                "failed_count": result.failed_count if hasattr(result, 'failed_count') else 0,
+                "imported_by": current_user.username
+            },
+            severity=AuditSeverity.HIGH,  # Device import is high severity
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
         return result
     except Exception as e:
         raise HTTPException(
@@ -456,7 +525,10 @@ async def import_in_memory_devices(
 @router.post("/devices/import", response_model=DeviceImportResponse)
 async def import_discovered_devices(
     import_request: DeviceImportRequest,
-    discovery_service: DiscoveryService = Depends(get_discovery_service)
+    request: Request,
+    discovery_service: DiscoveryService = Depends(get_discovery_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Import discovered devices as targets.
@@ -469,6 +541,29 @@ async def import_discovered_devices(
     """
     try:
         result = discovery_service.import_discovered_devices(import_request)
+        
+        # Log device import audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.BULK_OPERATION,
+            user_id=current_user.id,
+            resource_type="target",
+            resource_id="bulk_import_discovered",
+            action="import_discovered_devices",
+            details={
+                "device_ids": import_request.device_ids,
+                "imported_count": result.success_count if hasattr(result, 'success_count') else 0,
+                "failed_count": result.failed_count if hasattr(result, 'failed_count') else 0,
+                "imported_by": current_user.username
+            },
+            severity=AuditSeverity.HIGH,  # Device import is high severity
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
         return result
     except Exception as e:
         raise HTTPException(
@@ -480,7 +575,10 @@ async def import_discovered_devices(
 @router.post("/devices/import-configured", response_model=DeviceImportResponse)
 async def import_configured_devices(
     import_request: BulkDeviceImportRequest,
-    discovery_service: DiscoveryService = Depends(get_discovery_service)
+    request: Request,
+    discovery_service: DiscoveryService = Depends(get_discovery_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Import discovered devices as targets with user-provided configuration.
@@ -493,6 +591,29 @@ async def import_configured_devices(
     """
     try:
         result = discovery_service.import_configured_devices(import_request)
+        
+        # Log configured device import audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.BULK_OPERATION,
+            user_id=current_user.id,
+            resource_type="target",
+            resource_id="bulk_import_configured",
+            action="import_configured_devices",
+            details={
+                "device_count": len(import_request.devices),
+                "imported_count": result.success_count if hasattr(result, 'success_count') else 0,
+                "failed_count": result.failed_count if hasattr(result, 'failed_count') else 0,
+                "imported_by": current_user.username
+            },
+            severity=AuditSeverity.HIGH,  # Device import is high severity
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
         return result
     except Exception as e:
         raise HTTPException(

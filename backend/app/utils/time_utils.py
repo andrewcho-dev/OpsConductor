@@ -1,5 +1,5 @@
 """
-Timezone and time utility functions for the ENABLEDRM platform.
+Timezone and time utility functions for the OpsConductor platform.
 This module provides centralized time handling for job scheduling and system operations.
 """
 

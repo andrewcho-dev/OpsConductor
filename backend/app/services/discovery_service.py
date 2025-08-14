@@ -849,7 +849,7 @@ class DiscoveryService:
         device_type_counts = {device_type or 'unknown': count for device_type, count in device_type_query}
         
         # Recent jobs
-        recent_jobs = self.list_discovery_jobs(limit=5)
+        recent_jobs = self.list_discovery_jobs(limit=20)
         
         return DiscoveryStatsResponse(
             total_jobs=total_jobs,
@@ -881,15 +881,15 @@ class DiscoveryService:
         
         start_time = time.time()
         
-        # Create quick scan configuration
+        # Create quick scan configuration - MUCH faster settings
         config = DiscoveryConfig(
             network_ranges=[network_range],
-            common_ports=ports or [22, 80, 443, 161],
-            timeout=timeout,
-            max_concurrent=50,
+            common_ports=ports or [22, 80, 443, 135, 139, 445, 3389, 161],  # More comprehensive ports
+            timeout=0.5,  # Much faster timeout
+            max_concurrent=100,  # More concurrent connections
             enable_snmp=False,
-            enable_service_detection=False,
-            enable_hostname_resolution=False
+            enable_service_detection=False,  # Skip service detection for speed
+            enable_hostname_resolution=False  # Skip hostname resolution for speed
         )
         
         # Calculate total IPs
@@ -913,7 +913,7 @@ class DiscoveryService:
                     'open_ports': device.open_ports,
                     'device_type': device.device_type,
                     'confidence_score': device.confidence_score,
-                    'discovered_at': device.discovery_time
+                    'discovered_at': device.discovery_time.isoformat() if device.discovery_time else None
                 }
                 for device in discovered_devices
             ]

@@ -61,7 +61,7 @@ export const ThemeProvider = ({ children }) => {
 
   // Load theme from localStorage on mount
   useEffect(() => {
-    const savedTheme = localStorage.getItem('enabledrm-theme');
+    const savedTheme = localStorage.getItem('opsconductor-theme');
     if (savedTheme && THEME_PRESETS[savedTheme]) {
       setCurrentTheme(savedTheme);
     }
@@ -69,7 +69,7 @@ export const ThemeProvider = ({ children }) => {
 
   // Save theme to localStorage when it changes
   useEffect(() => {
-    localStorage.setItem('enabledrm-theme', currentTheme);
+    localStorage.setItem('opsconductor-theme', currentTheme);
   }, [currentTheme]);
 
   const changeTheme = (themeKey) => {

@@ -15,7 +15,7 @@ from app.utils.target_utils import getTargetSummary
 
 class AnalyticsService:
     """
-    Comprehensive analytics service for ENABLEDRM Platform.
+    Comprehensive analytics service for OpsConductor Platform.
     Provides real-time metrics, historical analysis, and reporting capabilities.
     """
 
@@ -41,7 +41,7 @@ class AnalyticsService:
             error_summary = self._get_error_summary(hours=24)
             
             # Get recent activity
-            recent_activity = self._get_recent_activity(limit=10)
+            recent_activity = self._get_recent_activity(limit=50)
             
             return {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -374,7 +374,7 @@ class AnalyticsService:
             "job_metrics": self._get_job_metrics(),
             "target_metrics": self._get_target_metrics(),
             "system_metrics": self._get_system_metrics(),
-            "recent_activity": self._get_recent_activity(limit=10),
+            "recent_activity": self._get_recent_activity(limit=50),
             "performance_trends": self._get_performance_trends(hours=24),
             "error_summary": self._get_error_summary(hours=24),
             "timestamp": now.isoformat()

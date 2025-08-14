@@ -11,7 +11,7 @@ from app.models.universal_target_models import UniversalTarget
 
 
 class SimpleAnalyticsService:
-    """Simple analytics service for ENABLEDRM Platform."""
+    """Simple analytics service for OpsConductor Platform."""
 
     def __init__(self, db: Session):
         self.db = db

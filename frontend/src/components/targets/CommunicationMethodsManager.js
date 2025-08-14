@@ -43,6 +43,7 @@ import {
   StarBorder as StarBorderIcon,
   Close as CloseIcon
 } from '@mui/icons-material';
+import { CloseAction } from '../common/StandardActions';
 
 import { 
   addCommunicationMethod, 
@@ -630,9 +631,7 @@ ${result.details ? JSON.stringify(result.details, null, 2) : ''}
           <Typography variant="h6">
             Communication Methods - {target?.name}
           </Typography>
-          <IconButton onClick={handleClose} size="small">
-            <CloseIcon />
-          </IconButton>
+          <CloseAction onClick={handleClose} />
         </Box>
       </DialogTitle>
       
@@ -682,9 +681,7 @@ ${result.details ? JSON.stringify(result.details, null, 2) : ''}
         )}
       </DialogContent>
       
-      <DialogActions>
-        <Button onClick={handleClose}>Close</Button>
-      </DialogActions>
+
     </Dialog>
   );
 };

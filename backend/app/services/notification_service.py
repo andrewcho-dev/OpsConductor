@@ -259,7 +259,7 @@ class NotificationService:
         
         # Get default from email if not provided
         if not from_email:
-            from_email = credentials.get('username') or 'noreply@enabledrm.com'
+            from_email = credentials.get('username') or 'noreply@opsconductor.com'
         
         try:
             # Create message

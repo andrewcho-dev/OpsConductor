@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ENABLEDRM Job Scheduler
+OpsConductor Job Scheduler
 Handles execution of scheduled jobs according to the architecture plan.
 """
 
@@ -143,7 +143,7 @@ class JobScheduler:
     
     def run(self):
         """Main scheduler loop"""
-        logger.info("🚀 ENABLEDRM Job Scheduler starting up...")
+        logger.info("🚀 OpsConductor Job Scheduler starting up...")
         self.running = True
         
         while self.running:

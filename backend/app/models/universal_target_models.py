@@ -17,7 +17,7 @@ class UniversalTarget(Base):
     target_uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4, index=True)
     target_serial = Column(String(20), unique=True, nullable=False, index=True)
     name = Column(String(100), index=True, nullable=False)  # NO UNIQUE CONSTRAINT - Multiple targets can have same name
-    target_type = Column(String(20), nullable=False, default="system")  # system, api, database, email, web
+    target_type = Column(String(20), nullable=False, default="system")  # system, api, database, email, web, communication
     description = Column(Text, nullable=True)
     os_type = Column(String(20), nullable=False)  # linux, windows (simplified for initial release)
     environment = Column(String(20), nullable=False, default="development")  # production, staging, development, testing

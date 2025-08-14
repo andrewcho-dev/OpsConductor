@@ -176,7 +176,7 @@ def create_default_alert_rules(db: Session):
                 "min_severity": "error",
                 "include_warnings": False
             },
-            "recipients": ["admin@enabledrm.com"],
+            "recipients": ["admin@opsconductor.com"],
             "notification_template_id": job_failure_template.id if job_failure_template else None
         },
         {
@@ -187,7 +187,7 @@ def create_default_alert_rules(db: Session):
                 "min_severity": "error",
                 "include_warnings": True
             },
-            "recipients": ["admin@enabledrm.com", "ops@enabledrm.com"],
+            "recipients": ["admin@opsconductor.com", "ops@opsconductor.com"],
             "notification_template_id": system_error_template.id if system_error_template else None
         },
         {
@@ -198,7 +198,7 @@ def create_default_alert_rules(db: Session):
                 "min_severity": "warning",
                 "include_info": False
             },
-            "recipients": ["admin@enabledrm.com"],
+            "recipients": ["admin@opsconductor.com"],
             "notification_template_id": performance_template.id if performance_template else None
         },
         {
@@ -209,7 +209,7 @@ def create_default_alert_rules(db: Session):
                 "min_severity": "warning",
                 "include_info": True
             },
-            "recipients": ["admin@enabledrm.com", "security@enabledrm.com"],
+            "recipients": ["admin@opsconductor.com", "security@opsconductor.com"],
             "notification_template_id": security_template.id if security_template else None
         }
     ]

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List
 from datetime import datetime
@@ -8,6 +8,7 @@ from ..database.database import get_db
 from ..services.system_service import SystemService
 from ..tasks.cleanup_tasks import CleanupTasks
 from ..models.user_models import User
+from ..domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 from ..models.universal_target_models import UniversalTarget
 from ..models.job_models import Job, JobExecution, ExecutionStatus
 
@@ -150,10 +151,15 @@ async def get_dst_rules(db: Session = Depends(get_db)):
 @router.put("/dst-rules")
 async def update_dst_rules(
     request: DSTRulesUpdateRequest,
+    http_request: Request,
     db: Session = Depends(get_db)
 ):
     """Update DST rules configuration"""
     service = SystemService(db)
+    
+    # Get old rules for audit
+    old_rules = service.get_dst_rules()
+    
     success = service.set_dst_rules(request.dst_rules)
     
     if not success:
@@ -161,6 +167,28 @@ async def update_dst_rules(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid DST rules format"
         )
+    
+    # Log system config change audit event
+    audit_service = AuditService(db)
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    user_agent = http_request.headers.get("user-agent", "unknown")
+    
+    await audit_service.log_event(
+        event_type=AuditEventType.SYSTEM_CONFIG_CHANGED,
+        user_id=1,  # System user for now
+        resource_type="system",
+        resource_id="dst_rules",
+        action="update_dst_rules",
+        details={
+            "config_type": "dst_rules",
+            "old_value": old_rules,
+            "new_value": request.dst_rules,
+            "changed_by": "system"
+        },
+        severity=AuditSeverity.HIGH,  # System config changes are high severity
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
     
     return {
         "message": "DST rules updated successfully",

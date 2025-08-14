@@ -235,29 +235,29 @@ const UniversalTargetCreateModal = ({ open, onClose, onTargetCreated }) => {
     try {
       setLoading(true);
       setError('');
-      
+
       // Validate communication methods
       if (!communicationMethods || communicationMethods.length === 0) {
         setError('At least one communication method is required');
         return;
       }
-      
+
       // Ensure at least one method is marked as primary
       const hasPrimary = communicationMethods.some(method => method.is_primary);
       if (!hasPrimary) {
         communicationMethods[0].is_primary = true;
       }
-      
+
       // Create the target with comprehensive structure (multiple methods support)
       const targetCreateData = {
         // Basic target information
         ...targetData,
-        
+
         // Multiple communication methods support
         communication_methods: communicationMethods.map(method => ({
           method_type: method.method_type,
           config: {
-            host: targetData.ip_address, // ALL methods use the target's IP address
+            host: targetData.ip_address, // ALL methods use the target's IP address/hostname field
             port: method.port,
             // SMTP-specific config
             ...(method.method_type === 'smtp' && {
@@ -334,14 +334,44 @@ const UniversalTargetCreateModal = ({ open, onClose, onTargetCreated }) => {
           })
         }))
       };
-      
+
       console.log('Creating target with comprehensive data:', targetCreateData);
+      console.log('Target IP/Hostname:', targetData.ip_address);
+      console.log('Communication methods:', communicationMethods);
       await createTargetComprehensive(targetCreateData);
       onTargetCreated();
       resetForm();
-      
+
     } catch (err) {
-      setError(`Failed to create target: ${err.message}`);
+      console.error('Target creation error:', err);
+      // Try to show backend error details if available
+      let errorMsg = 'Failed to create target.';
+      
+      if (err && typeof err === 'object') {
+        if (err.detail) {
+          errorMsg = err.detail;
+        } else if (err.message) {
+          errorMsg = err.message;
+        } else if (err.toString && err.toString() !== '[object Object]') {
+          errorMsg = err.toString();
+        } else {
+          errorMsg = JSON.stringify(err);
+        }
+      } else if (typeof err === 'string') {
+        // Try to parse as JSON if it looks like an object
+        try {
+          const parsed = JSON.parse(err);
+          if (parsed && (parsed.detail || parsed.message)) {
+            errorMsg = parsed.detail || parsed.message;
+          } else {
+            errorMsg = err;
+          }
+        } catch {
+          errorMsg = err;
+        }
+      }
+      
+      setError(`Failed to create target: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
@@ -759,6 +789,8 @@ const UniversalTargetCreateModal = ({ open, onClose, onTargetCreated }) => {
                           SMTP Configuration
                         </Typography>
                       </Grid>
+                      
+
                       
                       <Grid item xs={4}>
                         <FormControl fullWidth size="small">

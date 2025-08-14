@@ -271,7 +271,8 @@ class CacheService:
 
 
 # Global cache service instance
-cache_service = CacheService()
+from app.core.config import settings
+cache_service = CacheService(redis_url=settings.REDIS_URL)
 
 
 def cache_key(*args, **kwargs) -> str:

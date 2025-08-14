@@ -239,8 +239,8 @@ class SystemMonitor:
         """Check PostgreSQL database"""
         try:
             result = subprocess.run([
-                "docker", "exec", "enabledrm-postgres", 
-                "pg_isready", "-U", "enabledrm"
+                "docker", "exec", "opsconductor-postgres", 
+                "pg_isready", "-U", "opsconductor"
             ], capture_output=True, text=True, timeout=10)
             
             if result.returncode == 0:
@@ -324,7 +324,7 @@ class SystemMonitor:
         try:
             if service_name == "react-dev-server":
                 return self.restart_react_dev_server()
-            elif service_name.startswith("enabledrm-"):
+            elif service_name.startswith("opsconductor-"):
                 return self.restart_docker_container(service_name)
             else:
                 return False
@@ -341,7 +341,7 @@ class SystemMonitor:
             time.sleep(2)
             
             # Start new React dev server
-            os.chdir("/home/enabledrm/frontend")
+            os.chdir("/home/opsconductor/frontend")
             subprocess.run([
                 "screen", "-dmS", "react-dev", "bash", "-c", 
                 "npm start 2>&1 | tee ../frontend-dev.log"
@@ -382,8 +382,8 @@ class SystemMonitor:
         services.append(self.check_react_dev_server())
         
         # Check Docker services
-        docker_services = ["enabledrm-backend", "enabledrm-postgres", "enabledrm-redis", 
-                          "enabledrm-nginx", "enabledrm-celery-worker", "enabledrm-scheduler"]
+        docker_services = ["opsconductor-backend", "opsconductor-postgres", "opsconductor-redis", 
+                          "opsconductor-nginx", "opsconductor-celery-worker", "opsconductor-scheduler"]
         
         for service in docker_services:
             services.append(self.check_docker_service(service))
@@ -469,19 +469,19 @@ async def execute_system_action(
         try:
             if action.action == "restart_all":
                 # Restart all services
-                subprocess.run(["/home/enabledrm/dev-stop.sh"], check=True)
+                subprocess.run(["/home/opsconductor/dev-stop.sh"], check=True)
                 time.sleep(5)
-                subprocess.run(["/home/enabledrm/dev-start.sh"], check=True)
+                subprocess.run(["/home/opsconductor/dev-start.sh"], check=True)
             elif action.action == "restart_frontend":
                 system_monitor.restart_react_dev_server()
             elif action.action == "restart_backend":
-                system_monitor.restart_docker_container("enabledrm-backend")
+                system_monitor.restart_docker_container("opsconductor-backend")
             elif action.action == "cleanup_logs":
                 # Clean up old logs
-                subprocess.run(["find", "/home/enabledrm", "-name", "*.log", "-mtime", "+7", "-delete"], check=False)
+                subprocess.run(["find", "/home/opsconductor", "-name", "*.log", "-mtime", "+7", "-delete"], check=False)
             elif action.action == "update_dependencies":
                 # Update frontend dependencies
-                os.chdir("/home/enabledrm/frontend")
+                os.chdir("/home/opsconductor/frontend")
                 subprocess.run(["npm", "update"], check=False)
             else:
                 print(f"Unknown action: {action.action}")

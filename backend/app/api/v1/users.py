@@ -1,12 +1,13 @@
 """
 User Management API v1 endpoints using CQRS pattern.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database.database import get_db
+from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 from app.core.security import verify_token
 from app.models.user_models import User
 from app.shared.infrastructure.cqrs import mediator
@@ -49,7 +50,9 @@ async def get_current_user(credentials = Depends(security)):
 @router.post("/", response_model=dict)
 async def create_user(
     user_data: UserCreate,
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Create a new user."""
     # Check if current user is admin
@@ -73,6 +76,29 @@ async def create_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result.message
         )
+    
+    # Log user creation audit event
+    audit_service = AuditService(db)
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    await audit_service.log_event(
+        event_type=AuditEventType.USER_CREATED,
+        user_id=current_user.id,
+        resource_type="user",
+        resource_id=str(result.data.get("id", "unknown")),
+        action="create_user_v1",
+        details={
+            "created_username": user_data.username,
+            "created_email": user_data.email,
+            "created_role": user_data.role,
+            "created_by": current_user.username,
+            "api_version": "v1"
+        },
+        severity=AuditSeverity.MEDIUM,
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
     
     return {
         "success": True,
@@ -151,7 +177,9 @@ async def get_users(
 async def update_user(
     user_id: int,
     user_data: UserUpdate,
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Update user."""
     # Users can only update their own data unless they're admin
@@ -179,6 +207,28 @@ async def update_user(
             detail=result.message
         )
     
+    # Log user update audit event
+    audit_service = AuditService(db)
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    await audit_service.log_event(
+        event_type=AuditEventType.USER_UPDATED,
+        user_id=current_user.id,
+        resource_type="user",
+        resource_id=str(user_id),
+        action="update_user_v1",
+        details={
+            "target_user_id": user_id,
+            "updated_fields": list(update_data.keys()),
+            "updated_by": current_user.username,
+            "api_version": "v1"
+        },
+        severity=AuditSeverity.MEDIUM,
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
+    
     return {
         "success": True,
         "data": result.data,
@@ -190,7 +240,9 @@ async def update_user(
 async def change_password(
     user_id: int,
     password_data: PasswordChange,
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Change user password."""
     # Users can only change their own password unless they're admin
@@ -214,6 +266,28 @@ async def change_password(
             detail=result.message
         )
     
+    # Log password change audit event - CRITICAL SECURITY EVENT
+    audit_service = AuditService(db)
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    await audit_service.log_event(
+        event_type=AuditEventType.SECURITY_VIOLATION,  # Password changes are security events
+        user_id=current_user.id,
+        resource_type="user",
+        resource_id=str(user_id),
+        action="change_password_v1",
+        details={
+            "target_user_id": user_id,
+            "changed_by": current_user.username,
+            "self_change": current_user.id == user_id,
+            "api_version": "v1"
+        },
+        severity=AuditSeverity.HIGH,  # Password changes are high severity
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
+    
     return {
         "success": True,
         "message": result.message
@@ -223,7 +297,9 @@ async def change_password(
 @router.post("/{user_id}/deactivate", response_model=dict)
 async def deactivate_user(
     user_id: int,
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Deactivate user."""
     # Only administrators can deactivate users
@@ -249,6 +325,27 @@ async def deactivate_user(
             detail=result.message
         )
     
+    # Log user deactivation audit event - CRITICAL SECURITY EVENT
+    audit_service = AuditService(db)
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    await audit_service.log_event(
+        event_type=AuditEventType.USER_UPDATED,
+        user_id=current_user.id,
+        resource_type="user",
+        resource_id=str(user_id),
+        action="deactivate_user_v1",
+        details={
+            "target_user_id": user_id,
+            "deactivated_by": current_user.username,
+            "api_version": "v1"
+        },
+        severity=AuditSeverity.HIGH,  # User deactivation is high severity
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
+    
     return {
         "success": True,
         "data": result.data,
@@ -259,7 +356,9 @@ async def deactivate_user(
 @router.post("/{user_id}/activate", response_model=dict)
 async def activate_user(
     user_id: int,
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Activate user."""
     # Only administrators can activate users
@@ -277,6 +376,27 @@ async def activate_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result.message
         )
+    
+    # Log user activation audit event - CRITICAL SECURITY EVENT
+    audit_service = AuditService(db)
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    await audit_service.log_event(
+        event_type=AuditEventType.USER_UPDATED,
+        user_id=current_user.id,
+        resource_type="user",
+        resource_id=str(user_id),
+        action="activate_user_v1",
+        details={
+            "target_user_id": user_id,
+            "activated_by": current_user.username,
+            "api_version": "v1"
+        },
+        severity=AuditSeverity.HIGH,  # User activation is high severity
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
     
     return {
         "success": True,

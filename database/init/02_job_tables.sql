@@ -13,6 +13,8 @@ CREATE TYPE log_category AS ENUM ('authentication', 'communication', 'command_ex
 -- Core job entity
 CREATE TABLE jobs (
     id SERIAL PRIMARY KEY,
+    job_uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+    job_serial VARCHAR(20) UNIQUE NOT NULL DEFAULT 'JOB-' || LPAD(nextval('jobs_id_seq')::text, 6, '0'),
     name VARCHAR(255) NOT NULL,
     description TEXT,
     job_type job_type NOT NULL DEFAULT 'command',
@@ -50,6 +52,8 @@ CREATE TABLE job_targets (
 CREATE TABLE job_executions (
     id SERIAL PRIMARY KEY,
     job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    execution_uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+    execution_serial VARCHAR(50) UNIQUE NOT NULL DEFAULT 'EXEC-' || LPAD(nextval('job_executions_id_seq')::text, 8, '0'),
     execution_number INTEGER NOT NULL,
     status execution_status NOT NULL DEFAULT 'scheduled',
     scheduled_at TIMESTAMP WITH TIME ZONE,
@@ -63,7 +67,10 @@ CREATE TABLE job_execution_branches (
     id SERIAL PRIMARY KEY,
     job_execution_id INTEGER NOT NULL REFERENCES job_executions(id) ON DELETE CASCADE,
     target_id INTEGER NOT NULL REFERENCES universal_targets(id),
+    branch_uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+    branch_serial VARCHAR(100) UNIQUE NOT NULL DEFAULT 'BRANCH-' || LPAD(nextval('job_execution_branches_id_seq')::text, 8, '0'),
     branch_id VARCHAR(10) NOT NULL, -- 001, 002, 003, etc.
+    target_serial_ref VARCHAR(50),
     status execution_status NOT NULL DEFAULT 'scheduled',
     scheduled_at TIMESTAMP WITH TIME ZONE,
     started_at TIMESTAMP WITH TIME ZONE,
@@ -77,7 +84,7 @@ CREATE TABLE job_execution_branches (
 -- Job execution logs
 CREATE TABLE job_execution_logs (
     id SERIAL PRIMARY KEY,
-    job_execution_id INTEGER NOT NULL REFERENCES job_executions(id) ON DELETE CASCADE,
+    job_execution_id INTEGER REFERENCES job_executions(id) ON DELETE CASCADE,
     branch_id INTEGER REFERENCES job_execution_branches(id) ON DELETE CASCADE,
     log_phase log_phase NOT NULL,
     log_level log_level NOT NULL DEFAULT 'info',
@@ -92,15 +99,22 @@ CREATE TABLE job_execution_logs (
 CREATE INDEX idx_jobs_created_by ON jobs(created_by);
 CREATE INDEX idx_jobs_status ON jobs(status);
 CREATE INDEX idx_jobs_scheduled_at ON jobs(scheduled_at);
+CREATE INDEX idx_jobs_job_uuid ON jobs(job_uuid);
+CREATE INDEX idx_jobs_job_serial ON jobs(job_serial);
 CREATE INDEX idx_job_actions_job_id ON job_actions(job_id);
 CREATE INDEX idx_job_actions_order ON job_actions(job_id, action_order);
 CREATE INDEX idx_job_targets_job_id ON job_targets(job_id);
 CREATE INDEX idx_job_targets_target_id ON job_targets(target_id);
 CREATE INDEX idx_job_executions_job_id ON job_executions(job_id);
 CREATE INDEX idx_job_executions_status ON job_executions(status);
+CREATE INDEX idx_job_executions_execution_uuid ON job_executions(execution_uuid);
+CREATE INDEX idx_job_executions_execution_serial ON job_executions(execution_serial);
 CREATE INDEX idx_job_execution_branches_execution_id ON job_execution_branches(job_execution_id);
 CREATE INDEX idx_job_execution_branches_target_id ON job_execution_branches(target_id);
 CREATE INDEX idx_job_execution_branches_status ON job_execution_branches(status);
+CREATE INDEX idx_job_execution_branches_branch_uuid ON job_execution_branches(branch_uuid);
+CREATE INDEX idx_job_execution_branches_branch_serial ON job_execution_branches(branch_serial);
+CREATE INDEX idx_job_execution_branches_target_serial_ref ON job_execution_branches(target_serial_ref);
 CREATE INDEX idx_job_execution_logs_execution_id ON job_execution_logs(job_execution_id);
 CREATE INDEX idx_job_execution_logs_branch_id ON job_execution_logs(branch_id);
 CREATE INDEX idx_job_execution_logs_timestamp ON job_execution_logs(timestamp);

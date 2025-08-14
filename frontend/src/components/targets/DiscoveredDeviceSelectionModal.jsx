@@ -376,13 +376,24 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
                               onChange={(e) => handleConfigChange(device.id, 'communication_method', e.target.value)}
                               disabled={importing}
                             >
-                              {/* Always include common methods, plus any suggested ones */}
+                              {/* FIXED: Show ALL available communication methods */}
                               <MenuItem value="ssh">SSH</MenuItem>
                               <MenuItem value="winrm">WinRM</MenuItem>
                               <MenuItem value="snmp">SNMP</MenuItem>
+                              <MenuItem value="telnet">Telnet</MenuItem>
                               <MenuItem value="rest_api">REST API</MenuItem>
+                              <MenuItem value="smtp">SMTP</MenuItem>
+                              <MenuItem value="mysql">MySQL/MariaDB</MenuItem>
+                              <MenuItem value="postgresql">PostgreSQL</MenuItem>
+                              <MenuItem value="mssql">Microsoft SQL Server</MenuItem>
+                              <MenuItem value="oracle">Oracle Database</MenuItem>
+                              <MenuItem value="sqlite">SQLite</MenuItem>
+                              <MenuItem value="mongodb">MongoDB</MenuItem>
+                              <MenuItem value="redis">Redis</MenuItem>
+                              <MenuItem value="elasticsearch">Elasticsearch</MenuItem>
+                              {/* Include any additional suggested methods not in the standard list */}
                               {device.suggested_communication_methods?.filter(method => 
-                                !['ssh', 'winrm', 'snmp', 'rest_api'].includes(method)
+                                !['ssh', 'winrm', 'snmp', 'telnet', 'rest_api', 'smtp', 'mysql', 'postgresql', 'mssql', 'oracle', 'sqlite', 'mongodb', 'redis', 'elasticsearch'].includes(method)
                               ).map(method => (
                                 <MenuItem key={method} value={method}>
                                   {method.toUpperCase()}

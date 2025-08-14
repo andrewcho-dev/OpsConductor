@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -12,6 +12,7 @@ from app.schemas.job_schemas import (
     JobExecutionResponse, JobWithExecutionsResponse, JobActionResultResponse
 )
 from app.services.user_service import UserService
+from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 from app.tasks.job_tasks import execute_job_task
 import logging
 from app.utils.target_utils import getTargetIpAddress
@@ -103,6 +104,7 @@ def get_current_user(
 @router.post("/", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 async def create_job(
     job_data: JobCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -113,6 +115,28 @@ async def create_job(
         print(f"DEBUG: job_data.job_type type: {type(job_data.job_type)}")
         job_service = JobService(db)
         job = job_service.create_job(job_data, current_user.id)
+        
+        # Log job creation audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.JOB_CREATED,
+            user_id=current_user.id,
+            resource_type="job",
+            resource_id=str(job.id),
+            action="create_job",
+            details={
+                "job_name": job.name,
+                "job_type": job.job_type,
+                "description": job.description,
+                "created_by": current_user.username
+            },
+            severity=AuditSeverity.MEDIUM,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
         
         # Return job with actions
         return JobResponse.model_validate(job)
@@ -148,11 +172,14 @@ async def get_jobs(
                 )
         
         # Use optimized method to get jobs with last execution in single query
+        # Role-based filtering: admins see all jobs, regular users see only their own
+        created_by_filter = None if current_user.role in ['admin', 'administrator'] else current_user.id
+        
         jobs_with_executions = job_service.get_jobs_with_last_execution(
             skip=skip,
             limit=limit,
             status=job_status,
-            created_by=current_user.id
+            created_by=created_by_filter
         )
         
         # Convert to response format
@@ -267,6 +294,7 @@ async def schedule_job(
 async def execute_job(
     job_id: int,
     execute_data: JobExecuteRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -302,6 +330,31 @@ async def execute_job(
         # Queue Celery task for job execution
         task = execute_job_task.delay(execution.id, target_ids)
         logger.info(f"Celery task queued: execution_id={execution.id}, task_id={task.id}, targets={target_ids}")
+        
+        # Log job execution audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.JOB_EXECUTED,
+            user_id=current_user.id,
+            resource_type="job",
+            resource_id=str(job_id),
+            action="execute_job",
+            details={
+                "job_name": job.name,
+                "execution_id": execution.id,
+                "execution_uuid": str(execution.execution_uuid) if execution.execution_uuid else None,
+                "target_count": len(target_ids),
+                "target_ids": target_ids,
+                "executed_by": current_user.username,
+                "task_id": task.id
+            },
+            severity=AuditSeverity.MEDIUM,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
         
         return build_execution_response(execution)
     except HTTPException:
@@ -396,6 +449,7 @@ async def get_job_executions(
 async def update_job(
     job_id: int,
     job_data: JobCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -419,6 +473,34 @@ async def update_job(
         
         # Update job
         updated_job = job_service.update_job(job_id, job_data)
+        
+        # Log job update audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.JOB_UPDATED,
+            user_id=current_user.id,
+            resource_type="job",
+            resource_id=str(job_id),
+            action="update_job",
+            details={
+                "job_name": updated_job.name,
+                "job_type": updated_job.job_type,
+                "updated_fields": {
+                    "name": job_data.name,
+                    "description": job_data.description,
+                    "job_type": job_data.job_type,
+                    "command": job_data.command
+                },
+                "updated_by": current_user.username
+            },
+            severity=AuditSeverity.MEDIUM,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
         return JobResponse.model_validate(updated_job)
     except HTTPException:
         raise
@@ -436,6 +518,7 @@ async def update_job(
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_job(
     job_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -464,6 +547,28 @@ async def delete_job(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to delete job {job_id}"
             )
+        
+        # Log job deletion audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.JOB_DELETED,
+            user_id=current_user.id,
+            resource_type="job",
+            resource_id=str(job_id),
+            action="delete_job",
+            details={
+                "job_name": job.name,
+                "job_type": job.job_type,
+                "command": job.command,
+                "deleted_by": current_user.username
+            },
+            severity=AuditSeverity.HIGH,  # Job deletion is high severity
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
     except HTTPException:
         raise
     except Exception as e:

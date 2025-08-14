@@ -2,7 +2,7 @@
 Job Scheduling API Routes
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from app.services.job_scheduling_service import JobSchedulingService
 from app.core.security import verify_token
 from app.models.user_models import User
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 
 router = APIRouter(prefix="/api/jobs", tags=["job-scheduling"])
 security = HTTPBearer()
@@ -69,7 +70,8 @@ class ScheduleUpdateRequest(BaseModel):
 
 @router.post("/schedules", response_model=Dict[str, Any])
 async def create_schedule(
-    request: ScheduleCreateRequest,
+    request_data: ScheduleCreateRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -78,9 +80,32 @@ async def create_schedule(
         scheduling_service = JobSchedulingService(db)
         
         # Convert request to dict
-        schedule_data = request.dict(exclude_unset=True)
+        schedule_data = request_data.dict(exclude_unset=True)
         
         schedule = scheduling_service.create_schedule(schedule_data)
+        
+        # Log schedule creation audit event - HIGH SECURITY EVENT
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.SYSTEM_CONFIG_CHANGED,
+            user_id=current_user.id,
+            resource_type="job_schedule",
+            resource_id=str(schedule.id),
+            action="create_schedule",
+            details={
+                "schedule_id": schedule.id,
+                "job_id": schedule.job_id,
+                "schedule_type": schedule.schedule_type,
+                "enabled": schedule.enabled,
+                "created_by": current_user.username
+            },
+            severity=AuditSeverity.HIGH,  # Job scheduling is high severity
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
         
         return {
             "success": True,

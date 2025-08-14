@@ -117,12 +117,12 @@ const SystemManagement = () => {
       const fallbackData = {
         overall_health: 'unknown',
         services: [
-          { service: 'enabledrm-backend', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] },
-          { service: 'enabledrm-frontend', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] },
-          { service: 'enabledrm-postgres', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] },
-          { service: 'enabledrm-redis', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] },
-          { service: 'enabledrm-nginx', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] },
-          { service: 'enabledrm-portainer', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] }
+          { service: 'opsconductor-backend', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] },
+          { service: 'opsconductor-frontend', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] },
+          { service: 'opsconductor-postgres', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] },
+          { service: 'opsconductor-redis', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] },
+          { service: 'opsconductor-nginx', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] },
+          { service: 'opsconductor-portainer', status: 'running', health: 'healthy', uptime: 3600, cpu_usage: 0, memory_usage: 0, last_check: new Date().toISOString(), issues: [] }
         ],
         system_metrics: {
           cpu_usage: 15.2,

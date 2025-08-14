@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Typography,
   Button,
@@ -26,6 +26,8 @@ import {
   Grid,
   Card,
   CardContent,
+  TablePagination,
+  TableSortLabel,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -56,6 +58,13 @@ const UserManagementSimplified = () => {
     password: '',
     role: 'user',
   });
+
+  // Table state for filtering, sorting, and pagination
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [sortField, setSortField] = useState('username');
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [columnFilters, setColumnFilters] = useState({});
 
   const navigate = useNavigate();
 
@@ -136,6 +145,128 @@ const UserManagementSimplified = () => {
       }
     }
   };
+
+  // Filter and sort users based on column filters and sort
+  const filteredAndSortedUsers = useMemo(() => {
+    if (!users || !Array.isArray(users)) {
+      return [];
+    }
+
+    const filtered = users.filter(user => {
+      try {
+        return Object.entries(columnFilters).every(([key, filterValue]) => {
+          if (!filterValue) return true;
+          
+          switch (key) {
+            case 'id':
+              return user.id.toString().includes(filterValue);
+            case 'username':
+              return user.username?.toLowerCase().includes(filterValue.toLowerCase());
+            case 'email':
+              return user.email?.toLowerCase().includes(filterValue.toLowerCase());
+            case 'role':
+              return user.role === filterValue;
+            case 'status':
+              const isActive = user.is_active;
+              return (filterValue === 'active' && isActive) || (filterValue === 'inactive' && !isActive);
+            case 'last_login':
+              const lastLogin = user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never';
+              return lastLogin.toLowerCase().includes(filterValue.toLowerCase());
+            default:
+              return true;
+          }
+        });
+      } catch (e) {
+        return true; // Include user if there's an error
+      }
+    });
+
+    // Sort the filtered results
+    const sorted = filtered.sort((a, b) => {
+      let aValue = a[sortField];
+      let bValue = b[sortField];
+      
+      // Handle null/undefined values
+      if (aValue == null) aValue = '';
+      if (bValue == null) bValue = '';
+      
+      // Convert to strings for comparison
+      aValue = aValue.toString();
+      bValue = bValue.toString();
+      
+      if (sortDirection === 'asc') {
+        return aValue.localeCompare(bValue);
+      } else {
+        return bValue.localeCompare(aValue);
+      }
+    });
+    
+    return sorted;
+  }, [users, columnFilters, sortField, sortDirection]);
+
+  // Paginated users - memoized for performance
+  const paginatedUsers = useMemo(() => {
+    return filteredAndSortedUsers.slice(
+      page * rowsPerPage,
+      page * rowsPerPage + rowsPerPage
+    );
+  }, [filteredAndSortedUsers, page, rowsPerPage]);
+
+  // Handler functions for table interactions
+  const handleChangePage = useCallback((event, newPage) => {
+    setPage(newPage);
+  }, []);
+
+  const handleChangeRowsPerPage = useCallback((event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  }, []);
+
+  const handleSort = useCallback((field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  }, [sortField, sortDirection]);
+
+  const handleColumnFilterChange = (columnKey, value) => {
+    setColumnFilters(prev => ({
+      ...prev,
+      [columnKey]: value
+    }));
+    setPage(0); // Reset to first page when filtering
+  };
+
+  // Sortable header component - memoized for performance
+  const SortableHeader = useCallback(({ field, children, ...props }) => (
+    <TableCell 
+      {...props}
+      className="table-header-cell"
+      sx={{ 
+        cursor: 'pointer',
+        userSelect: 'none',
+        fontWeight: 600,
+        fontSize: '0.75rem',
+        padding: '8px 12px',
+        borderBottom: '2px solid #e0e0e0'
+      }}
+      onClick={() => handleSort(field)}
+    >
+      <TableSortLabel
+        active={sortField === field}
+        direction={sortField === field ? sortDirection : 'asc'}
+        sx={{
+          '& .MuiTableSortLabel-icon': {
+            fontSize: '0.75rem'
+          }
+        }}
+      >
+        {children}
+      </TableSortLabel>
+    </TableCell>
+  ), [sortField, sortDirection, handleSort]);
 
   // Calculate user statistics
   const stats = {
@@ -270,7 +401,7 @@ const UserManagementSimplified = () => {
             USER ACCOUNTS
           </Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-            {users.length} users configured
+            {filteredAndSortedUsers.length} of {users.length} users {Object.keys(columnFilters).some(key => columnFilters[key]) ? 'filtered' : 'configured'}
           </Typography>
         </div>
         
@@ -286,91 +417,245 @@ const UserManagementSimplified = () => {
             <TableContainer className="custom-scrollbar">
               <Table className="compact-table">
                 <TableHead>
+                  {/* Header Row */}
                   <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Username</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Role</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Last Login</TableCell>
-                    <TableCell>Actions</TableCell>
+                    <SortableHeader field="id">ID</SortableHeader>
+                    <SortableHeader field="username">Username</SortableHeader>
+                    <SortableHeader field="email">Email</SortableHeader>
+                    <SortableHeader field="role">Role</SortableHeader>
+                    <SortableHeader field="is_active">Status</SortableHeader>
+                    <SortableHeader field="last_login">Last Login</SortableHeader>
+                    <TableCell 
+                      className="table-header-cell"
+                      sx={{ 
+                        fontWeight: 600,
+                        fontSize: '0.75rem',
+                        padding: '8px 12px',
+                        borderBottom: '2px solid #e0e0e0'
+                      }}
+                      align="center"
+                    >
+                      Actions
+                    </TableCell>
+                  </TableRow>
+                  
+                  {/* Filter Row */}
+                  <TableRow>
+                    <TableCell sx={{ padding: '4px 8px' }}>
+                      <TextField
+                        size="small"
+                        placeholder="Filter ID..."
+                        value={columnFilters.id || ''}
+                        onChange={(e) => handleColumnFilterChange('id', e.target.value)}
+                        sx={{
+                          '& .MuiInputBase-input': {
+                            padding: '2px 4px',
+                            fontSize: '0.75rem',
+                            fontFamily: 'monospace'
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ padding: '4px 8px' }}>
+                      <TextField
+                        size="small"
+                        placeholder="Filter username..."
+                        value={columnFilters.username || ''}
+                        onChange={(e) => handleColumnFilterChange('username', e.target.value)}
+                        sx={{
+                          '& .MuiInputBase-input': {
+                            padding: '2px 4px',
+                            fontSize: '0.75rem',
+                            fontFamily: 'monospace'
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ padding: '4px 8px' }}>
+                      <TextField
+                        size="small"
+                        placeholder="Filter email..."
+                        value={columnFilters.email || ''}
+                        onChange={(e) => handleColumnFilterChange('email', e.target.value)}
+                        sx={{
+                          '& .MuiInputBase-input': {
+                            padding: '2px 4px',
+                            fontSize: '0.75rem',
+                            fontFamily: 'monospace'
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ padding: '4px 8px' }}>
+                      <Select
+                        size="small"
+                        value={columnFilters.role || ''}
+                        onChange={(e) => handleColumnFilterChange('role', e.target.value)}
+                        displayEmpty
+                        sx={{
+                          minWidth: 120,
+                          '& .MuiSelect-select': {
+                            padding: '2px 4px',
+                            fontSize: '0.75rem',
+                            fontFamily: 'monospace'
+                          }
+                        }}
+                      >
+                        <MenuItem value="">All Roles</MenuItem>
+                        <MenuItem value="administrator">Administrator</MenuItem>
+                        <MenuItem value="manager">Manager</MenuItem>
+                        <MenuItem value="user">User</MenuItem>
+                      </Select>
+                    </TableCell>
+                    <TableCell sx={{ padding: '4px 8px' }}>
+                      <Select
+                        size="small"
+                        value={columnFilters.status || ''}
+                        onChange={(e) => handleColumnFilterChange('status', e.target.value)}
+                        displayEmpty
+                        sx={{
+                          minWidth: 100,
+                          '& .MuiSelect-select': {
+                            padding: '2px 4px',
+                            fontSize: '0.75rem',
+                            fontFamily: 'monospace'
+                          }
+                        }}
+                      >
+                        <MenuItem value="">All Status</MenuItem>
+                        <MenuItem value="active">Active</MenuItem>
+                        <MenuItem value="inactive">Inactive</MenuItem>
+                      </Select>
+                    </TableCell>
+                    <TableCell sx={{ padding: '4px 8px' }}>
+                      <TextField
+                        size="small"
+                        placeholder="Filter login..."
+                        value={columnFilters.last_login || ''}
+                        onChange={(e) => handleColumnFilterChange('last_login', e.target.value)}
+                        sx={{
+                          '& .MuiInputBase-input': {
+                            padding: '2px 4px',
+                            fontSize: '0.75rem',
+                            fontFamily: 'monospace'
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ padding: '4px 8px' }} align="center">
+                      {/* No filter for Actions column */}
+                    </TableCell>
                   </TableRow>
                 </TableHead>
               <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id} hover>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {user.id}
+                {filteredAndSortedUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center" className="no-data-cell">
+                      <Typography variant="body2" color="text.secondary">
+                        {users.length === 0 ? 'No users found. Create your first user to get started!' : 'No users match your search criteria.'}
                       </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" className="font-weight-bold">
-                        {user.username}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <EmailIcon fontSize="small" color="action" />
-                        <Typography variant="body2">
-                          {user.email}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={user.role}
-                        size="small"
-                        className="chip-compact"
-                        color={
-                          user.role === 'administrator' ? 'error' :
-                          user.role === 'manager' ? 'warning' :
-                          user.role === 'user' ? 'primary' : 'default'
-                        }
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={user.is_active ? 'Active' : 'Inactive'}
-                        size="small"
-                        className="chip-compact"
-                        color={user.is_active ? 'success' : 'default'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="caption" color="text.secondary">
-                        {user.last_login
-                          ? new Date(user.last_login).toLocaleDateString()
-                          : 'Never'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Tooltip title="Edit user">
-                          <IconButton
-                            className="btn-icon"
-                            size="small"
-                            onClick={() => handleOpenDialog(user)}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete user">
-                          <IconButton
-                            className="btn-icon"
-                            size="small"
-                            onClick={() => handleDelete(user.id)}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  paginatedUsers.map((user) => (
+                    <TableRow key={user.id} className="table-row" hover>
+                      <TableCell className="table-cell">
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                          {user.id}
+                        </Typography>
+                      </TableCell>
+                      <TableCell className="table-cell">
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 600 }}>
+                          {user.username}
+                        </Typography>
+                      </TableCell>
+                      <TableCell className="table-cell">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <EmailIcon fontSize="small" color="action" />
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                            {user.email}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell className="table-cell">
+                        <Chip
+                          label={user.role}
+                          size="small"
+                          className="chip-compact"
+                          sx={{ fontSize: '0.7rem', fontFamily: 'monospace' }}
+                          color={
+                            user.role === 'administrator' ? 'error' :
+                            user.role === 'manager' ? 'warning' :
+                            user.role === 'user' ? 'primary' : 'default'
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="table-cell">
+                        <Chip
+                          label={user.is_active ? 'Active' : 'Inactive'}
+                          size="small"
+                          className="chip-compact"
+                          sx={{ fontSize: '0.7rem', fontFamily: 'monospace' }}
+                          color={user.is_active ? 'success' : 'default'}
+                        />
+                      </TableCell>
+                      <TableCell className="table-cell">
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }} color="text.secondary">
+                          {user.last_login
+                            ? new Date(user.last_login).toLocaleDateString()
+                            : 'Never'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell className="table-cell" align="center">
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                          <Tooltip title="Edit user">
+                            <IconButton
+                              className="btn-icon"
+                              size="small"
+                              onClick={() => handleOpenDialog(user)}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete user">
+                            <IconButton
+                              className="btn-icon"
+                              size="small"
+                              onClick={() => handleDelete(user.id)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
+          )}
+          
+          {/* Pagination */}
+          {!loading && filteredAndSortedUsers.length > 0 && (
+            <TablePagination
+              component="div"
+              count={filteredAndSortedUsers.length}
+              page={page}
+              onPageChange={handleChangePage}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              sx={{
+                borderTop: '1px solid #e0e0e0',
+                '& .MuiTablePagination-toolbar': {
+                  fontSize: '0.75rem'
+                },
+                '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                  fontSize: '0.75rem'
+                }
+              }}
+            />
           )}
         </div>
       </div>

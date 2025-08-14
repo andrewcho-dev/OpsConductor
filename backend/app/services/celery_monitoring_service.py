@@ -81,7 +81,7 @@ class CeleryMonitoringService:
             self.db.rollback()
             raise
 
-    def get_recent_tasks(self, limit: int = 10) -> List[CeleryTaskHistory]:
+    def get_recent_tasks(self, limit: int = 100) -> List[CeleryTaskHistory]:
         """Get recent completed tasks"""
         return self.db.query(CeleryTaskHistory).order_by(
             desc(CeleryTaskHistory.completed_at)
@@ -236,7 +236,7 @@ class CeleryMonitoringService:
             
             # Get historical statistics
             stats = self.get_task_statistics(hours=24)
-            recent_tasks = self.get_recent_tasks(limit=10)
+            recent_tasks = self.get_recent_tasks(limit=50)
             task_types = self.get_task_types_stats(hours=24)
             
             # Format recent tasks for frontend

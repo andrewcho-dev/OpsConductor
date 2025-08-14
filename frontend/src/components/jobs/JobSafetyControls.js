@@ -24,7 +24,6 @@ import {
   Warning as WarningIcon,
   Stop as StopIcon,
   CleaningServices as CleanupIcon,
-  Security as SecurityIcon,
   HealthAndSafety as HealthIcon,
 } from '@mui/icons-material';
 
@@ -150,19 +149,6 @@ const JobSafetyControls = ({ onRefresh, token }) => {
         >
           Health Check
         </Button>
-        
-        <Tooltip title="Use checkboxes in the job table to terminate specific jobs">
-          <Button
-            variant="outlined"
-            color="info"
-            startIcon={<SecurityIcon fontSize="small" />}
-            disabled={true}
-            size="small"
-            sx={{ fontSize: '0.75rem', minWidth: 'auto', opacity: 0.6 }}
-          >
-            Use Table Actions
-          </Button>
-        </Tooltip>
         
         {healthStatus && (
           <Chip

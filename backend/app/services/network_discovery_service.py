@@ -98,6 +98,11 @@ class NetworkDiscoveryService:
                 'keywords': ['windows server', 'server 2019', 'server 2022', 'iis']
             },
             # Network Infrastructure
+            'router_gateway': {
+                'ports': [53, 80, 443, 161],  # DNS + Web management
+                'banners': ['Router', 'Gateway', 'OpenWrt', 'DD-WRT'],
+                'keywords': ['router', 'gateway', 'openwrt', 'dd-wrt', 'pfsense']
+            },
             'cisco_switch': {
                 'ports': [22, 23, 80, 443, 161],
                 'banners': ['Cisco', 'IOS'],
@@ -575,6 +580,10 @@ class NetworkDiscoveryService:
             port_matches = len(set(device.open_ports) & set(hints['ports']))
             if port_matches > 0:
                 score += port_matches * 0.3
+                
+                # Special case: DNS port 53 strongly indicates router/gateway
+                if device_type == 'router_gateway' and 53 in device.open_ports:
+                    score += 0.5
             
             # Check banner matches
             for port, service_info in device.services.items():

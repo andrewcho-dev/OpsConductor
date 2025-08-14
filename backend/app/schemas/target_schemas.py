@@ -88,38 +88,11 @@ class TargetBase(BaseModel):
     @validator('os_type')
     def validate_os_type(cls, v):
         """Validate Device/OS type."""
-        # Valid device/OS types - expanded list
-        valid_types = [
-            # Operating Systems
-            'linux', 'windows', 'windows_desktop', 'macos', 'freebsd', 'aix', 'solaris',
-            # Network Infrastructure
-            'cisco_switch', 'cisco_router', 'juniper_switch', 'juniper_router', 'arista_switch',
-            'hp_switch', 'dell_switch', 'firewall', 'load_balancer', 'wireless_controller', 'access_point',
-            # Virtualization & Cloud
-            'vmware_esxi', 'vmware_vcenter', 'hyper_v', 'proxmox', 'xen', 'kubernetes', 'docker',
-            # Storage Systems
-            'netapp', 'emc_storage', 'hp_storage', 'pure_storage', 'synology', 'qnap',
-            # Database Systems
-            'mysql', 'postgresql', 'mssql', 'oracle_db', 'mongodb', 'redis', 'elasticsearch', 'cassandra',
-            # Application Servers
-            'apache', 'nginx', 'iis', 'tomcat', 'jboss', 'websphere',
-            # Communication & Email
-            'exchange', 'postfix', 'sendmail', 'zimbra', 'asterisk',
-            # Infrastructure Services
-            'dns_server', 'dhcp_server', 'ntp_server', 'ldap_server', 'backup_server',
-            # Power & Environmental
-            'ups', 'pdu', 'environmental_monitor', 'generator',
-            # Security Appliances
-            'ids_ips', 'siem', 'vulnerability_scanner',
-            # IoT & Embedded
-            'raspberry_pi', 'arduino', 'iot_sensor', 'embedded_linux',
-            # Generic/Unknown
-            'generic_device', 'unknown',
-            # Legacy types for backward compatibility
-            'email', 'database'
-        ]
-        if v not in valid_types:
-            raise ValueError(f'Device/OS type must be one of: {", ".join(valid_types)}')
+        if v is not None:
+            from app.core.device_types import get_valid_device_types
+            valid_types = get_valid_device_types()
+            if v not in valid_types:
+                raise ValueError(f'Device/OS type must be one of: {", ".join(valid_types)}')
         return v
     
     @validator('environment')
@@ -323,36 +296,8 @@ class TargetComprehensiveUpdate(BaseModel):
     def validate_os_type(cls, v):
         """Validate Device/OS type."""
         if v is not None:
-            # Valid device/OS types - expanded list
-            valid_types = [
-                # Operating Systems
-                'linux', 'windows', 'windows_desktop', 'macos', 'freebsd', 'aix', 'solaris',
-                # Network Infrastructure
-                'cisco_switch', 'cisco_router', 'juniper_switch', 'juniper_router', 'arista_switch',
-                'hp_switch', 'dell_switch', 'firewall', 'load_balancer', 'wireless_controller', 'access_point',
-                # Virtualization & Cloud
-                'vmware_esxi', 'vmware_vcenter', 'hyper_v', 'proxmox', 'xen', 'kubernetes', 'docker',
-                # Storage Systems
-                'netapp', 'emc_storage', 'hp_storage', 'pure_storage', 'synology', 'qnap',
-                # Database Systems
-                'mysql', 'postgresql', 'mssql', 'oracle_db', 'mongodb', 'redis', 'elasticsearch', 'cassandra',
-                # Application Servers
-                'apache', 'nginx', 'iis', 'tomcat', 'jboss', 'websphere',
-                # Communication & Email
-                'exchange', 'postfix', 'sendmail', 'zimbra', 'asterisk',
-                # Infrastructure Services
-                'dns_server', 'dhcp_server', 'ntp_server', 'ldap_server', 'backup_server',
-                # Power & Environmental
-                'ups', 'pdu', 'environmental_monitor', 'generator',
-                # Security Appliances
-                'ids_ips', 'siem', 'vulnerability_scanner',
-                # IoT & Embedded
-                'raspberry_pi', 'arduino', 'iot_sensor', 'embedded_linux',
-                # Generic/Unknown
-                'generic_device', 'unknown',
-                # Legacy types for backward compatibility
-                'email', 'database'
-            ]
+            from app.core.device_types import get_valid_device_types
+            valid_types = get_valid_device_types()
             if v not in valid_types:
                 raise ValueError(f'Device/OS type must be one of: {", ".join(valid_types)}')
         return v

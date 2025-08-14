@@ -5,12 +5,18 @@ RESTful API endpoints for target management following the architecture plan.
 from typing import List
 from datetime import datetime
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
 from app.database.database import get_db
 from app.services.universal_target_service import UniversalTargetService
 from app.services.health_monitoring_service import HealthMonitoringService
+from app.services.user_service import UserService
+from app.utils.target_utils import getTargetIpAddress
+from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
+from app.core.security import verify_token
+from app.models.user_models import User
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.schemas.target_schemas import (
     TargetCreate, 
     TargetUpdate, 
@@ -23,6 +29,8 @@ from app.schemas.target_schemas import (
     CommunicationMethodUpdate,
     CommunicationMethodResponse
 )
+from app.services.serial_service import SerialService
+from app.models.universal_target_models import UniversalTarget
 
 router = APIRouter(
     prefix="/api/targets",
@@ -35,6 +43,28 @@ router = APIRouter(
 )
 
 logger = logging.getLogger(__name__)
+security = HTTPBearer()
+
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), 
+                    db: Session = Depends(get_db)):
+    """Get current authenticated user."""
+    token = credentials.credentials
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+    
+    user_id = payload.get("user_id")
+    user = UserService.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return user
 
 
 def get_target_service(db: Session = Depends(get_db)) -> UniversalTargetService:
@@ -88,7 +118,10 @@ async def get_target(
 @router.post("/", response_model=TargetResponse, status_code=status.HTTP_201_CREATED)
 async def create_target(
     target_data: TargetCreate,
-    target_service: UniversalTargetService = Depends(get_target_service)
+    request: Request,
+    target_service: UniversalTargetService = Depends(get_target_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Create a new target with communication method and credentials.
@@ -216,6 +249,29 @@ async def create_target(
             ssl=getattr(target_data, 'ssl', None),
             verify_certs=getattr(target_data, 'verify_certs', None)
         )
+        
+        # Log target creation audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.TARGET_CREATED,
+            user_id=current_user.id,
+            resource_type="target",
+            resource_id=str(target.id),
+            action="create_target",
+            details={
+                "target_name": target.name,
+                "ip_address": getTargetIpAddress(target),
+                "method_type": target_data.method_type,
+                "created_by": current_user.username
+            },
+            severity=AuditSeverity.MEDIUM,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
         return target
         
     except ValueError as e:
@@ -233,7 +289,10 @@ async def create_target(
 @router.post("/comprehensive", response_model=TargetResponse, status_code=status.HTTP_201_CREATED)
 async def create_target_comprehensive(
     target_data: TargetComprehensiveUpdate,
-    target_service: UniversalTargetService = Depends(get_target_service)
+    request: Request,
+    target_service: UniversalTargetService = Depends(get_target_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Create a new target with comprehensive support for multiple communication methods.
@@ -251,45 +310,86 @@ async def create_target_comprehensive(
         TargetResponse: Created target with full details
     """
     try:
-        # First create the basic target
-        basic_target = target_service.create_target(
+        # Validate required fields
+        if not target_data.name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Target name is required"
+            )
+        
+        if not target_data.os_type:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OS type is required"
+            )
+        
+        if not target_data.communication_methods:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least one communication method is required"
+            )
+        
+        # Create the target directly without using the basic create_target method
+        # Generate permanent identifiers
+        target_serial = SerialService.generate_target_serial(db)
+        
+        # Create the target
+        target = UniversalTarget(
+            target_serial=target_serial,
             name=target_data.name,
+            target_type="system",  # Simplified version only supports system targets
             description=target_data.description,
             os_type=target_data.os_type,
-            environment=target_data.environment,
+            environment=target_data.environment or "development",
             location=target_data.location,
             data_center=target_data.data_center,
             region=target_data.region,
-            ip_address=target_data.ip_address,
-            method_type="ssh",  # Temporary - will be replaced by comprehensive methods
-            username="temp",    # Temporary - will be replaced
-            password="temp"     # Temporary - will be replaced
+            status="active",
+            health_status="unknown"
         )
         
-        if not basic_target:
+        db.add(target)
+        db.flush()  # Get the target ID
+        
+        # Now add the communication methods
+        updated_target = target_service.update_target_comprehensive(
+            target_id=target.id,
+            communication_methods=[method.dict() for method in target_data.communication_methods]
+        )
+        
+        if not updated_target:
+            # Clean up the target if comprehensive update fails
+            db.delete(target)
+            db.commit()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create basic target"
+                detail="Failed to add communication methods to target"
             )
         
-        # Now update it comprehensively with the actual communication methods
-        if target_data.communication_methods:
-            updated_target = target_service.update_target_comprehensive(
-                target_id=basic_target.id,
-                communication_methods=[method.dict() for method in target_data.communication_methods]
-            )
-            
-            if not updated_target:
-                # Clean up the basic target if comprehensive update fails
-                target_service.delete_target(basic_target.id)
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to update target with comprehensive methods"
-                )
-            
-            return updated_target
+        # Log comprehensive target creation audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
         
-        return basic_target
+        await audit_service.log_event(
+            event_type=AuditEventType.TARGET_CREATED,
+            user_id=current_user.id,
+            resource_type="target",
+            resource_id=str(updated_target.id),
+            action="create_target_comprehensive",
+            details={
+                "target_name": updated_target.name,
+                "ip_address": getTargetIpAddress(updated_target),
+                "communication_methods_count": len(updated_target.communication_methods),
+                "created_by": current_user.username,
+                "endpoint": "comprehensive"
+            },
+            severity=AuditSeverity.MEDIUM,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
+        return updated_target
         
     except HTTPException:
         raise
@@ -305,7 +405,10 @@ async def create_target_comprehensive(
 async def update_target(
     target_id: int,
     target_data: TargetUpdate,
-    target_service: UniversalTargetService = Depends(get_target_service)
+    request: Request,
+    target_service: UniversalTargetService = Depends(get_target_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Update target basic information.
@@ -336,6 +439,35 @@ async def update_target(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Target with ID {target_id} not found"
             )
+        
+        # Log target update audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.TARGET_UPDATED,
+            user_id=current_user.id,
+            resource_type="target",
+            resource_id=str(target_id),
+            action="update_target",
+            details={
+                "target_name": target.name,
+                "ip_address": getTargetIpAddress(target),
+                "updated_fields": {
+                    "name": target_data.name,
+                    "description": target_data.description,
+                    "os_type": target_data.os_type,
+                    "environment": target_data.environment,
+                    "location": target_data.location,
+                    "status": target_data.status
+                },
+                "updated_by": current_user.username
+            },
+            severity=AuditSeverity.MEDIUM,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
         
         return target
         
@@ -412,7 +544,10 @@ async def update_target_comprehensive(
 @router.delete("/{target_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_target(
     target_id: int,
-    target_service: UniversalTargetService = Depends(get_target_service)
+    request: Request,
+    target_service: UniversalTargetService = Depends(get_target_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Delete a target (soft delete - sets is_active = False).
@@ -420,18 +555,52 @@ async def delete_target(
     Args:
         target_id: Target ID to delete
     """
+    # Get target data for audit before deletion
+    target = target_service.get_target_by_id(target_id)
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Target with ID {target_id} not found"
+        )
+    
     success = target_service.delete_target(target_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Target with ID {target_id} not found"
         )
+    
+    # Log target deletion audit event
+    audit_service = AuditService(db)
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    await audit_service.log_event(
+        event_type=AuditEventType.TARGET_DELETED,
+        user_id=current_user.id,
+        resource_type="target",
+        resource_id=str(target_id),
+        action="delete_target",
+        details={
+            "target_name": target.name,
+            "ip_address": getTargetIpAddress(target),
+            "os_type": target.os_type,
+            "environment": target.environment,
+            "deleted_by": current_user.username
+        },
+        severity=AuditSeverity.HIGH,  # Target deletion is high severity
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
 
 
 @router.post("/{target_id}/test-connection", response_model=ConnectionTestResult)
 async def test_target_connection(
     target_id: int,
-    target_service: UniversalTargetService = Depends(get_target_service)
+    request: Request,
+    target_service: UniversalTargetService = Depends(get_target_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Test connection to a target.
@@ -445,6 +614,32 @@ async def test_target_connection(
     """
     try:
         result = target_service.test_target_connection(target_id)
+        
+        # Log connection test audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        # Get target info for audit
+        target = target_service.get_target_by_id(target_id)
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.TARGET_CONNECTION_TEST,
+            user_id=current_user.id,
+            resource_type="target",
+            resource_id=str(target_id),
+            action="test_connection",
+            details={
+                "target_name": target.name if target else f"target_{target_id}",
+                "ip_address": getTargetIpAddress(target) if target else "unknown",
+                "test_result": result.success if hasattr(result, 'success') else "unknown",
+                "tested_by": current_user.username
+            },
+            severity=AuditSeverity.LOW,  # Connection tests are low severity
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
         return result
         
     except Exception as e:
@@ -879,4 +1074,87 @@ async def test_method_configuration(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to test method configuration: {str(e)}"
+        )
+
+
+# Network Discovery Endpoints
+@router.get("/discovery")
+async def get_discovery_jobs(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get network discovery jobs.
+    
+    Args:
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        
+    Returns:
+        List of discovery jobs
+    """
+    try:
+        from app.services.discovery_service import DiscoveryService
+        discovery_service = DiscoveryService(db)
+        jobs = discovery_service.list_discovery_jobs(skip=skip, limit=limit)
+        return jobs
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get discovery jobs: {str(e)}"
+        )
+
+
+@router.post("/discovery")
+async def create_discovery_job(
+    discovery_data: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Create a new network discovery job.
+    
+    Args:
+        discovery_data: Discovery job configuration
+        
+    Returns:
+        Created discovery job
+    """
+    try:
+        from app.services.discovery_service import DiscoveryService
+        discovery_service = DiscoveryService(db)
+        
+        # Create discovery job
+        job = discovery_service.create_discovery_job(discovery_data)
+        
+        # Log discovery job creation audit event
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.DISCOVERY_JOB_CREATED,
+            user_id=current_user.id,
+            resource_type="discovery_job",
+            resource_id=str(job.id) if hasattr(job, 'id') else "unknown",
+            action="create_discovery_job",
+            details={
+                "discovery_type": discovery_data.get("discovery_type", "network_scan"),
+                "network_range": discovery_data.get("network_range"),
+                "created_by": current_user.username
+            },
+            severity=AuditSeverity.MEDIUM,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
+        return job
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create discovery job: {str(e)}"
         )

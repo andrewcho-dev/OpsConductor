@@ -24,7 +24,23 @@ const getAuthHeaders = () => {
 const handleResponse = async (response) => {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    console.error('API Error Response:', errorData);
+    
+    // Handle different error formats
+    if (errorData.detail) {
+      if (Array.isArray(errorData.detail)) {
+        // Pydantic validation errors
+        const errors = errorData.detail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+        throw new Error(errors);
+      } else {
+        // Simple detail error
+        throw new Error(errorData.detail);
+      }
+    } else if (errorData.message) {
+      throw new Error(errorData.message);
+    } else {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   }
   return response.json();
 };
@@ -343,7 +359,8 @@ export const getDefaultTargetData = () => ({
 });
 
 /**
- * Get communication method options - all methods available for any OS type
+ * Get communication method options - ALL methods available for ANY OS type
+ * FIXED: Now returns all connection methods regardless of OS type
  */
 export const getCommunicationMethodOptions = (osType) => {
   const systemMethods = [
@@ -366,12 +383,10 @@ export const getCommunicationMethodOptions = (osType) => {
     { value: 'elasticsearch', label: 'Elasticsearch' }
   ];
   
-  // Return appropriate methods based on OS type
-  if (osType === 'database') {
-    return databaseMethods;
-  } else {
-    return systemMethods;
-  }
+  // FIXED: Return ALL methods for ALL OS types - users should be able to choose any connection method
+  // A Linux server might have MySQL, PostgreSQL, Redis, etc. running on it
+  // A Windows server might have MSSQL, MongoDB, Elasticsearch, etc. running on it
+  return [...systemMethods, ...databaseMethods];
 };
 
 /**
@@ -449,6 +464,8 @@ export const getOSTypeOptions = () => [
   { value: 'postfix', label: 'Postfix Mail Server', category: 'Communication' },
   { value: 'sendmail', label: 'Sendmail Server', category: 'Communication' },
   { value: 'zimbra', label: 'Zimbra Server', category: 'Communication' },
+  { value: 'smtp_server', label: 'SMTP Server', category: 'Communication' },
+  { value: 'email', label: 'Email Server', category: 'Communication' },
   { value: 'asterisk', label: 'Asterisk PBX', category: 'Communication' },
   
   // Infrastructure Services
@@ -561,6 +578,13 @@ export const getDeviceDiscoveryHints = () => ({
     keywords: ['postgresql', 'postgres'] 
   },
   
+  // Communication & Email
+  'smtp_server': { 
+    ports: [25, 587, 465], 
+    services: ['smtp'], 
+    keywords: ['smtp', 'mail', 'postfix', 'sendmail', 'exim'] 
+  },
+  
   // Default for unknown devices
   'unknown': { 
     ports: [22, 23, 80, 443, 161], 
@@ -629,6 +653,7 @@ export const getRecommendedMethodsForDeviceType = (deviceType) => {
     'exchange': ['winrm', 'rest_api'],
     'postfix': ['ssh', 'smtp'],
     'zimbra': ['ssh', 'rest_api'],
+    'smtp_server': ['smtp', 'ssh'],
     
     // IoT & Embedded
     'raspberry_pi': ['ssh', 'snmp'],

@@ -1,3 +1,3 @@
 """
-API layer for ENABLEDRM Platform
+API layer for OpsConductor Platform
 """

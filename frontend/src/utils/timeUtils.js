@@ -1,5 +1,5 @@
 /**
- * Time Utilities for ENABLEDRM Frontend
+ * Time Utilities for OpsConductor Frontend
  * Centralized timezone handling to ensure consistent local time display
  */
 

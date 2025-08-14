@@ -232,8 +232,8 @@ class SystemMonitor:
         services.append(self.check_react_dev_server())
         
         # Check Docker services
-        docker_services = ["enabledrm-backend", "enabledrm-postgres", "enabledrm-redis", 
-                          "enabledrm-nginx", "enabledrm-celery-worker", "enabledrm-scheduler"]
+        docker_services = ["opsconductor-backend", "opsconductor-postgres", "opsconductor-redis",
+                          "opsconductor-nginx", "opsconductor-celery-worker", "opsconductor-scheduler"]
         
         for service in docker_services:
             services.append(self.check_docker_service(service))
@@ -292,7 +292,7 @@ async def heal_service(service_name: str, background_tasks: BackgroundTasks):
     def heal_task():
         if service_name == "react-dev-server":
             success = system_monitor.restart_react_dev_server()
-        elif service_name.startswith("enabledrm-"):
+        elif service_name.startswith("opsconductor-"):
             success = system_monitor.restart_docker_container(service_name)
         else:
             success = False
@@ -315,7 +315,7 @@ async def execute_system_action(action: dict, background_tasks: BackgroundTasks)
             elif action_name == "restart_frontend":
                 system_monitor.restart_react_dev_server()
             elif action_name == "restart_backend":
-                system_monitor.restart_docker_container("enabledrm-backend")
+                system_monitor.restart_docker_container("opsconductor-backend")
             elif action_name == "cleanup_logs":
                 subprocess.run(["find", "/home/enabledrm", "-name", "*.log", "-mtime", "+7", "-delete"], check=False)
             else:
@@ -339,7 +339,7 @@ async def get_service_logs(service_name: str, lines: int = 100):
             with open("/home/enabledrm/frontend-dev.log", "r") as f:
                 log_lines = f.readlines()
                 return {"logs": log_lines[-lines:]}
-        elif service_name.startswith("enabledrm-"):
+        elif service_name.startswith("opsconductor-"):
             result = subprocess.run([
                 "docker", "logs", "--tail", str(lines), service_name
             ], capture_output=True, text=True)

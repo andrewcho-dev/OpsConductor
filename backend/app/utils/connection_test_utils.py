@@ -90,10 +90,10 @@ def test_ssh_connection(host: str, port: int, credentials: Dict[str, Any], timeo
         
         # Test command execution
         try:
-            stdin, stdout, stderr = ssh_client.exec_command('echo "ENABLEDRM Connection Test"', timeout=5)
+            stdin, stdout, stderr = ssh_client.exec_command('echo "OpsConductor Connection Test"', timeout=5)
             output = stdout.read().decode().strip()
             
-            if "ENABLEDRM Connection Test" in output:
+            if "OpsConductor Connection Test" in output:
                 return {
                     'success': True, 
                     'message': f'SSH connection successful! Connected to {host}:{port}',
@@ -154,11 +154,11 @@ def test_winrm_connection(host: str, port: int, credentials: Dict[str, Any], tim
             )
             
             # Test command execution
-            result = session.run_cmd('echo ENABLEDRM Connection Test')
+            result = session.run_cmd('echo OpsConductor Connection Test')
             
             if result.status_code == 0:
                 output = result.std_out.decode().strip()
-                if "ENABLEDRM Connection Test" in output:
+                if "OpsConductor Connection Test" in output:
                     return {
                         'success': True,
                         'message': f'WinRM connection successful! Connected to {host}:{port}',

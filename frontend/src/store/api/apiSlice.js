@@ -1,5 +1,5 @@
 /**
- * RTK Query API slice for ENABLEDRM platform
+ * RTK Query API slice for OpsConductor platform
  */
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 

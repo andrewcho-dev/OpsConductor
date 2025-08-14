@@ -14,15 +14,12 @@ import {
   TablePagination,
   TextField,
   Box,
-  Chip,
   IconButton,
   Tooltip,
   Typography,
-  InputAdornment,
   Select,
   MenuItem,
   FormControl,
-  InputLabel,
   Button,
   Checkbox,
   Dialog,
@@ -33,7 +30,6 @@ import {
   CircularProgress
 } from '@mui/material';
 import {
-  Search as SearchIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Schedule as ScheduleIcon,
@@ -54,6 +50,9 @@ import JobExecutionHistoryModal from './JobExecutionHistoryModal';
 import { formatLocalDateTime, formatBothUTCAndLocal } from '../../utils/timeUtils';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAlert } from '../layout/BottomStatusBar';
+import { ViewDetailsAction, EditAction, DeleteAction, PlayAction, StopAction } from '../common/StandardActions';
+import { getStatusRowStyling, getTableCellStyle } from '../../utils/tableUtils';
+import { useTheme } from '@mui/material/styles';
 
 const JobList = ({ 
     jobs, 
@@ -62,13 +61,12 @@ const JobList = ({
     onUpdateJob,
     onDeleteJob
 }) => {
+    const theme = useTheme();
     const { token } = useAuth();
     const { addAlert } = useAlert();
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
-    const [typeFilter, setTypeFilter] = useState('all');
+
     const [sortField, setSortField] = useState('name');
     const [sortDirection, setSortDirection] = useState('asc');
     const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -84,20 +82,61 @@ const JobList = ({
     const [jobsToTerminate, setJobsToTerminate] = useState([]);
     const [terminateReason, setTerminateReason] = useState('');
     const [terminateLoading, setTerminateLoading] = useState(false);
+    const [columnFilters, setColumnFilters] = useState({});
 
-    // Filtering, search, and sort logic
-    const filteredJobs = useMemo(() => {
+    // Filter jobs based on column filters and sort
+    const filteredAndSortedJobs = useMemo(() => {
+        // Apply column filters
+        if (!jobs || !Array.isArray(jobs)) {
+            return [];
+        }
+
         const filtered = jobs.filter(job => {
-            const matchesSearch = job.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                job.job_type.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
-            const matchesType = typeFilter === 'all' || job.job_type === typeFilter;
-            
-            return matchesSearch && matchesStatus && matchesType;
+            try {
+                return Object.entries(columnFilters).every(([key, filterValue]) => {
+                    if (!filterValue) return true;
+                    
+                    switch (key) {
+                        case 'name':
+                            return job.name?.toLowerCase().includes(filterValue.toLowerCase());
+                        case 'job_serial':
+                            return (job.job_serial || `ID-${job.id}`).toLowerCase().includes(filterValue.toLowerCase());
+                        case 'job_type':
+                            return job.job_type === filterValue;
+                        case 'status':
+                            return job.status === filterValue;
+                        case 'created_at':
+                            try {
+                                const createdTime = formatDateWithBothTimezones(job.created_at);
+                                return createdTime.local.toLowerCase().includes(filterValue.toLowerCase());
+                            } catch (e) {
+                                return true;
+                            }
+                        case 'last_run':
+                            try {
+                                const lastRunTime = job.last_execution ? formatDateWithBothTimezones(job.last_execution.started_at) : { local: 'Never run' };
+                                return lastRunTime.local.toLowerCase().includes(filterValue.toLowerCase());
+                            } catch (e) {
+                                return true;
+                            }
+                        case 'scheduled_at':
+                            try {
+                                const scheduledTime = job.scheduled_at ? formatDateWithBothTimezones(job.scheduled_at).local : 'Not scheduled';
+                                return scheduledTime.toLowerCase().includes(filterValue.toLowerCase());
+                            } catch (e) {
+                                return true;
+                            }
+                        default:
+                            return true;
+                    }
+                });
+            } catch (e) {
+                return true; // Include job if there's an error
+            }
         });
 
         // Sort the filtered results
-        return filtered.sort((a, b) => {
+        const sorted = filtered.sort((a, b) => {
             let aValue = a[sortField];
             let bValue = b[sortField];
             
@@ -115,7 +154,9 @@ const JobList = ({
                 return bValue.localeCompare(aValue);
             }
         });
-    }, [jobs, searchTerm, statusFilter, typeFilter, sortField, sortDirection]);
+        
+        return sorted;
+    }, [jobs, columnFilters, sortField, sortDirection]);
 
     const handleChangePage = useCallback((event, newPage) => {
         setPage(newPage);
@@ -198,14 +239,14 @@ const JobList = ({
 
     const handleSelectAll = useCallback((checked) => {
         if (checked) {
-            const runningJobIds = filteredJobs
+            const runningJobIds = filteredAndSortedJobs
                 .filter(job => job.status === 'running')
                 .map(job => job.id);
             setSelectedJobs(new Set(runningJobIds));
         } else {
             setSelectedJobs(new Set());
         }
-    }, [filteredJobs]);
+    }, [filteredAndSortedJobs]);
 
     const handleTerminateJob = useCallback(async (job, e) => {
         e.stopPropagation();
@@ -215,11 +256,11 @@ const JobList = ({
     }, []);
 
     const handleBulkTerminate = useCallback(() => {
-        const jobsToTerminateList = filteredJobs.filter(job => selectedJobs.has(job.id));
+        const jobsToTerminateList = filteredAndSortedJobs.filter(job => selectedJobs.has(job.id));
         setJobsToTerminate(jobsToTerminateList);
         setShowTerminateDialog(true);
         setTerminateReason('');
-    }, [filteredJobs, selectedJobs]);
+    }, [filteredAndSortedJobs, selectedJobs]);
 
     const executeTermination = useCallback(async () => {
         if (jobsToTerminate.length === 0) return;
@@ -330,18 +371,7 @@ const JobList = ({
         }
     }, []);
 
-    const getStatusColor = useCallback((status) => {
-        switch (status) {
-            case 'draft': return 'default';
-            case 'scheduled': return 'info';
-            case 'running': return 'primary';
-            case 'completed': return 'success';
-            case 'failed': return 'error';
-            case 'cancelled': return 'secondary';
-            case 'paused': return 'warning';
-            default: return 'default';
-        }
-    }, []);
+
 
     const getJobTypeLabel = useCallback((jobType) => {
         switch (jobType) {
@@ -353,18 +383,25 @@ const JobList = ({
         }
     }, []);
 
+    const handleColumnFilterChange = (columnKey, value) => {
+        setColumnFilters(prev => ({
+            ...prev,
+            [columnKey]: value
+        }));
+    };
+
     // Paginated jobs - memoized for performance
     const paginatedJobs = useMemo(() => {
-        return filteredJobs.slice(
+        return filteredAndSortedJobs.slice(
             page * rowsPerPage,
             page * rowsPerPage + rowsPerPage
         );
-    }, [filteredJobs, page, rowsPerPage]);
+    }, [filteredAndSortedJobs, page, rowsPerPage]);
 
     // Computed values for bulk operations
     const runningJobs = useMemo(() => {
-        return filteredJobs.filter(job => job.status === 'running');
-    }, [filteredJobs]);
+        return filteredAndSortedJobs.filter(job => job.status === 'running');
+    }, [filteredAndSortedJobs]);
 
     const allRunningSelected = useMemo(() => {
         return runningJobs.length > 0 && runningJobs.every(job => selectedJobs.has(job.id));
@@ -399,77 +436,28 @@ const JobList = ({
 
     return (
         <Box>
-            {/* Compact Search and Filters */}
-            <div className="filters-container">
-                <TextField
-                    className="search-field form-control-compact"
-                    placeholder="Search jobs..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    InputProps={{
-                        startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon fontSize="small" />
-                            </InputAdornment>
-                        ),
-                    }}
-                    size="small"
-                />
-                
-                <FormControl className="filter-item form-control-compact" size="small">
-                    <InputLabel>Status</InputLabel>
-                    <Select
-                        value={statusFilter}
-                        label="Status"
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                        <MenuItem value="all">All Status</MenuItem>
-                        <MenuItem value="draft">Draft</MenuItem>
-                        <MenuItem value="scheduled">Scheduled</MenuItem>
-                        <MenuItem value="running">Running</MenuItem>
-                        <MenuItem value="completed">Completed</MenuItem>
-                        <MenuItem value="failed">Failed</MenuItem>
-                        <MenuItem value="cancelled">Cancelled</MenuItem>
-                        <MenuItem value="paused">Paused</MenuItem>
-                    </Select>
-                </FormControl>
-                
-                <FormControl className="filter-item form-control-compact" size="small">
-                    <InputLabel>Type</InputLabel>
-                    <Select
-                        value={typeFilter}
-                        label="Type"
-                        onChange={(e) => setTypeFilter(e.target.value)}
-                    >
-                        <MenuItem value="all">All Types</MenuItem>
-                        <MenuItem value="command">Command</MenuItem>
-                        <MenuItem value="script">Script</MenuItem>
-                        <MenuItem value="file_transfer">File Transfer</MenuItem>
-                        <MenuItem value="composite">Composite</MenuItem>
-                    </Select>
-                </FormControl>
-
-                {/* Bulk Terminate Button */}
-                {selectedJobs.size > 0 && (
+            {/* Bulk Operations */}
+            {selectedJobs.size > 0 && (
+                <Box sx={{ mb: 2 }}>
                     <Button
                         variant="contained"
                         color="error"
                         size="small"
                         startIcon={<StopIcon fontSize="small" />}
                         onClick={handleBulkTerminate}
-                        sx={{ ml: 2 }}
                     >
                         Terminate Selected ({selectedJobs.size})
                     </Button>
-                )}
-            </div>
+                </Box>
+            )}
 
             {/* Compact Table */}
             <TableContainer className="table-container">
                 <Table size="small" className="compact-table">
                     <TableHead>
-                        <TableRow className="table-header-row">
-                            <TableCell className="table-header-cell" padding="checkbox">
+                        {/* Column Headers Row */}
+                        <TableRow sx={{ backgroundColor: 'grey.100' }}>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }} padding="checkbox">
                                 <Tooltip title={runningJobs.length > 0 ? "Select all running jobs" : "No running jobs to select"}>
                                     <Checkbox
                                         indeterminate={someRunningSelected && !allRunningSelected}
@@ -480,18 +468,181 @@ const JobList = ({
                                     />
                                 </Tooltip>
                             </TableCell>
-                            <SortableHeader field="name">Job Name</SortableHeader>
-                            <SortableHeader field="job_serial">Job Serial</SortableHeader>
-                            <TableCell className="table-header-cell">Type</TableCell>
-                            <TableCell className="table-header-cell">Status</TableCell>
-                            <TableCell className="table-header-cell">Created</TableCell>
-                            <TableCell className="table-header-cell">Last Run</TableCell>
-                            <TableCell className="table-header-cell">Next Scheduled</TableCell>
-                            <TableCell className="table-header-cell" align="center">Actions</TableCell>
+                            <SortableHeader field="name" sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                                Job Name
+                            </SortableHeader>
+                            <SortableHeader field="job_serial" sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                                Job Serial
+                            </SortableHeader>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>Type</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>Status</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>Created</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>Last Run</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>Next Scheduled</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }} align="center">Actions</TableCell>
+                        </TableRow>
+                        
+                        {/* Column Filters Row */}
+                        <TableRow sx={{ backgroundColor: 'grey.50' }}>
+                            <TableCell sx={{ padding: '4px 8px' }} padding="checkbox">
+                                {/* No filter for checkbox column */}
+                            </TableCell>
+                            <TableCell sx={{ padding: '4px 8px' }}>
+                                <TextField
+                                    size="small"
+                                    placeholder="Filter name..."
+                                    value={columnFilters.name || ''}
+                                    onChange={(e) => handleColumnFilterChange('name', e.target.value)}
+                                    sx={{
+                                        '& .MuiInputBase-input': {
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.75rem',
+                                            padding: '2px 4px'
+                                        }
+                                    }}
+                                />
+                            </TableCell>
+                            <TableCell sx={{ padding: '4px 8px' }}>
+                                <TextField
+                                    size="small"
+                                    placeholder="Filter serial..."
+                                    value={columnFilters.job_serial || ''}
+                                    onChange={(e) => handleColumnFilterChange('job_serial', e.target.value)}
+                                    sx={{
+                                        '& .MuiInputBase-input': {
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.75rem',
+                                            padding: '2px 4px'
+                                        }
+                                    }}
+                                />
+                            </TableCell>
+                            <TableCell sx={{ padding: '4px 8px' }}>
+                                <FormControl size="small" fullWidth>
+                                    <Select
+                                        value={columnFilters.job_type || ''}
+                                        onChange={(e) => handleColumnFilterChange('job_type', e.target.value)}
+                                        displayEmpty
+                                        sx={{
+                                            '& .MuiSelect-select': {
+                                                padding: '2px 4px',
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.75rem'
+                                            }
+                                        }}
+                                        MenuProps={{
+                                            PaperProps: {
+                                                sx: {
+                                                    '& .MuiMenuItem-root': {
+                                                        fontFamily: 'monospace',
+                                                        fontSize: '0.75rem',
+                                                        minHeight: 'auto',
+                                                        padding: '4px 8px'
+                                                    }
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <MenuItem value="" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                            <em>All Types</em>
+                                        </MenuItem>
+                                        <MenuItem value="command" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Command</MenuItem>
+                                        <MenuItem value="script" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Script</MenuItem>
+                                        <MenuItem value="file_transfer" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>File Transfer</MenuItem>
+                                        <MenuItem value="composite" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Composite</MenuItem>
+                                    </Select>
+                                </FormControl>
+                            </TableCell>
+                            <TableCell sx={{ padding: '4px 8px' }}>
+                                <FormControl size="small" fullWidth>
+                                    <Select
+                                        value={columnFilters.status || ''}
+                                        onChange={(e) => handleColumnFilterChange('status', e.target.value)}
+                                        displayEmpty
+                                        sx={{
+                                            '& .MuiSelect-select': {
+                                                padding: '2px 4px',
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.75rem'
+                                            }
+                                        }}
+                                        MenuProps={{
+                                            PaperProps: {
+                                                sx: {
+                                                    '& .MuiMenuItem-root': {
+                                                        fontFamily: 'monospace',
+                                                        fontSize: '0.75rem',
+                                                        minHeight: 'auto',
+                                                        padding: '4px 8px'
+                                                    }
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <MenuItem value="" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                            <em>All Status</em>
+                                        </MenuItem>
+                                        <MenuItem value="pending" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Pending</MenuItem>
+                                        <MenuItem value="running" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Running</MenuItem>
+                                        <MenuItem value="completed" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Completed</MenuItem>
+                                        <MenuItem value="failed" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Failed</MenuItem>
+                                        <MenuItem value="cancelled" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Cancelled</MenuItem>
+                                        <MenuItem value="scheduled" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Scheduled</MenuItem>
+                                    </Select>
+                                </FormControl>
+                            </TableCell>
+                            <TableCell sx={{ padding: '4px 8px' }}>
+                                <TextField
+                                    size="small"
+                                    placeholder="Filter created..."
+                                    value={columnFilters.created_at || ''}
+                                    onChange={(e) => handleColumnFilterChange('created_at', e.target.value)}
+                                    sx={{
+                                        '& .MuiInputBase-input': {
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.75rem',
+                                            padding: '2px 4px'
+                                        }
+                                    }}
+                                />
+                            </TableCell>
+                            <TableCell sx={{ padding: '4px 8px' }}>
+                                <TextField
+                                    size="small"
+                                    placeholder="Filter last run..."
+                                    value={columnFilters.last_run || ''}
+                                    onChange={(e) => handleColumnFilterChange('last_run', e.target.value)}
+                                    sx={{
+                                        '& .MuiInputBase-input': {
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.75rem',
+                                            padding: '2px 4px'
+                                        }
+                                    }}
+                                />
+                            </TableCell>
+                            <TableCell sx={{ padding: '4px 8px' }}>
+                                <TextField
+                                    size="small"
+                                    placeholder="Filter scheduled..."
+                                    value={columnFilters.scheduled_at || ''}
+                                    onChange={(e) => handleColumnFilterChange('scheduled_at', e.target.value)}
+                                    sx={{
+                                        '& .MuiInputBase-input': {
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.75rem',
+                                            padding: '2px 4px'
+                                        }
+                                    }}
+                                />
+                            </TableCell>
+                            <TableCell sx={{ padding: '4px 8px' }} align="center">
+                                {/* No filter for Actions column */}
+                            </TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {filteredJobs.length === 0 ? (
+                        {filteredAndSortedJobs.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={9} align="center" className="no-data-cell">
                                     <Typography variant="body2" color="text.secondary">
@@ -508,7 +659,10 @@ const JobList = ({
                                 <TableRow 
                                     key={job.id} 
                                     className="table-row"
-                                    sx={{ cursor: 'pointer' }}
+                                    sx={{ 
+                                        cursor: 'pointer',
+                                        ...getStatusRowStyling(job.status, theme)
+                                    }}
                                 >
                                     <TableCell className="table-cell" padding="checkbox">
                                         <Checkbox
@@ -520,81 +674,32 @@ const JobList = ({
                                         />
                                     </TableCell>
                                     
-                                    <TableCell className="table-cell">
-                                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.75rem' }}>
-                                            {job.name}
-                                        </Typography>
+                                    <TableCell sx={getTableCellStyle(true)}>
+                                        {job.name}
                                     </TableCell>
                                     
-                                    <TableCell className="table-cell">
-                                        <Typography variant="body2" sx={{ 
-                                            fontWeight: 600, 
-                                            fontSize: '0.8rem',
-                                            fontFamily: 'monospace',
-                                            color: 'primary.main'
-                                        }}>
-                                            {job.job_serial || `ID-${job.id}`}
-                                        </Typography>
+                                    <TableCell sx={getTableCellStyle()}>
+                                        {job.job_serial || `ID-${job.id}`}
                                     </TableCell>
                                     
-                                    <TableCell className="table-cell">
-                                        <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-                                            {getJobTypeLabel(job.job_type)}
-                                        </Typography>
+                                    <TableCell sx={getTableCellStyle()}>
+                                        {getJobTypeLabel(job.job_type)}
                                     </TableCell>
                                     
-                                    <TableCell className="table-cell">
-                                        <Chip 
-                                            label={job.status} 
-                                            color={getStatusColor(job.status)}
-                                            size="small"
-                                            sx={{ fontSize: '0.65rem', height: '20px' }}
-                                        />
+                                    <TableCell sx={getTableCellStyle()}>
+                                        {job.status}
                                     </TableCell>
                                     
-                                    <TableCell className="table-cell">
-                                        <Box>
-                                            <Typography variant="body2" sx={{ fontSize: '0.7rem', fontWeight: 600, color: 'primary.main', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                <LocalTimeIcon sx={{ fontSize: 12 }} />
-                                                {createdTime.local}
-                                            </Typography>
-                                            <Typography variant="body2" sx={{ fontSize: '0.7rem', fontWeight: 500, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                <UtcTimeIcon sx={{ fontSize: 12 }} />
-                                                {createdTime.utc} UTC
-                                            </Typography>
-                                        </Box>
+                                    <TableCell sx={getTableCellStyle()}>
+                                        {createdTime.local}
                                     </TableCell>
                                     
-                                    <TableCell className="table-cell">
-                                        <Box>
-                                            <Typography variant="body2" sx={{ fontSize: '0.7rem', fontWeight: 600, color: 'primary.main', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                <LocalTimeIcon sx={{ fontSize: 12 }} />
-                                                {lastRunTime.local}
-                                            </Typography>
-                                            <Typography variant="body2" sx={{ fontSize: '0.7rem', fontWeight: 500, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                <UtcTimeIcon sx={{ fontSize: 12 }} />
-                                                {lastRunTime.utc} UTC
-                                            </Typography>
-                                        </Box>
+                                    <TableCell sx={getTableCellStyle()}>
+                                        {lastRunTime.local || 'Never'}
                                     </TableCell>
                                     
-                                    <TableCell className="table-cell">
-                                        {job.scheduled_at ? (
-                                            <Box>
-                                                <Typography variant="body2" sx={{ fontSize: '0.7rem', fontWeight: 600, color: 'primary.main', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                    <LocalTimeIcon sx={{ fontSize: 12 }} />
-                                                    {formatDateWithBothTimezones(job.scheduled_at).local}
-                                                </Typography>
-                                                <Typography variant="body2" sx={{ fontSize: '0.7rem', fontWeight: 500, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                    <UtcTimeIcon sx={{ fontSize: 12 }} />
-                                                    {formatDateWithBothTimezones(job.scheduled_at).utc} UTC
-                                                </Typography>
-                                            </Box>
-                                        ) : (
-                                            <Typography variant="body2" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
-                                                Not scheduled
-                                            </Typography>
-                                        )}
+                                    <TableCell sx={getTableCellStyle()}>
+                                        {job.scheduled_at ? formatDateWithBothTimezones(job.scheduled_at).local : 'Not scheduled'}
                                     </TableCell>
                                     
                                     <TableCell className="table-cell" align="center">
@@ -617,51 +722,13 @@ const JobList = ({
                                             
                                             {/* Terminate Action for Running Jobs */}
                                             {job.status === 'running' && (
-                                                <Tooltip title="Terminate Running Job">
-                                                    <IconButton 
-                                                        className="btn-icon"
-                                                        size="small" 
-                                                        onClick={(e) => handleTerminateJob(job, e)}
-                                                        color="error"
-                                                    >
-                                                        <StopIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
+                                                <StopAction onClick={(e) => handleTerminateJob(job, e)} />
                                             )}
                                             
                                             {/* View/Edit Actions */}
-                                            <Tooltip title="View Execution History">
-                                                <IconButton 
-                                                    className="btn-icon"
-                                                    size="small" 
-                                                    onClick={(e) => handleViewHistoryClick(job, e)}
-                                                    color="info"
-                                                >
-                                                    <VisibilityIcon fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                            
-                                            <Tooltip title="Edit Job">
-                                                <IconButton 
-                                                    className="btn-icon"
-                                                    size="small" 
-                                                    onClick={(e) => handleEditClick(job, e)}
-                                                    color="primary"
-                                                >
-                                                    <EditIcon fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                            
-                                            <Tooltip title="Delete Job">
-                                                <IconButton 
-                                                    className="btn-icon"
-                                                    size="small" 
-                                                    onClick={(e) => handleDeleteClick(job, e)}
-                                                    color="error"
-                                                >
-                                                    <DeleteIcon fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
+                                            <ViewDetailsAction onClick={(e) => handleViewHistoryClick(job, e)} />
+                                            <EditAction onClick={(e) => handleEditClick(job, e)} />
+                                            <DeleteAction onClick={(e) => handleDeleteClick(job, e)} />
                                         </Box>
                                     </TableCell>
                                 </TableRow>
@@ -673,11 +740,11 @@ const JobList = ({
             </TableContainer>
 
             {/* Compact Pagination */}
-            {filteredJobs.length > 0 && (
+            {filteredAndSortedJobs.length > 0 && (
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25, 50]}
                     component="div"
-                    count={filteredJobs.length}
+                    count={filteredAndSortedJobs.length}
                     rowsPerPage={rowsPerPage}
                     page={page}
                     onPageChange={handleChangePage}

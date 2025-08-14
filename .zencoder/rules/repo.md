@@ -106,12 +106,15 @@ npm start
 **Configuration**: Static file serving with custom nginx configuration
 
 #### Testing
-**Framework**: React Testing Library
-**Test Location**: frontend/src/tests
+**Framework**: React Testing Library (Unit), Playwright (E2E)
+**Test Location**: frontend/src/tests (Unit), tests/e2e (E2E)
 **Run Command**:
 ```bash
 cd frontend
 npm test
+
+# E2E Tests (from root)
+npm run test:comprehensive
 ```
 
 ### Infrastructure

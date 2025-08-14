@@ -29,8 +29,8 @@ def create_admin_user():
         # Create admin user
         admin_user = User(
             username="admin",
-            email="admin@enabledrm.local",
-            hashed_password=get_password_hash("admin123"),
+            email="admin@opsconductor.local",
+            password_hash=get_password_hash("admin123"),
             role="administrator",
             is_active=True
         )
@@ -42,7 +42,7 @@ def create_admin_user():
         print("✅ Admin user created successfully!")
         print(f"   Username: admin")
         print(f"   Password: admin123")
-        print(f"   Email: admin@enabledrm.local")
+        print(f"   Email: admin@opsconductor.local")
         print(f"   Role: administrator")
         
     except Exception as e:

@@ -8,6 +8,7 @@ from app.schemas.user_schemas import UserLogin, Token, TokenData
 from app.services.user_service import UserService
 from app.core.security import create_access_token, create_refresh_token, verify_token
 from app.core.config import settings
+from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 
 router = APIRouter()
 security = HTTPBearer()
@@ -20,11 +21,55 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """User login endpoint."""
+    audit_service = AuditService(db)
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
     # Authenticate user
     user = UserService.authenticate_user(
         db, user_credentials.username, user_credentials.password
     )
     if not user:
+        # Check for potential brute force attack (multiple failed attempts from same IP)
+        from app.shared.infrastructure.cache import cache_service
+        await cache_service.initialize()
+        
+        failed_attempts_key = f"failed_login_attempts:{client_ip}"
+        failed_attempts = await cache_service.get(failed_attempts_key) or 0
+        failed_attempts += 1
+        await cache_service.set(failed_attempts_key, failed_attempts, ttl=3600)  # 1 hour TTL
+        
+        # Determine severity based on failed attempts
+        if failed_attempts >= 10:
+            severity = AuditSeverity.CRITICAL  # Potential brute force attack
+            action = "potential_brute_force_attack"
+        elif failed_attempts >= 5:
+            severity = AuditSeverity.HIGH
+            action = "multiple_failed_logins"
+        else:
+            severity = AuditSeverity.HIGH
+            action = "failed_login"
+        
+        # Log failed login attempt
+        await audit_service.log_event(
+            event_type=AuditEventType.SECURITY_VIOLATION,
+            user_id=None,
+            resource_type="authentication",
+            resource_id=user_credentials.username,
+            action=action,
+            details={
+                "username": user_credentials.username,
+                "reason": "invalid_credentials",
+                "ip_address": client_ip,
+                "user_agent": user_agent,
+                "failed_attempts_count": failed_attempts,
+                "potential_brute_force": failed_attempts >= 10
+            },
+            severity=severity,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -37,8 +82,26 @@ async def login(
     # Create user session
     UserService.create_user_session(
         db, user.id, 
-        ip_address=request.client.host,
-        user_agent=request.headers.get("user-agent")
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
+
+    # Log successful login
+    await audit_service.log_event(
+        event_type=AuditEventType.USER_LOGIN,
+        user_id=user.id,
+        resource_type="user",
+        resource_id=str(user.id),
+        action="login",
+        details={
+            "username": user.username,
+            "login_method": "password",
+            "ip_address": client_ip,
+            "user_agent": user_agent
+        },
+        severity=AuditSeverity.LOW,
+        ip_address=client_ip,
+        user_agent=user_agent
     )
 
     # Create tokens
@@ -61,10 +124,15 @@ async def login(
 
 @router.post("/logout")
 async def logout(
+    request: Request,
     credentials: HTTPBearer = Depends(security),
     db: Session = Depends(get_db)
 ):
     """User logout endpoint."""
+    audit_service = AuditService(db)
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
     token = credentials.credentials
     payload = verify_token(token)
     if not payload:
@@ -72,6 +140,26 @@ async def logout(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
         )
+
+    user_id = payload.get("user_id")
+    username = payload.get("sub")
+    
+    # Log logout event
+    await audit_service.log_event(
+        event_type=AuditEventType.USER_LOGOUT,
+        user_id=user_id,
+        resource_type="user",
+        resource_id=str(user_id) if user_id else "unknown",
+        action="logout",
+        details={
+            "username": username,
+            "ip_address": client_ip,
+            "user_agent": user_agent
+        },
+        severity=AuditSeverity.LOW,
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
 
     # In a real implementation, you might want to blacklist the token
     # For now, we'll just return success

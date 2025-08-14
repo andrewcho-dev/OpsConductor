@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add the backend directory to Python path
-sys.path.append('/home/enabledrm/backend')
+sys.path.append('/home/opsconductor/backend')
 
 async def test_infrastructure():
     """Test the shared infrastructure components"""

@@ -699,7 +699,7 @@ class UniversalTargetService:
                                 print(f"Set method {method_id} as primary")
                                 break
                 
-                # Handle other method updates (config, credentials, etc.)
+                # Handle method creation and updates
                 for method_data in communication_methods:
                     method_id = method_data.get('id')
                     if method_id:
@@ -715,6 +715,49 @@ class UniversalTargetService:
                                     # Handle credential updates
                                     pass  # TODO: Implement credential updates if needed
                                 break
+                    else:
+                        # Create new method
+                        print(f"Creating new communication method: {method_data['method_type']}")
+                        
+                        # Extract credentials from the method data
+                        credentials = method_data.get('credentials', [])
+                        username = None
+                        password = None
+                        ssh_key = None
+                        ssh_passphrase = None
+                        credential_type = 'password'
+                        
+                        if credentials and len(credentials) > 0:
+                            cred = credentials[0]
+                            credential_type = cred.get('credential_type', 'password')
+                            encrypted_creds = cred.get('encrypted_credentials', {})
+                            
+                            if credential_type == 'password':
+                                username = encrypted_creds.get('username')
+                                password = encrypted_creds.get('password')
+                            elif credential_type == 'ssh_key':
+                                username = encrypted_creds.get('username')
+                                ssh_key = encrypted_creds.get('ssh_key')
+                                ssh_passphrase = encrypted_creds.get('ssh_passphrase')
+                        
+                        # Add the new communication method
+                        new_method = self.add_communication_method(
+                            target_id=target_id,
+                            method_type=method_data['method_type'],
+                            config=method_data['config'],
+                            is_primary=method_data.get('is_primary', False),
+                            is_active=method_data.get('is_active', True),
+                            credential_type=credential_type,
+                            username=username,
+                            password=password,
+                            ssh_key=ssh_key,
+                            ssh_passphrase=ssh_passphrase
+                        )
+                        
+                        if new_method:
+                            print(f"Successfully created communication method: {new_method.id}")
+                        else:
+                            print(f"Failed to create communication method: {method_data['method_type']}")
             
             # Legacy single method support (for backward compatibility)
             elif any([ip_address, method_type, port]):

@@ -11,7 +11,7 @@ from sqlalchemy import func, text
 
 from app.shared.infrastructure.container import injectable
 from app.shared.infrastructure.cache import cache_service, cached
-from app.models.job_models import Job, JobExecution, ExecutionStatus
+from app.models.job_models import Job, JobExecution, ExecutionStatus, JobStatus
 from app.models.universal_target_models import UniversalTarget
 from app.models.user_models import User
 
@@ -103,11 +103,24 @@ class MetricsService:
         try:
             uptime_seconds = time.time() - self.start_time
             
-            # Count active objects
-            total_jobs = self.db.query(Job).count()
-            active_jobs = self.db.query(Job).filter(Job.status == 'active').count()
-            total_targets = self.db.query(UniversalTarget).count()
-            online_targets = self.db.query(UniversalTarget).filter(UniversalTarget.status == 'online').count()
+            # Count active (non-soft-deleted) objects
+            # Jobs: Only count non-terminal status jobs (active jobs)
+            total_jobs = self.db.query(Job).filter(
+                Job.status.in_([JobStatus.DRAFT, JobStatus.SCHEDULED, JobStatus.RUNNING])
+            ).count()
+            active_jobs = self.db.query(Job).filter(
+                Job.status.in_([JobStatus.SCHEDULED, JobStatus.RUNNING])
+            ).count()
+            
+            # Targets: Only count non-soft-deleted and active targets
+            total_targets = self.db.query(UniversalTarget).filter(
+                UniversalTarget.is_active == True,
+                UniversalTarget.status == 'active'
+            ).count()
+            online_targets = self.db.query(UniversalTarget).filter(
+                UniversalTarget.is_active == True,
+                UniversalTarget.status == 'active'
+            ).count()
             total_users = self.db.query(User).count()
             active_users = self.db.query(User).filter(User.is_active == True).count()
             
@@ -212,6 +225,18 @@ class MetricsService:
             # Execution performance
             last_24h = datetime.now(timezone.utc) - timedelta(hours=24)
             
+            # Check if we have recent data, if not, use historical data
+            recent_executions_count = self.db.query(JobExecution).filter(
+                JobExecution.started_at >= last_24h
+            ).count()
+            
+            # If no recent data, expand to last 7 days for historical context
+            time_window = last_24h
+            time_period = "24h"
+            if recent_executions_count == 0:
+                time_window = datetime.now(timezone.utc) - timedelta(days=7)
+                time_period = "7d"
+            
             # Average execution time
             avg_execution_time = self.db.query(
                 func.avg(
@@ -219,30 +244,31 @@ class MetricsService:
                 )
             ).filter(
                 JobExecution.completed_at.isnot(None),
-                JobExecution.started_at >= last_24h
+                JobExecution.started_at >= time_window
             ).scalar() or 0
             
             # Success rate
             total_executions = self.db.query(JobExecution).filter(
-                JobExecution.started_at >= last_24h
+                JobExecution.started_at >= time_window
             ).count()
             
             successful_executions = self.db.query(JobExecution).filter(
-                JobExecution.started_at >= last_24h,
+                JobExecution.started_at >= time_window,
                 JobExecution.status == ExecutionStatus.COMPLETED
             ).count()
             
             success_rate = (successful_executions / total_executions * 100) if total_executions > 0 else 0
             
-            # Error rate by hour
+            # Error rate by hour (or day if using 7-day window)
+            time_trunc = 'hour' if time_period == "24h" else 'day'
             hourly_errors = self.db.query(
-                func.date_trunc('hour', JobExecution.started_at).label('hour'),
+                func.date_trunc(time_trunc, JobExecution.started_at).label('period'),
                 func.count(JobExecution.id).label('count')
             ).filter(
-                JobExecution.started_at >= last_24h,
+                JobExecution.started_at >= time_window,
                 JobExecution.status == ExecutionStatus.FAILED
             ).group_by(
-                func.date_trunc('hour', JobExecution.started_at)
+                func.date_trunc(time_trunc, JobExecution.started_at)
             ).all()
             
             return {
@@ -250,11 +276,13 @@ class MetricsService:
                 "success_rate_24h": round(success_rate, 2),
                 "total_executions_24h": total_executions,
                 "successful_executions_24h": successful_executions,
+                "time_period": time_period,
+                "data_source": "recent" if time_period == "24h" else "historical",
                 "hourly_errors_24h": [
                     {
-                        "hour": hour.isoformat(),
+                        "hour": period.isoformat(),
                         "error_count": count
-                    } for hour, count in hourly_errors
+                    } for period, count in hourly_errors
                 ]
             }
         except Exception as e:
@@ -355,40 +383,40 @@ class MetricsService:
             if "system" in metrics and "error" not in metrics["system"]:
                 system = metrics["system"]
                 prometheus_metrics.extend([
-                    f"enabledrm_cpu_percent {system['cpu']['percent']}",
-                    f"enabledrm_memory_percent {system['memory']['percent']}",
-                    f"enabledrm_disk_percent {system['disk']['percent']}",
-                    f"enabledrm_memory_total_bytes {system['memory']['total_bytes']}",
-                    f"enabledrm_memory_used_bytes {system['memory']['used_bytes']}",
-                    f"enabledrm_disk_total_bytes {system['disk']['total_bytes']}",
-                    f"enabledrm_disk_used_bytes {system['disk']['used_bytes']}",
+                    f"opsconductor_cpu_percent {system['cpu']['percent']}",
+                    f"opsconductor_memory_percent {system['memory']['percent']}",
+                    f"opsconductor_disk_percent {system['disk']['percent']}",
+                    f"opsconductor_memory_total_bytes {system['memory']['total_bytes']}",
+                    f"opsconductor_memory_used_bytes {system['memory']['used_bytes']}",
+                    f"opsconductor_disk_total_bytes {system['disk']['total_bytes']}",
+                    f"opsconductor_disk_used_bytes {system['disk']['used_bytes']}",
                 ])
             
             # Application metrics
             if "application" in metrics and "error" not in metrics["application"]:
                 app = metrics["application"]
                 prometheus_metrics.extend([
-                    f"enabledrm_uptime_seconds {app['uptime_seconds']}",
-                    f"enabledrm_jobs_total {app['jobs']['total']}",
-                    f"enabledrm_jobs_active {app['jobs']['active']}",
-                    f"enabledrm_targets_total {app['targets']['total']}",
-                    f"enabledrm_targets_online {app['targets']['online']}",
-                    f"enabledrm_users_total {app['users']['total']}",
-                    f"enabledrm_users_active {app['users']['active']}",
-                    f"enabledrm_executions_running {app['executions']['currently_running']}",
+                    f"opsconductor_uptime_seconds {app['uptime_seconds']}",
+                    f"opsconductor_jobs_total {app['jobs']['total']}",
+                    f"opsconductor_jobs_active {app['jobs']['active']}",
+                    f"opsconductor_targets_total {app['targets']['total']}",
+                    f"opsconductor_targets_online {app['targets']['online']}",
+                    f"opsconductor_users_total {app['users']['total']}",
+                    f"opsconductor_users_active {app['users']['active']}",
+                    f"opsconductor_executions_running {app['executions']['currently_running']}",
                 ])
             
             # Performance metrics
             if "performance" in metrics and "error" not in metrics["performance"]:
                 perf = metrics["performance"]
                 prometheus_metrics.extend([
-                    f"enabledrm_avg_execution_time_seconds {perf['avg_execution_time_seconds']}",
-                    f"enabledrm_success_rate_percent {perf['success_rate_24h']}",
-                    f"enabledrm_executions_total_24h {perf['total_executions_24h']}",
+                    f"opsconductor_avg_execution_time_seconds {perf['avg_execution_time_seconds']}",
+                    f"opsconductor_success_rate_percent {perf['success_rate_24h']}",
+                    f"opsconductor_executions_total_24h {perf['total_executions_24h']}",
                 ])
             
             # Health score
-            prometheus_metrics.append(f"enabledrm_health_score {health['health_score']}")
+            prometheus_metrics.append(f"opsconductor_health_score {health['health_score']}")
             
             return "\n".join(prometheus_metrics) + "\n"
             

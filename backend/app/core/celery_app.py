@@ -1,5 +1,5 @@
 """
-Celery configuration for ENABLEDRM background task processing
+Celery configuration for OpsConductor background task processing
 """
 
 from celery import Celery
@@ -8,7 +8,7 @@ from app.core.config import settings
 
 # Create Celery app
 celery_app = Celery(
-    "enabledrm",
+    "opsconductor",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
     include=["app.tasks.job_tasks", "app.tasks.periodic_tasks", "app.tasks.discovery_tasks"]

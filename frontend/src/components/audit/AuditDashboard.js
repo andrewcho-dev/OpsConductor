@@ -5,9 +5,7 @@ import {
   Card,
   CardContent,
   Typography,
-  Button,
-  Tab,
-  Tabs,
+
   Table,
   TableBody,
   TableCell,
@@ -15,7 +13,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
   TextField,
   FormControl,
   InputLabel,
@@ -25,24 +22,38 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  IconButton,
+  Pagination,
+  Stack
 } from '@mui/material';
 import {
-  Security as SecurityIcon,
   Search as SearchIcon,
-  Download as DownloadIcon,
-  Verified as VerifiedIcon
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
+  UnfoldMore as UnfoldMoreIcon,
+  Save as SaveIcon
 } from '@mui/icons-material';
+import SearchCard from '../common/SearchCard';
+import ColumnFilters from '../common/ColumnFilters';
+import { ViewDetailsAction, CloseAction, DownloadAction, RefreshAction } from '../common/StandardActions';
+import { getSeverityRowStyling, getTableCellStyle } from '../../utils/tableUtils';
+import { useTheme } from '@mui/material/styles';
 import '../../styles/dashboard.css';
 
 function AuditDashboard() {
-  const [tabValue, setTabValue] = useState(0);
+  const theme = useTheme();
   const [events, setEvents] = useState([]);
-  const [statistics, setStatistics] = useState(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('');
   const [severityFilter, setSeverityFilter] = useState('');
+  const [columnFilters, setColumnFilters] = useState({});
+  const [sortField, setSortField] = useState('timestamp');
+  const [sortDirection, setSortDirection] = useState('desc');
   const [eventTypes, setEventTypes] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [verificationResult, setVerificationResult] = useState(null);
@@ -51,8 +62,8 @@ function AuditDashboard() {
     try {
       setLoading(true);
       
-      // Fetch recent events
-      const eventsResponse = await fetch('/api/v1/audit/events', {
+      // Fetch recent events with pagination
+      const eventsResponse = await fetch(`/api/v1/audit/events?page=${currentPage}&limit=${pageSize}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`
         }
@@ -60,20 +71,14 @@ function AuditDashboard() {
       
       if (eventsResponse.ok) {
         const eventsData = await eventsResponse.json();
+        console.log('Audit events data:', JSON.stringify(eventsData, null, 2));
+        console.log('Events array:', eventsData.events);
+        console.log('Total count:', eventsData.total);
         setEvents(eventsData.events || []);
+        setTotalCount(eventsData.total || eventsData.events?.length || 0);
       }
 
-      // Fetch statistics
-      const statsResponse = await fetch('/api/v1/audit/statistics', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        }
-      });
-      
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStatistics(statsData);
-      }
+
 
       // Fetch event types
       const typesResponse = await fetch('/api/v1/audit/event-types', {
@@ -98,8 +103,10 @@ function AuditDashboard() {
       setLoading(true);
       
       const params = new URLSearchParams();
-      if (searchQuery) params.append('query', searchQuery);
-      if (eventTypeFilter) params.append('event_type', eventTypeFilter);
+      params.append('query', searchQuery || '');
+      params.append('page', currentPage);
+      params.append('limit', pageSize);
+      if (eventTypeFilter) params.append('event_types', eventTypeFilter);
       if (severityFilter) params.append('severity', severityFilter);
       
       const response = await fetch(`/api/v1/audit/search?${params}`, {
@@ -111,13 +118,16 @@ function AuditDashboard() {
         body: JSON.stringify({
           query: searchQuery,
           event_types: eventTypeFilter ? [eventTypeFilter] : null,
-          limit: 100
+          page: currentPage,
+          limit: pageSize
         })
       });
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Search events data:', data);
         setEvents(data.events || []);
+        setTotalCount(data.total || data.events?.length || 0);
       }
     } catch (error) {
       console.error('Failed to search audit events:', error);
@@ -169,260 +179,691 @@ function AuditDashboard() {
 
   useEffect(() => {
     fetchAuditData();
-  }, []);
+  }, [currentPage, pageSize]);
 
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'critical': return 'error';
-      case 'high': return 'warning';
-      case 'medium': return 'info';
-      case 'low': return 'success';
-      default: return 'default';
+  useEffect(() => {
+    if (searchQuery || eventTypeFilter || severityFilter) {
+      searchEvents();
+    } else {
+      fetchAuditData();
     }
-  };
+  }, [currentPage, pageSize, searchQuery, eventTypeFilter, severityFilter]);
+
+
 
   const formatTimestamp = (timestamp) => {
     return new Date(timestamp).toLocaleString();
   };
 
-  const AuditOverview = () => (
-    <Grid container spacing={3}>
-      {/* Statistics Cards */}
-      {statistics && (
-        <>
-          <Grid item xs={12} md={3}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" color="primary">Total Events</Typography>
-                <Typography variant="h3">{statistics.total_events}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} md={9}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>Event Type Distribution</Typography>
-                <Grid container spacing={2}>
-                  {Object.entries(statistics.event_type_distribution || {}).map(([type, count]) => (
-                    <Grid item key={type}>
-                      <Chip label={`${type}: ${count}`} variant="outlined" />
-                    </Grid>
-                  ))}
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-        </>
-      )}
+  // Export functionality
+  const handleExport = (format) => {
+    if (filteredAndSortedEvents.length === 0) return;
 
-      {/* Recent Events */}
-      <Grid item xs={12}>
-        <Card>
-          <CardContent>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="h6">Recent Audit Events</Typography>
-              <Button
-                variant="outlined"
-                startIcon={<DownloadIcon />}
-                onClick={generateComplianceReport}
-              >
-                Compliance Report
-              </Button>
-            </Box>
-            
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Timestamp</TableCell>
-                    <TableCell>Event Type</TableCell>
-                    <TableCell>User</TableCell>
-                    <TableCell>Resource</TableCell>
-                    <TableCell>Severity</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {events.slice(0, 10).map((event, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{formatTimestamp(event.timestamp)}</TableCell>
-                      <TableCell>{event.event_type}</TableCell>
-                      <TableCell>{event.user_id || 'System'}</TableCell>
-                      <TableCell>{event.resource_type}:{event.resource_id}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={event.severity} 
-                          color={getSeverityColor(event.severity)}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="small"
-                          startIcon={<VerifiedIcon />}
-                          onClick={() => {
-                            setSelectedEvent(event);
-                            verifyEvent(event.id);
-                          }}
-                        >
-                          Verify
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
-  );
+    const exportData = filteredAndSortedEvents.map(event => ({
+      timestamp: formatTimestamp(event.timestamp),
+      event_type: event.event_type,
+      action: event.action,
+      user_id: event.user_id || 'System',
+      resource: `${event.resource_type}:${event.resource_id}`,
+      severity: event.severity,
+      details: event.details || ''
+    }));
 
-  const AuditSearch = () => (
-    <Grid container spacing={3}>
-      {/* Search Controls */}
-      <Grid item xs={12}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>Search Audit Events</Typography>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Search Query"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Enter search terms..."
-                />
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>Event Type</InputLabel>
-                  <Select
-                    value={eventTypeFilter}
-                    onChange={(e) => setEventTypeFilter(e.target.value)}
-                  >
-                    <MenuItem value="">All Types</MenuItem>
-                    {eventTypes.map((type) => (
-                      <MenuItem key={type.value} value={type.value}>
-                        {type.description}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>Severity</InputLabel>
-                  <Select
-                    value={severityFilter}
-                    onChange={(e) => setSeverityFilter(e.target.value)}
-                  >
-                    <MenuItem value="">All Severities</MenuItem>
-                    <MenuItem value="low">Low</MenuItem>
-                    <MenuItem value="medium">Medium</MenuItem>
-                    <MenuItem value="high">High</MenuItem>
-                    <MenuItem value="critical">Critical</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={2}>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  startIcon={<SearchIcon />}
-                  onClick={searchEvents}
-                  disabled={loading}
-                >
-                  Search
-                </Button>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      </Grid>
+    if (format === 'csv') {
+      exportToCSV(exportData);
+    } else if (format === 'json') {
+      exportToJSON(exportData);
+    }
+  };
 
-      {/* Search Results */}
-      <Grid item xs={12}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>Search Results ({events.length})</Typography>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Timestamp</TableCell>
-                    <TableCell>Event Type</TableCell>
-                    <TableCell>Action</TableCell>
-                    <TableCell>User</TableCell>
-                    <TableCell>Resource</TableCell>
-                    <TableCell>Severity</TableCell>
-                    <TableCell>Details</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {events.map((event, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{formatTimestamp(event.timestamp)}</TableCell>
-                      <TableCell>{event.event_type}</TableCell>
-                      <TableCell>{event.action}</TableCell>
-                      <TableCell>{event.user_id || 'System'}</TableCell>
-                      <TableCell>{event.resource_type}:{event.resource_id}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={event.severity} 
-                          color={getSeverityColor(event.severity)}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="small"
-                          onClick={() => setSelectedEvent(event)}
-                        >
-                          View
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
-  );
+  const exportToCSV = (data) => {
+    const headers = ['Timestamp', 'Event Type', 'Action', 'User', 'Resource', 'Severity', 'Details'];
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => [
+        `"${row.timestamp}"`,
+        `"${row.event_type}"`,
+        `"${row.action}"`,
+        `"${row.user_id}"`,
+        `"${row.resource}"`,
+        `"${row.severity}"`,
+        `"${row.details.replace(/"/g, '""')}"`
+      ].join(','))
+    ].join('\n');
+
+    downloadFile(csvContent, 'audit-events.csv', 'text/csv');
+  };
+
+  const exportToJSON = (data) => {
+    const jsonContent = JSON.stringify(data, null, 2);
+    downloadFile(jsonContent, 'audit-events.json', 'application/json');
+  };
+
+  const downloadFile = (content, filename, contentType) => {
+    const blob = new Blob([content], { type: contentType });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Column configuration for filters
+  const auditColumns = [
+    {
+      key: 'timestamp',
+      label: 'Timestamp',
+      width: 2,
+      filterable: true,
+      filterType: 'text',
+      sortable: true
+    },
+    {
+      key: 'event_type',
+      label: 'Event Type',
+      width: 1.5,
+      filterable: true,
+      filterType: 'select',
+      sortable: true,
+      options: eventTypes.map(type => ({ value: type.value, label: type.description }))
+    },
+    {
+      key: 'action',
+      label: 'Action',
+      width: 1.5,
+      filterable: true,
+      filterType: 'text',
+      sortable: true
+    },
+    {
+      key: 'user_id',
+      label: 'User',
+      width: 1,
+      filterable: true,
+      filterType: 'text',
+      sortable: true
+    },
+    {
+      key: 'resource',
+      label: 'Resource',
+      width: 2,
+      filterable: true,
+      filterType: 'text',
+      sortable: true
+    },
+    {
+      key: 'severity',
+      label: 'Severity',
+      width: 1,
+      filterable: true,
+      filterType: 'select',
+      sortable: true,
+      options: [
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' },
+        { value: 'critical', label: 'Critical' }
+      ]
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      width: 0.5,
+      filterable: false,
+      sortable: false
+    }
+  ];
+
+  const handleColumnFilterChange = (columnKey, value) => {
+    setColumnFilters(prev => ({
+      ...prev,
+      [columnKey]: value
+    }));
+  };
+
+  const handleSortChange = (columnKey, direction) => {
+    setSortField(columnKey);
+    setSortDirection(direction);
+  };
+
+  // Filter and sort events based on column filters and sort settings
+  const filteredAndSortedEvents = events
+    .filter(event => {
+      return Object.entries(columnFilters).every(([key, filterValue]) => {
+        if (!filterValue) return true;
+        
+        switch (key) {
+          case 'timestamp_start':
+            if (!filterValue) return true;
+            const eventDate = new Date(event.timestamp);
+            const startDate = new Date(filterValue);
+            return !isNaN(startDate.getTime()) && eventDate >= startDate;
+          case 'timestamp_end':
+            if (!filterValue) return true;
+            const eventDateEnd = new Date(event.timestamp);
+            const endDate = new Date(filterValue);
+            return !isNaN(endDate.getTime()) && eventDateEnd <= endDate;
+          case 'timestamp':
+            return formatTimestamp(event.timestamp).toLowerCase().includes(filterValue.toLowerCase());
+          case 'event_type':
+            return event.event_type === filterValue;
+          case 'action':
+            return event.action.toLowerCase().includes(filterValue.toLowerCase());
+          case 'user_id':
+            return (event.user_id || 'System').toLowerCase().includes(filterValue.toLowerCase());
+          case 'resource':
+            return `${event.resource_type}:${event.resource_id}`.toLowerCase().includes(filterValue.toLowerCase());
+          case 'severity':
+            return event.severity === filterValue;
+          default:
+            return true;
+        }
+      });
+    })
+    .sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortField) {
+        case 'timestamp':
+          aValue = new Date(a.timestamp);
+          bValue = new Date(b.timestamp);
+          break;
+        case 'event_type':
+          aValue = a.event_type || '';
+          bValue = b.event_type || '';
+          break;
+        case 'action':
+          aValue = a.action || '';
+          bValue = b.action || '';
+          break;
+        case 'user_id':
+          aValue = a.user_id || 'System';
+          bValue = b.user_id || 'System';
+          break;
+        case 'resource':
+          aValue = `${a.resource_type}:${a.resource_id}`;
+          bValue = `${b.resource_type}:${b.resource_id}`;
+          break;
+        case 'severity':
+          const severityOrder = { low: 1, medium: 2, high: 3, critical: 4 };
+          aValue = severityOrder[a.severity] || 0;
+          bValue = severityOrder[b.severity] || 0;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+
+
+
 
   return (
-    <div className="dashboard-container">
+    <div className="dashboard-container" style={{ marginBottom: '80px' }}>
       {/* Page Header */}
       <div className="page-header">
         <Typography className="page-title">
           Audit & Compliance
         </Typography>
         <div className="page-actions">
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<SecurityIcon />}
-            onClick={fetchAuditData}
-            disabled={loading}
+          {/* Record Count */}
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              fontFamily: 'monospace',
+              fontSize: '0.75rem',
+              color: 'text.secondary',
+              marginRight: 2,
+              display: 'flex',
+              alignItems: 'center'
+            }}
           >
-            Refresh
-          </Button>
+            {events.length} of {totalCount} records (Page {currentPage})
+          </Typography>
+          
+          {/* Export/Save Actions */}
+          <DownloadAction 
+            onClick={() => handleExport('csv')} 
+            disabled={loading || filteredAndSortedEvents.length === 0}
+            title="Export to CSV"
+          />
+          <IconButton
+            size="small"
+            onClick={() => handleExport('json')}
+            disabled={loading || filteredAndSortedEvents.length === 0}
+            title="Export to JSON"
+            sx={{ 
+              marginRight: 1,
+              color: 'primary.main',
+              '&:hover': { backgroundColor: 'primary.light' }
+            }}
+          >
+            <SaveIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+          
+          <RefreshAction onClick={fetchAuditData} disabled={loading} />
         </div>
       </div>
 
-      <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
-        <Tab label="Overview" />
-        <Tab label="Search Events" />
-      </Tabs>
-
-      {tabValue === 0 && <AuditOverview />}
-      {tabValue === 1 && <AuditSearch />}
+      {/* Audit Events Table */}
+      <Grid container spacing={3}>
+        <Grid item xs={12}>
+          <Card sx={{ 
+            height: 'calc(100vh - 200px)', // Full height minus header and margins
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <CardContent sx={{ 
+              py: 2, 
+              '&:last-child': { pb: 2 },
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              <TableContainer 
+                component={Paper} 
+                variant="outlined"
+                sx={{ 
+                  flex: 1, // Take up remaining space in the card
+                  minHeight: '400px', // Minimum height for usability
+                  border: '1px solid', 
+                  borderColor: 'divider' 
+                }}
+              >
+                <Table stickyHeader size="small">
+                  {/* Column Headers Row */}
+                  <TableHead>
+                    <TableRow sx={{ backgroundColor: 'grey.100' }}>
+                      <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                            Timestamp
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleSortChange('timestamp', sortField === 'timestamp' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                            sx={{ padding: '2px', marginLeft: '4px' }}
+                          >
+                            {sortField === 'timestamp' ? 
+                              (sortDirection === 'asc' ? 
+                                <ArrowUpwardIcon sx={{ fontSize: 14, color: 'primary.main' }} /> : 
+                                <ArrowDownwardIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                              ) : 
+                              <UnfoldMoreIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                            }
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                            Event Type
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleSortChange('event_type', sortField === 'event_type' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                            sx={{ padding: '2px', marginLeft: '4px' }}
+                          >
+                            {sortField === 'event_type' ? 
+                              (sortDirection === 'asc' ? 
+                                <ArrowUpwardIcon sx={{ fontSize: 14, color: 'primary.main' }} /> : 
+                                <ArrowDownwardIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                              ) : 
+                              <UnfoldMoreIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                            }
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                            Action
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleSortChange('action', sortField === 'action' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                            sx={{ padding: '2px', marginLeft: '4px' }}
+                          >
+                            {sortField === 'action' ? 
+                              (sortDirection === 'asc' ? 
+                                <ArrowUpwardIcon sx={{ fontSize: 14, color: 'primary.main' }} /> : 
+                                <ArrowDownwardIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                              ) : 
+                              <UnfoldMoreIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                            }
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                            User
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleSortChange('user_id', sortField === 'user_id' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                            sx={{ padding: '2px', marginLeft: '4px' }}
+                          >
+                            {sortField === 'user_id' ? 
+                              (sortDirection === 'asc' ? 
+                                <ArrowUpwardIcon sx={{ fontSize: 14, color: 'primary.main' }} /> : 
+                                <ArrowDownwardIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                              ) : 
+                              <UnfoldMoreIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                            }
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                            Resource
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleSortChange('resource', sortField === 'resource' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                            sx={{ padding: '2px', marginLeft: '4px' }}
+                          >
+                            {sortField === 'resource' ? 
+                              (sortDirection === 'asc' ? 
+                                <ArrowUpwardIcon sx={{ fontSize: 14, color: 'primary.main' }} /> : 
+                                <ArrowDownwardIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                              ) : 
+                              <UnfoldMoreIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                            }
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                            Severity
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleSortChange('severity', sortField === 'severity' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                            sx={{ padding: '2px', marginLeft: '4px' }}
+                          >
+                            {sortField === 'severity' ? 
+                              (sortDirection === 'asc' ? 
+                                <ArrowUpwardIcon sx={{ fontSize: 14, color: 'primary.main' }} /> : 
+                                <ArrowDownwardIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                              ) : 
+                              <UnfoldMoreIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                            }
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                        Actions
+                      </TableCell>
+                    </TableRow>
+                    
+                    {/* Filters Row */}
+                    <TableRow sx={{ backgroundColor: 'grey.50' }}>
+                      <TableCell sx={{ padding: '4px 8px', minHeight: '50px' }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            type="datetime-local"
+                            value={columnFilters.timestamp_start || ''}
+                            onChange={(e) => handleColumnFilterChange('timestamp_start', e.target.value)}
+                            sx={{
+                              '& .MuiInputBase-input': {
+                                fontFamily: 'monospace',
+                                fontSize: '0.75rem',
+                                padding: '1px 2px',
+                                height: '14px'
+                              }
+                            }}
+                          />
+                          <TextField
+                            size="small"
+                            fullWidth
+                            type="datetime-local"
+                            value={columnFilters.timestamp_end || ''}
+                            onChange={(e) => handleColumnFilterChange('timestamp_end', e.target.value)}
+                            sx={{
+                              '& .MuiInputBase-input': {
+                                fontFamily: 'monospace',
+                                fontSize: '0.75rem',
+                                padding: '1px 2px',
+                                height: '14px'
+                              }
+                            }}
+                          />
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ padding: '4px 8px' }}>
+                        <FormControl size="small" fullWidth>
+                          <Select
+                            value={columnFilters.event_type || ''}
+                            onChange={(e) => handleColumnFilterChange('event_type', e.target.value)}
+                            displayEmpty
+                            sx={{
+                              fontFamily: 'monospace',
+                              fontSize: '0.75rem',
+                              '& .MuiSelect-select': {
+                                padding: '2px 4px',
+                                fontFamily: 'monospace',
+                                fontSize: '0.75rem'
+                              }
+                            }}
+                            MenuProps={{
+                              PaperProps: {
+                                sx: {
+                                  '& .MuiMenuItem-root': {
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.75rem',
+                                    minHeight: 'auto',
+                                    padding: '4px 8px'
+                                  }
+                                }
+                              }
+                            }}
+                          >
+                            <MenuItem value="" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                              <em>All Event Types</em>
+                            </MenuItem>
+                            {eventTypes.map((type) => (
+                              <MenuItem 
+                                key={type.value} 
+                                value={type.value}
+                                sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
+                              >
+                                {type.description}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell sx={{ padding: '4px 8px' }}>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          placeholder="Filter Action..."
+                          value={columnFilters.action || ''}
+                          onChange={(e) => handleColumnFilterChange('action', e.target.value)}
+                          sx={{
+                            '& .MuiInputBase-input': {
+                              fontFamily: 'monospace',
+                              fontSize: '0.75rem',
+                              padding: '2px 4px'
+                            }
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ padding: '4px 8px' }}>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          placeholder="Filter User..."
+                          value={columnFilters.user_id || ''}
+                          onChange={(e) => handleColumnFilterChange('user_id', e.target.value)}
+                          sx={{
+                            '& .MuiInputBase-input': {
+                              fontFamily: 'monospace',
+                              fontSize: '0.75rem',
+                              padding: '2px 4px'
+                            }
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ padding: '4px 8px' }}>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          placeholder="Filter Resource..."
+                          value={columnFilters.resource || ''}
+                          onChange={(e) => handleColumnFilterChange('resource', e.target.value)}
+                          sx={{
+                            '& .MuiInputBase-input': {
+                              fontFamily: 'monospace',
+                              fontSize: '0.75rem',
+                              padding: '2px 4px'
+                            }
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ padding: '4px 8px' }}>
+                        <FormControl size="small" fullWidth>
+                          <Select
+                            value={columnFilters.severity || ''}
+                            onChange={(e) => handleColumnFilterChange('severity', e.target.value)}
+                            displayEmpty
+                            sx={{
+                              fontFamily: 'monospace',
+                              fontSize: '0.75rem',
+                              '& .MuiSelect-select': {
+                                padding: '2px 4px',
+                                fontFamily: 'monospace',
+                                fontSize: '0.75rem'
+                              }
+                            }}
+                            MenuProps={{
+                              PaperProps: {
+                                sx: {
+                                  '& .MuiMenuItem-root': {
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.75rem',
+                                    minHeight: 'auto',
+                                    padding: '4px 8px'
+                                  }
+                                }
+                              }
+                            }}
+                          >
+                            <MenuItem value="" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                              <em>All Severities</em>
+                            </MenuItem>
+                            <MenuItem value="low" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Low</MenuItem>
+                            <MenuItem value="medium" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Medium</MenuItem>
+                            <MenuItem value="high" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>High</MenuItem>
+                            <MenuItem value="critical" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Critical</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell sx={{ padding: '4px 8px' }}>
+                        {/* No filter for Actions column */}
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredAndSortedEvents.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                            <SearchIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+                            <Typography variant="body2" color="text.secondary">
+                              {events.length === 0 ? 'No audit events found' : 'No events match your filter criteria'}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredAndSortedEvents.map((event, index) => (
+                        <TableRow 
+                          key={index} 
+                          hover
+                          sx={getSeverityRowStyling(event.severity, theme)}
+                        >
+                          <TableCell sx={getTableCellStyle(true)}>
+                            {formatTimestamp(event.timestamp)}
+                          </TableCell>
+                          <TableCell sx={getTableCellStyle()}>
+                            {event.event_type}
+                          </TableCell>
+                          <TableCell sx={getTableCellStyle()}>
+                            {event.action}
+                          </TableCell>
+                          <TableCell sx={getTableCellStyle()}>
+                            {event.user_id || 'System'}
+                          </TableCell>
+                          <TableCell sx={getTableCellStyle()}>
+                            {event.resource_type}:{event.resource_id}
+                          </TableCell>
+                          <TableCell sx={getTableCellStyle()}>
+                            {event.severity}
+                          </TableCell>
+                          <TableCell sx={{ padding: '4px 8px' }}>
+                            <ViewDetailsAction
+                              onClick={() => setSelectedEvent(event)}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              {/* Pagination Controls - ALWAYS VISIBLE */}
+              <Stack 
+                direction="row" 
+                justifyContent="space-between" 
+                alignItems="center" 
+                sx={{ 
+                  mt: 2, 
+                  px: 2, 
+                  pb: 2,
+                  backgroundColor: '#f5f5f5',
+                  borderRadius: 1,
+                  border: '2px solid red' // DEBUG: Make it visible
+                }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} entries
+                  <br />
+                  DEBUG: currentPage={currentPage}, pageSize={pageSize}, totalCount={totalCount}, pageCount={Math.ceil(totalCount / pageSize)}
+                </Typography>
+                <Pagination
+                  count={Math.max(1, Math.ceil(totalCount / pageSize))}
+                  page={currentPage}
+                  onChange={(event, page) => {
+                    console.log('Pagination change:', { page, totalCount, pageSize });
+                    setCurrentPage(page);
+                  }}
+                  color="primary"
+                  size="small"
+                  showFirstButton
+                  showLastButton
+                  sx={{ 
+                    border: '2px solid blue' // DEBUG: Make pagination visible
+                  }}
+                />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
       {/* Event Details Dialog */}
       <Dialog
@@ -431,7 +872,10 @@ function AuditDashboard() {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Event Details</DialogTitle>
+        <DialogTitle>
+          Event Details
+          <CloseAction onClick={() => setSelectedEvent(null)} />
+        </DialogTitle>
         <DialogContent>
           {selectedEvent && (
             <Box>
@@ -451,11 +895,7 @@ function AuditDashboard() {
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="body2" color="textSecondary">Severity</Typography>
-                  <Chip 
-                    label={selectedEvent.severity} 
-                    color={getSeverityColor(selectedEvent.severity)}
-                    size="small"
-                  />
+                  <Typography sx={{ fontFamily: 'monospace' }}>{selectedEvent.severity}</Typography>
                 </Grid>
                 <Grid item xs={12}>
                   <Typography variant="body2" color="textSecondary">Details</Typography>
@@ -476,9 +916,6 @@ function AuditDashboard() {
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelectedEvent(null)}>Close</Button>
-        </DialogActions>
       </Dialog>
     </div>
   );

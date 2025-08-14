@@ -11,7 +11,7 @@ import time
 import urllib3
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -23,6 +23,7 @@ from app.database.database import get_db
 from app.core.security import verify_token
 from app.models.user_models import User
 from app.services.user_service import UserService
+from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,7 @@ async def get_system_health(
 @router.post("/containers/{container_name}/restart")
 async def restart_container(
     container_name: str,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -99,9 +101,9 @@ async def restart_container(
     try:
         # Validate container name
         valid_containers = [
-            "enabledrm-backend", "enabledrm-frontend", "enabledrm-postgres",
-            "enabledrm-redis", "enabledrm-nginx", "enabledrm-celery-worker",
-            "enabledrm-scheduler"
+            "opsconductor-backend", "opsconductor-frontend", "opsconductor-postgres",
+            "opsconductor-redis", "opsconductor-nginx", "opsconductor-celery-worker",
+            "opsconductor-scheduler"
         ]
         
         if container_name not in valid_containers:
@@ -112,7 +114,7 @@ async def restart_container(
         
         # Execute docker compose restart command
         result = subprocess.run(
-            ['docker', 'compose', 'restart', container_name.replace('enabledrm-', '')],
+            ['docker', 'compose', 'restart', container_name.replace('opsconductor-', '')],
             cwd='/app',
             capture_output=True,
             text=True,
@@ -120,6 +122,27 @@ async def restart_container(
         )
         
         if result.returncode == 0:
+            # Log container restart audit event - CRITICAL SYSTEM EVENT
+            audit_service = AuditService(db)
+            client_ip = request.client.host if request.client else "unknown"
+            user_agent = request.headers.get("user-agent", "unknown")
+            
+            await audit_service.log_event(
+                event_type=AuditEventType.SYSTEM_CONFIG_CHANGED,
+                user_id=current_user.id,
+                resource_type="container",
+                resource_id=container_name,
+                action="restart_container",
+                details={
+                    "container_name": container_name,
+                    "restarted_by": current_user.username,
+                    "restart_result": "success"
+                },
+                severity=AuditSeverity.CRITICAL,  # Container restarts are critical
+                ip_address=client_ip,
+                user_agent=user_agent
+            )
+            
             logger.info(f"Container {container_name} restarted successfully by user {current_user.username}")
             return {
                 "success": True,
@@ -309,123 +332,169 @@ async def get_system_metrics() -> Dict[str, Any]:
 
 
 async def get_container_health() -> List[Dict[str, Any]]:
-    """Get Docker container health information."""
-    # Since we can't access Docker API from inside the container without mounting the socket,
-    # we'll return the expected containers with their status based on service health checks
+    """Get Docker container health information using Docker API."""
+    containers = []
     
-    containers = [
-        {
-            "name": "enabledrm-backend",
-            "status": "running",
-            "health": "healthy",
-            "uptime": 3600,
-            "image": "enabledrm-backend",
-            "ports": ["8000/tcp"]
-        },
-        {
-            "name": "enabledrm-frontend", 
-            "status": "running",
-            "health": "healthy",
-            "uptime": 3600,
-            "image": "enabledrm-frontend",
-            "ports": ["3000/tcp"]
-        },
-        {
-            "name": "enabledrm-postgres",
-            "status": "running", 
-            "health": "healthy",
-            "uptime": 7200,
-            "image": "postgres:15-alpine",
-            "ports": ["5432/tcp"]
-        },
-        {
-            "name": "enabledrm-redis",
-            "status": "running",
-            "health": "healthy", 
-            "uptime": 7200,
-            "image": "redis:7-alpine",
-            "ports": ["6379/tcp"]
-        },
-        {
-            "name": "enabledrm-nginx",
-            "status": "running",
-            "health": "healthy",
-            "uptime": 7200, 
-            "image": "nginx:alpine",
-            "ports": ["80/tcp", "443/tcp"]
-        },
-        {
-            "name": "enabledrm-celery-worker",
-            "status": "running",
-            "health": "healthy",
-            "uptime": 3600,
-            "image": "enabledrm-celery-worker", 
-            "ports": []
-        },
-        {
-            "name": "enabledrm-scheduler",
-            "status": "running",
-            "health": "healthy",
-            "uptime": 3600,
-            "image": "enabledrm-scheduler",
-            "ports": []
-        }
-    ]
-    
-    # Update container health based on actual service checks
     try:
-        # Check if we can connect to other services to infer container health
+        # Initialize Docker client
+        client = docker.from_env()
         
-        # Check Redis (indicates redis container is healthy)
-        try:
-            import redis
-            r = redis.Redis(host='redis', port=6379, db=0, socket_timeout=2)
-            r.ping()
-            # Redis is healthy
-        except Exception:
-            # Update redis container status
-            for container in containers:
-                if container['name'] == 'enabledrm-redis':
-                    container['status'] = 'unhealthy'
-                    container['health'] = 'critical'
+        # Expected container names (actual names from docker-compose)
+        expected_containers = [
+            "opsconductor-backend",
+            "opsconductor-frontend", 
+            "opsconductor-postgres",
+            "opsconductor-redis",
+            "opsconductor-nginx",
+            "opsconductor-celery-worker",
+            "opsconductor-scheduler"
+        ]
         
-        # Check if we can make HTTP requests to frontend
-        try:
-            import requests
-            requests.get('http://frontend:3000', timeout=2)
-            # Frontend is healthy
-        except Exception:
-            # Update frontend container status
-            for container in containers:
-                if container['name'] == 'enabledrm-frontend':
-                    container['status'] = 'unhealthy'
-                    container['health'] = 'critical'
+        # Get all containers
+        all_containers = client.containers.list(all=True)
         
-        # Check if we can make HTTPS requests to nginx
-        try:
-            import requests
-            response = requests.get('https://nginx:443/health', timeout=2, verify=False)
-            if response.status_code == 200:
-                # Nginx is healthy
-                for container in containers:
-                    if container['name'] == 'enabledrm-nginx':
-                        container['status'] = 'running'
-                        container['health'] = 'healthy'
-            else:
-                # Nginx responding but not healthy
-                for container in containers:
-                    if container['name'] == 'enabledrm-nginx':
-                        container['status'] = 'running'
-                        container['health'] = 'warning'
-        except Exception:
-            # Update nginx container status
-            for container in containers:
-                if container['name'] == 'enabledrm-nginx':
-                    container['status'] = 'unhealthy'
-                    container['health'] = 'critical'
+        for expected_name in expected_containers:
+            container_found = False
+            
+            for container in all_containers:
+                if container.name == expected_name:
+                    container_found = True
                     
+                    # Get container status
+                    status = container.status
+                    
+                    # Calculate uptime
+                    uptime = 0
+                    if status == 'running' and container.attrs.get('State', {}).get('StartedAt'):
+                        started_at = container.attrs['State']['StartedAt']
+                        # Parse the timestamp (format: 2024-01-01T12:00:00.000000000Z)
+                        started_time = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+                        uptime = int((datetime.now(timezone.utc) - started_time).total_seconds())
+                    
+                    # Get health status
+                    health = "unknown"
+                    if container.attrs.get('State', {}).get('Health'):
+                        health_status = container.attrs['State']['Health']['Status']
+                        if health_status == 'healthy':
+                            health = 'healthy'
+                        elif health_status == 'unhealthy':
+                            health = 'critical'
+                        else:
+                            health = 'warning'
+                    else:
+                        # If no health check defined, infer from status
+                        if status == 'running':
+                            health = 'healthy'
+                        elif status == 'exited':
+                            health = 'critical'
+                        else:
+                            health = 'warning'
+                    
+                    # Get image name
+                    image_name = container.image.tags[0] if container.image.tags else container.image.id[:12]
+                    
+                    # Get ports
+                    ports = []
+                    if container.attrs.get('NetworkSettings', {}).get('Ports'):
+                        for port in container.attrs['NetworkSettings']['Ports'].keys():
+                            ports.append(port)
+                    
+                    containers.append({
+                        "name": container.name,
+                        "status": status,
+                        "health": health,
+                        "uptime": uptime,
+                        "image": image_name,
+                        "ports": ports,
+                        "created": container.attrs.get('Created', ''),
+                        "id": container.id[:12]
+                    })
+                    break
+            
+            # If container not found, add it as missing
+            if not container_found:
+                containers.append({
+                    "name": expected_name,
+                    "status": "missing",
+                    "health": "critical",
+                    "uptime": 0,
+                    "image": "unknown",
+                    "ports": [],
+                    "created": "",
+                    "id": "N/A"
+                })
+        
+        client.close()
+        
     except Exception as e:
-        logger.error(f"Failed to check container health via service checks: {str(e)}")
+        logger.error(f"Failed to get container health via Docker API: {str(e)}")
+        
+        # Fallback to static data if Docker API fails
+        containers = [
+            {
+                "name": "opsconductor-backend",
+                "status": "running",
+                "health": "healthy",
+                "uptime": 3600,
+                "image": "opsconductor-backend",
+                "ports": ["8000/tcp"],
+                "error": "Docker API unavailable"
+            },
+            {
+                "name": "opsconductor-frontend", 
+                "status": "running",
+                "health": "healthy",
+                "uptime": 3600,
+                "image": "opsconductor-frontend",
+                "ports": ["3000/tcp"],
+                "error": "Docker API unavailable"
+            },
+            {
+                "name": "opsconductor-postgres",
+                "status": "running", 
+                "health": "healthy",
+                "uptime": 7200,
+                "image": "postgres:15-alpine",
+                "ports": ["5432/tcp"],
+                "error": "Docker API unavailable"
+            },
+            {
+                "name": "opsconductor-redis",
+                "status": "running",
+                "health": "healthy", 
+                "uptime": 7200,
+                "image": "redis:7-alpine",
+                "ports": ["6379/tcp"],
+                "error": "Docker API unavailable"
+            },
+            {
+                "name": "opsconductor-nginx",
+                "status": "running",
+                "health": "healthy",
+                "uptime": 7200, 
+                "image": "nginx:alpine",
+                "ports": ["80/tcp", "443/tcp"],
+                "error": "Docker API unavailable"
+            },
+            {
+                "name": "opsconductor-celery-worker",
+                "status": "running",
+                "health": "healthy",
+                "uptime": 3600,
+                "image": "opsconductor-celery-worker", 
+                "ports": [],
+                "error": "Docker API unavailable"
+            },
+            {
+                "name": "opsconductor-scheduler",
+                "status": "running",
+                "health": "healthy",
+                "uptime": 3600,
+                "image": "opsconductor-scheduler",
+                "ports": [],
+                "error": "Docker API unavailable"
+            }
+        ]
         
     return containers
 

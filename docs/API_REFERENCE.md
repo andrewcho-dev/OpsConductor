@@ -811,9 +811,9 @@ const ws = new WebSocket('ws://localhost:8000/ws/executions');
 
 ### Python SDK
 ```python
-from enabledrm_sdk import EnableDRMClient
+from opsconductor_sdk import OpsConductorClient
 
-client = EnableDRMClient(
+client = OpsConductorClient(
     base_url="http://localhost:8000",
     token="your_jwt_token"
 )
@@ -829,9 +829,9 @@ print(f"Success rate: {performance.success_rate}%")
 
 ### JavaScript SDK
 ```javascript
-import { EnableDRMClient } from '@enabledrm/sdk';
+import { OpsConductorClient } from '@opsconductor/sdk';
 
-const client = new EnableDRMClient({
+const client = new OpsConductorClient({
   baseURL: 'http://localhost:8000',
   token: 'your_jwt_token'
 });

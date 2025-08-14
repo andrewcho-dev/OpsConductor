@@ -3,7 +3,7 @@ Celery Monitoring API Endpoints
 Provides real-time monitoring of Celery workers, queues, and tasks
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Dict, List, Any, Optional
 import logging
 from datetime import datetime, timedelta
@@ -19,9 +19,26 @@ from app.core.config import settings
 from app.database.database import get_db
 from app.services.celery_monitoring_service import CeleryMonitoringService
 from sqlalchemy.orm import Session
+from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
+from app.models.user_models import User
+from app.core.security import verify_token
+from fastapi.security import HTTPBearer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/celery", tags=["celery-monitoring"])
+security = HTTPBearer()
+
+def get_current_user(credentials = Depends(security), db: Session = Depends(get_db)):
+    """Get current authenticated user."""
+    token = credentials.credentials
+    user = verify_token(token)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
 
 # Redis connection for queue monitoring
 redis_client = redis.Redis.from_url(settings.REDIS_URL)
@@ -283,10 +300,43 @@ async def get_scheduled_tasks() -> List[Dict[str, Any]]:
         raise HTTPException(status_code=500, detail="Failed to get scheduled tasks")
 
 @router.post("/workers/{worker_name}/shutdown")
-async def shutdown_worker(worker_name: str) -> Dict[str, str]:
+async def shutdown_worker(
+    worker_name: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, str]:
     """Shutdown a specific worker"""
+    # Only administrators can shutdown workers
+    if current_user.role != "administrator":
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can shutdown workers"
+        )
+    
     try:
         celery_app.control.shutdown(destination=[worker_name])
+        
+        # Log worker shutdown audit event - CRITICAL SYSTEM EVENT
+        audit_service = AuditService(db)
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        await audit_service.log_event(
+            event_type=AuditEventType.SYSTEM_CONFIG_CHANGED,
+            user_id=current_user.id,
+            resource_type="worker",
+            resource_id=worker_name,
+            action="shutdown_worker",
+            details={
+                "worker_name": worker_name,
+                "shutdown_by": current_user.username
+            },
+            severity=AuditSeverity.CRITICAL,  # Worker shutdown is critical
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
         return {"message": f"Shutdown signal sent to worker {worker_name}"}
         
     except Exception as e:
@@ -401,7 +451,7 @@ def get_queue_names() -> List[str]:
     except Exception:
         return ['celery', 'job_execution', 'default']
 
-def get_recent_tasks(limit: int = 10) -> List[Dict[str, Any]]:
+def get_recent_tasks(limit: int = 100) -> List[Dict[str, Any]]:
     """Get recent task information"""
     # This would typically come from Celery events or a task history database
     # For now, return empty list

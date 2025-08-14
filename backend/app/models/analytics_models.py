@@ -1,5 +1,5 @@
 """
-Analytics data models for ENABLEDRM Platform.
+Analytics data models for OpsConductor Platform.
 These models store aggregated metrics and performance data for reporting.
 """
 from sqlalchemy import Column, Integer, String, DateTime, Float, JSON, ForeignKey, Index

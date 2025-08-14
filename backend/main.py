@@ -17,7 +17,7 @@ from typing import List
 from app.shared.middleware.error_handler import ErrorHandlingMiddleware, RequestLoggingMiddleware
 
 from app.database.database import engine, Base
-from app.routers import users, auth, universal_targets, system, notifications, jobs, analytics, celery_monitor, job_safety_routes, job_scheduling_routes, discovery, system_health, log_viewer
+from app.routers import users, auth, universal_targets, system, notifications, jobs, analytics, celery_monitor, job_safety_routes, job_scheduling_routes, discovery, system_health, log_viewer, audit
 from app.api import system_simple as system_management
 from app.core.config import settings
 from app.core.security import verify_token
@@ -108,6 +108,7 @@ app.include_router(job_scheduling_routes.router)
 app.include_router(discovery.router, tags=["Network Discovery"])
 app.include_router(system_health.router, tags=["System Health"])
 app.include_router(log_viewer.router, tags=["Log Viewer"])
+app.include_router(audit.router, tags=["Audit"])
 app.include_router(system_management.router, prefix="/api/system-management", tags=["System Management"])
 
 # Include new versioned API routers
@@ -117,7 +118,8 @@ from app.api.v1 import (
     targets as targets_v1, 
     analytics as analytics_v1,
     monitoring as monitoring_v1,
-    audit as audit_v1
+    audit as audit_v1,
+    device_types as device_types_v1
 )
 app.include_router(users_v1.router, tags=["Users API v1"])
 app.include_router(websocket_v1.router, prefix="/api/v1", tags=["WebSocket API v1"])
@@ -125,22 +127,23 @@ app.include_router(targets_v1.router, tags=["Targets API v1"])
 app.include_router(analytics_v1.router, tags=["Analytics API v1"])
 app.include_router(monitoring_v1.router, tags=["Monitoring API v1"])
 app.include_router(audit_v1.router, tags=["Audit API v1"])
+app.include_router(device_types_v1.router, tags=["Device Types API v1"])
 
 @app.get("/")
 async def root():
     return {
-        "message": "ENABLEDRM Universal Automation Orchestration Platform",
+        "message": "OpsConductor Universal Automation Orchestration Platform",
         "version": "1.0.0",
         "status": "running"
     }
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "ENABLEDRM Platform"}
+    return {"status": "healthy", "service": "OpsConductor Platform"}
 
 @app.get("/api/health")
 async def api_health_check():
-    return {"status": "healthy", "service": "ENABLEDRM Platform"}
+    return {"status": "healthy", "service": "OpsConductor Platform"}
 
 if __name__ == "__main__":
     import uvicorn

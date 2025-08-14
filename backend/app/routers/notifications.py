@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from ..database.database import get_db
+from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
+from app.models.user_models import User
+from app.core.security import verify_token
+from fastapi.security import HTTPBearer
 from ..services.notification_service import NotificationService
 from ..services.system_service import SystemService
 from ..schemas.notification_schemas import (
@@ -15,6 +19,19 @@ from ..schemas.notification_schemas import (
 from ..models.notification_models import NotificationTemplate, NotificationLog, AlertRule, AlertLog
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+security = HTTPBearer()
+
+def get_current_user(credentials = Depends(security), db: Session = Depends(get_db)):
+    """Get current authenticated user."""
+    token = credentials.credentials
+    user = verify_token(token)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
 
 
 # Email Target Configuration endpoints
@@ -177,9 +194,11 @@ def get_notification_templates(
 
 
 @router.post("/templates", response_model=NotificationTemplateResponse)
-def create_notification_template(
+async def create_notification_template(
     template: NotificationTemplateCreate,
-    db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Create notification template"""
     # Check if template name already exists
@@ -197,6 +216,27 @@ def create_notification_template(
     db.add(db_template)
     db.commit()
     db.refresh(db_template)
+    
+    # Log template creation audit event
+    audit_service = AuditService(db)
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    await audit_service.log_event(
+        event_type=AuditEventType.SYSTEM_CONFIG_CHANGED,
+        user_id=current_user.id,
+        resource_type="notification_template",
+        resource_id=str(db_template.id),
+        action="create_notification_template",
+        details={
+            "template_name": template.name,
+            "template_type": template.template_type,
+            "created_by": current_user.username
+        },
+        severity=AuditSeverity.MEDIUM,
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
     
     return db_template
 

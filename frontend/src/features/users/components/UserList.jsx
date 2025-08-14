@@ -14,7 +14,6 @@ import {
   TableRow,
   TablePagination,
   IconButton,
-  Chip,
   TextField,
   InputAdornment,
   FormControl,
@@ -35,6 +34,10 @@ import {
   Refresh as RefreshIcon,
   PersonAdd as PersonAddIcon,
 } from '@mui/icons-material';
+import { RefreshAction, EditAction, DeleteAction } from '../../../components/common/StandardActions';
+import ColumnFilters from '../../../components/common/ColumnFilters';
+import { getStatusRowStyling, getTableCellStyle } from '../../../utils/tableUtils';
+import { useTheme } from '@mui/material/styles';
 
 // Redux selectors and actions
 import {
@@ -54,6 +57,7 @@ import {
 import { useGetUsersQuery } from '../../../store/api/usersApi';
 
 const UserList = () => {
+  const theme = useTheme();
   const dispatch = useDispatch();
   const currentUser = useSelector(selectCurrentUser);
   const filters = useSelector(selectFilters);
@@ -61,6 +65,7 @@ const UserList = () => {
   
   // Local state for search debouncing
   const [searchTerm, setSearchTerm] = useState(filters.users.search);
+  const [columnFilters, setColumnFilters] = useState({});
   
   // API query
   const {
@@ -146,6 +151,101 @@ const UserList = () => {
     }));
   };
 
+  // Column configuration for filters
+  const userColumns = [
+    {
+      key: 'username',
+      label: 'Username',
+      width: 1.5,
+      filterable: true,
+      filterType: 'text'
+    },
+    {
+      key: 'email',
+      label: 'Email',
+      width: 2,
+      filterable: true,
+      filterType: 'text'
+    },
+    {
+      key: 'role',
+      label: 'Role',
+      width: 1,
+      filterable: true,
+      filterType: 'select',
+      options: [
+        { value: 'administrator', label: 'Administrator' },
+        { value: 'operator', label: 'Operator' },
+        { value: 'viewer', label: 'Viewer' }
+      ]
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      width: 1,
+      filterable: true,
+      filterType: 'select',
+      options: [
+        { value: 'active', label: 'Active' },
+        { value: 'inactive', label: 'Inactive' }
+      ]
+    },
+    {
+      key: 'last_login',
+      label: 'Last Login',
+      width: 1.5,
+      filterable: true,
+      filterType: 'text'
+    },
+    {
+      key: 'created_at',
+      label: 'Created',
+      width: 1.5,
+      filterable: true,
+      filterType: 'text'
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      width: 1,
+      filterable: false
+    }
+  ];
+
+  const handleColumnFilterChange = (columnKey, value) => {
+    setColumnFilters(prev => ({
+      ...prev,
+      [columnKey]: value
+    }));
+  };
+
+  // Filter users based on column filters
+  const filteredUsers = (usersData?.users || []).filter(user => {
+    return Object.entries(columnFilters).every(([key, filterValue]) => {
+      if (!filterValue) return true;
+      
+      switch (key) {
+        case 'username':
+          return user.username.toLowerCase().includes(filterValue.toLowerCase());
+        case 'email':
+          return user.email.toLowerCase().includes(filterValue.toLowerCase());
+        case 'role':
+          return user.role === filterValue;
+        case 'status':
+          return (user.is_active ? 'active' : 'inactive') === filterValue;
+        case 'last_login':
+          const lastLogin = user.last_login 
+            ? new Date(user.last_login).toLocaleDateString()
+            : 'Never';
+          return lastLogin.toLowerCase().includes(filterValue.toLowerCase());
+        case 'created_at':
+          return new Date(user.created_at).toLocaleDateString().toLowerCase().includes(filterValue.toLowerCase());
+        default:
+          return true;
+      }
+    });
+  });
+
   const confirmDeleteUser = async (userId) => {
     try {
       // We'll implement this API call later
@@ -162,20 +262,7 @@ const UserList = () => {
     }
   };
 
-  const getRoleColor = (role) => {
-    switch (role) {
-      case 'administrator':
-        return 'error';
-      case 'operator':
-        return 'warning';
-      default:
-        return 'default';
-    }
-  };
 
-  const getStatusColor = (isActive) => {
-    return isActive ? 'success' : 'default';
-  };
 
   if (isError) {
     return (
@@ -212,61 +299,21 @@ const UserList = () => {
           </Button>
         )}
         
-        <Tooltip title="Refresh">
-          <IconButton onClick={refetch} sx={{ ml: 1 }}>
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
+        <RefreshAction onClick={refetch} sx={{ ml: 1 }} />
       </Toolbar>
 
-      {/* Filters */}
-      <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        <TextField
-          size="small"
-          placeholder="Search users..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-          sx={{ minWidth: 250 }}
-        />
-        
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>Role</InputLabel>
-          <Select
-            value={filters.users.role}
-            label="Role"
-            onChange={handleRoleFilterChange}
-          >
-            <MenuItem value="">All Roles</MenuItem>
-            <MenuItem value="administrator">Administrator</MenuItem>
-            <MenuItem value="operator">Operator</MenuItem>
-            <MenuItem value="user">User</MenuItem>
-          </Select>
-        </FormControl>
-        
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>Status</InputLabel>
-          <Select
-            value={filters.users.status}
-            label="Status"
-            onChange={handleStatusFilterChange}
-          >
-            <MenuItem value="">All Status</MenuItem>
-            <MenuItem value="active">Active</MenuItem>
-            <MenuItem value="inactive">Inactive</MenuItem>
-          </Select>
-        </FormControl>
-      </Box>
+
 
       {/* Table */}
       <Paper>
         <TableContainer>
+          {/* Column Filters */}
+          <ColumnFilters
+            columns={userColumns}
+            filters={columnFilters}
+            onFilterChange={handleColumnFilterChange}
+          />
+          
           <Table>
             <TableHead>
               <TableRow>
@@ -286,69 +333,52 @@ const UserList = () => {
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
-              ) : users.length === 0 ? (
+              ) : filteredUsers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} align="center">
                     No users found
                   </TableCell>
                 </TableRow>
               ) : (
-                users.map((user) => (
-                  <TableRow key={user.id} hover>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight="medium">
-                        {user.username}
-                      </Typography>
+                filteredUsers.map((user) => (
+                  <TableRow 
+                    key={user.id} 
+                    hover
+                    sx={getStatusRowStyling(user.is_active ? 'active' : 'inactive', theme)}
+                  >
+                    <TableCell sx={getTableCellStyle(true)}>
+                      {user.username}
                     </TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={user.role}
-                        color={getRoleColor(user.role)}
-                        size="small"
-                      />
+                    <TableCell sx={getTableCellStyle()}>{user.email}</TableCell>
+                    <TableCell sx={getTableCellStyle()}>
+                      {user.role}
                     </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={user.is_active ? 'Active' : 'Inactive'}
-                        color={getStatusColor(user.is_active)}
-                        size="small"
-                      />
+                    <TableCell sx={getTableCellStyle()}>
+                      {user.is_active ? 'Active' : 'Inactive'}
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={getTableCellStyle()}>
                       {user.last_login 
                         ? new Date(user.last_login).toLocaleDateString()
                         : 'Never'
                       }
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={getTableCellStyle()}>
                       {new Date(user.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Edit User">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditUser(user)}
-                          disabled={
-                            currentUser?.role !== 'administrator' && 
-                            currentUser?.id !== user.id
-                          }
-                        >
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
+                      <EditAction
+                        onClick={() => handleEditUser(user)}
+                        disabled={
+                          currentUser?.role !== 'administrator' && 
+                          currentUser?.id !== user.id
+                        }
+                      />
                       
                       {currentUser?.role === 'administrator' && 
                        currentUser?.id !== user.id && (
-                        <Tooltip title="Delete User">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDeleteUser(user)}
-                            color="error"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
+                        <DeleteAction
+                          onClick={() => handleDeleteUser(user)}
+                        />
                       )}
                     </TableCell>
                   </TableRow>

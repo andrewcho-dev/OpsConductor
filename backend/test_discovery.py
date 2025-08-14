@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add the backend directory to the Python path
-sys.path.insert(0, '/home/enabledrm/backend')
+sys.path.insert(0, '/home/opsconductor/backend')
 
 from app.services.network_discovery_service import NetworkDiscoveryService, DiscoveryConfig
 

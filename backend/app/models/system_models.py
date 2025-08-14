@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, JSON, DateTime
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from datetime import datetime, timezone
 import pytz
 from typing import Dict, Any

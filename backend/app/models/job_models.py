@@ -213,7 +213,7 @@ class JobExecutionLog(Base):
     __tablename__ = "job_execution_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    job_execution_id = Column(Integer, ForeignKey("job_executions.id"), nullable=False)
+    job_execution_id = Column(Integer, ForeignKey("job_executions.id"), nullable=True)
     branch_id = Column(Integer, ForeignKey("job_execution_branches.id"), nullable=True)
     log_phase = Column(Enum(LogPhase, name='logphase', values_callable=lambda obj: [e.value for e in obj]), nullable=False)
     log_level = Column(Enum(LogLevel, name='loglevel', values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=LogLevel.INFO)

@@ -1,7 +1,7 @@
 """
 Audit API v1 for security and compliance logging.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from typing import Optional, List
@@ -45,7 +45,8 @@ def get_audit_service(db: Session = Depends(get_db)) -> AuditService:
 
 @router.get("/events")
 async def get_audit_events(
-    limit: int = Query(100, ge=1, le=1000),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=1000),
     event_type: Optional[str] = None,
     user_id: Optional[int] = None,
     severity: Optional[str] = None,
@@ -80,7 +81,8 @@ async def get_audit_events(
                 detail=f"Invalid severity: {severity}"
             )
     
-    events = await service.get_recent_events(
+    result = await service.get_recent_events(
+        page=page,
         limit=limit,
         event_type=event_type_enum,
         user_id=user_id,
@@ -88,13 +90,15 @@ async def get_audit_events(
     )
     
     return {
-        "events": events,
-        "total_returned": len(events),
+        "events": result["events"],
+        "total": result["total"],
+        "page": page,
+        "limit": limit,
+        "total_pages": result["total_pages"],
         "filters": {
             "event_type": event_type,
             "user_id": user_id,
-            "severity": severity,
-            "limit": limit
+            "severity": severity
         }
     }
 
@@ -118,11 +122,12 @@ async def get_audit_statistics(
 @router.post("/search")
 async def search_audit_events(
     query: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=1000),
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     event_types: Optional[List[str]] = None,
     user_ids: Optional[List[int]] = None,
-    limit: int = Query(100, ge=1, le=1000),
     service: AuditService = Depends(get_audit_service),
     current_user: User = Depends(get_current_user)
 ):
@@ -144,25 +149,28 @@ async def search_audit_events(
                 detail=f"Invalid event type: {str(e)}"
             )
     
-    events = await service.search_audit_events(
+    result = await service.search_audit_events(
         query=query,
+        page=page,
+        limit=limit,
         start_date=start_date,
         end_date=end_date,
         event_types=event_type_enums,
-        user_ids=user_ids,
-        limit=limit
+        user_ids=user_ids
     )
     
     return {
-        "events": events,
-        "total_returned": len(events),
+        "events": result["events"],
+        "total": result["total"],
+        "page": page,
+        "limit": limit,
+        "total_pages": result["total_pages"],
         "search_criteria": {
             "query": query,
             "start_date": start_date.isoformat() if start_date else None,
             "end_date": end_date.isoformat() if end_date else None,
             "event_types": event_types,
-            "user_ids": user_ids,
-            "limit": limit
+            "user_ids": user_ids
         }
     }
 
@@ -186,6 +194,7 @@ async def verify_audit_entry(
 
 @router.get("/compliance/report")
 async def get_compliance_report(
+    request: Request,
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     service: AuditService = Depends(get_audit_service),
@@ -205,6 +214,32 @@ async def get_compliance_report(
         start_date = end_date - timedelta(days=30)
     
     report = await service.get_compliance_report(start_date, end_date)
+    
+    # Log data export audit event
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    await service.log_event(
+        event_type=AuditEventType.DATA_EXPORT,
+        user_id=current_user.id,
+        resource_type="audit",
+        resource_id="compliance_report",
+        action="export_compliance_report",
+        details={
+            "export_type": "compliance_report",
+            "date_range": {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat()
+            },
+            "exported_by": current_user.username,
+            "report_size": len(str(report)),
+            "event_count": report.get("summary", {}).get("total_events", 0)
+        },
+        severity=AuditSeverity.MEDIUM,  # Data exports are medium severity
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
+    
     return report
 
 
