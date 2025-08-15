@@ -1,11 +1,10 @@
-from sqlalchemy import Column, Integer, String, Text, JSON, DateTime
+from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
-from sqlalchemy.orm import declarative_base
 from datetime import datetime, timezone
 import pytz
 from typing import Dict, Any
-
-Base = declarative_base()
+from app.database.database import Base
 
 
 class SystemSetting(Base):
@@ -14,7 +13,7 @@ class SystemSetting(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     setting_key = Column(String(100), unique=True, nullable=False, index=True)
-    setting_value = Column(JSON, nullable=False)
+    setting_value = Column(JSONB, nullable=False)  # Database uses JSONB
     description = Column(Text)
     updated_at = Column(
         DateTime(timezone=True), 

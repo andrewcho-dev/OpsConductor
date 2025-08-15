@@ -34,13 +34,38 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 OpsConductor Platform starting up...")
     
-    # Initialize cache service
+    # Initialize existing cache service
     from app.shared.infrastructure.cache import cache_service
     await cache_service.initialize()
     
+    # Initialize Phase 2 improvements - Redis cache for device types
+    try:
+        from app.core.cache import initialize_redis
+        await initialize_redis()
+        print("✅ Device Types Redis cache initialized")
+    except Exception as e:
+        print(f"⚠️  Device Types Redis cache initialization failed: {e}")
+    
+    # Initialize structured logging
+    try:
+        from app.core.logging import app_logger
+        app_logger.info("OpsConductor Platform startup completed with Phase 2 improvements")
+        print("✅ Structured logging initialized")
+    except Exception as e:
+        print(f"⚠️  Structured logging initialization failed: {e}")
+    
     yield
+    
     # Shutdown
     print("🛑 OpsConductor Platform shutting down...")
+    
+    # Close Redis connections
+    try:
+        from app.core.cache import close_redis
+        await close_redis()
+        print("✅ Device Types Redis cache closed")
+    except Exception as e:
+        print(f"⚠️  Redis cache cleanup failed: {e}")
 
 app = FastAPI(
     title="OpsConductor Enterprise Automation Orchestration Platform",
@@ -126,7 +151,8 @@ from app.api.v2 import (
     templates as templates_v2,
     system as system_v2,
     discovery as discovery_v2,
-    notifications as notifications_v2
+    notifications as notifications_v2,
+    device_types as device_types_v2  # Phase 3 addition
 )
 app.include_router(health_v2.router, tags=["Health & Monitoring v2"])
 app.include_router(metrics_v2.router, tags=["Metrics & Analytics v2"])
@@ -135,6 +161,7 @@ app.include_router(templates_v2.router, tags=["Templates Management v2"])
 app.include_router(system_v2.router, tags=["System Administration v2"])
 app.include_router(discovery_v2.router, tags=["Network Discovery v2"])
 app.include_router(notifications_v2.router, tags=["Notifications & Alerts v2"])
+app.include_router(device_types_v2.router, tags=["Device Types Management v2"])  # Phase 3 addition
 
 @app.get("/")
 async def root():

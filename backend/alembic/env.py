@@ -38,6 +38,7 @@ import app.models.job_models
 import app.models.job_schedule_models
 import app.models.discovery_models
 import app.models.celery_models
+import app.models.device_type_models
 
 target_metadata = Base.metadata
 
