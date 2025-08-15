@@ -3,10 +3,10 @@ description: Repository Information Overview
 alwaysApply: true
 ---
 
-# ENABLEDRM Universal Automation Orchestration Platform
+# OpsConductor Universal Automation Orchestration Platform
 
 ## Repository Summary
-ENABLEDRM is a job-centric automation platform for orchestrating tasks across various target systems. It features a modern architecture with a FastAPI backend, React frontend, and uses PostgreSQL for data storage and Redis for caching.
+OpsConductor is a job-centric automation platform for orchestrating tasks across various target systems. It features a modern architecture with a FastAPI backend, React frontend, and uses PostgreSQL for data storage and Redis for caching.
 
 ## Repository Structure
 - **backend/**: FastAPI application with API endpoints, database models, and business logic

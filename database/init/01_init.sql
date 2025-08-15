@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
 -- Insert default system settings
 INSERT INTO system_settings (setting_key, setting_value, description) VALUES
 ('timezone', '"UTC"', 'System timezone configuration'),
-('session_timeout', '1800', 'User session timeout in seconds'),
+('session_timeout', '28800', 'User session timeout in seconds'),
 ('max_concurrent_jobs', '50', 'Maximum concurrent job executions'),
 ('log_retention_days', '30', 'How long to keep logs in days')
 ON CONFLICT (setting_key) DO NOTHING; 

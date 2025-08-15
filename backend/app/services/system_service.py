@@ -3,6 +3,7 @@ from sqlalchemy import select
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 import pytz
+import psutil
 
 from ..models.system_models import SystemSetting
 
@@ -17,33 +18,42 @@ class SystemService:
     
     def get_setting(self, key: str) -> Optional[Any]:
         """Get a system setting by key"""
-        stmt = select(SystemSetting).where(SystemSetting.setting_key == key)
-        result = self.db.execute(stmt).scalar_one_or_none()
-        return result.setting_value if result else None
+        try:
+            stmt = select(SystemSetting).where(SystemSetting.setting_key == key)
+            result = self.db.execute(stmt).scalar_one_or_none()
+            return result.setting_value if result else None
+        except Exception as e:
+            print(f"Error getting setting {key}: {e}")
+            return None
     
     def set_setting(self, key: str, value: Any, 
                    description: str = None) -> SystemSetting:
         """Set a system setting"""
-        stmt = select(SystemSetting).where(SystemSetting.setting_key == key)
-        existing = self.db.execute(stmt).scalar_one_or_none()
-        
-        if existing:
-            existing.setting_value = value
-            if description:
-                existing.description = description
-            existing.updated_at = datetime.now(timezone.utc)
-            self.db.commit()
-            return existing
-        else:
-            new_setting = SystemSetting(
-                setting_key=key,
-                setting_value=value,
-                description=description
-            )
-            self.db.add(new_setting)
-            self.db.commit()
-            self.db.refresh(new_setting)
-            return new_setting
+        try:
+            stmt = select(SystemSetting).where(SystemSetting.setting_key == key)
+            existing = self.db.execute(stmt).scalar_one_or_none()
+            
+            if existing:
+                existing.setting_value = value
+                if description:
+                    existing.description = description
+                existing.updated_at = datetime.now(timezone.utc)
+                self.db.commit()
+                return existing
+            else:
+                new_setting = SystemSetting(
+                    setting_key=key,
+                    setting_value=value,
+                    description=description
+                )
+                self.db.add(new_setting)
+                self.db.commit()
+                self.db.refresh(new_setting)
+                return new_setting
+        except Exception as e:
+            print(f"Error setting {key}: {e}")
+            self.db.rollback()
+            raise
     
     def get_all_settings(self) -> List[SystemSetting]:
         """Get all system settings"""
@@ -161,11 +171,31 @@ class SystemService:
             'session_timeout': self.get_session_timeout(),
             'max_concurrent_jobs': self.get_max_concurrent_jobs(),
             'log_retention_days': self.get_log_retention_days(),
+            'uptime': self.get_system_uptime(),
             'system_time': {
                 'utc': datetime.now(timezone.utc).isoformat(),
                 'local': self.utc_to_local_string(datetime.now(timezone.utc))
             }
         }
+    
+    def get_system_uptime(self) -> str:
+        """Get system uptime as a human-readable string"""
+        try:
+            boot_time = psutil.boot_time()
+            uptime_seconds = datetime.now().timestamp() - boot_time
+            
+            days = int(uptime_seconds // 86400)
+            hours = int((uptime_seconds % 86400) // 3600)
+            minutes = int((uptime_seconds % 3600) // 60)
+            
+            if days > 0:
+                return f"{days}d {hours}h {minutes}m"
+            elif hours > 0:
+                return f"{hours}h {minutes}m"
+            else:
+                return f"{minutes}m"
+        except Exception:
+            return "Unknown"
     
     def get_timezone_display_name(self) -> str:
         """Get human-readable timezone name"""
