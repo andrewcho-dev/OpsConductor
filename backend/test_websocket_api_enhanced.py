@@ -34,7 +34,7 @@ async def test_websocket_api_enhanced():
     print("-" * 40)
     
     try:
-        from app.api.v1.websocket_enhanced import (
+        from app.api.v2.websocket_enhanced import (
             WebSocketConnectionResponse, WebSocketMessageRequest, WebSocketMessageResponse,
             WebSocketStatisticsResponse, WebSocketRoomInfo, WebSocketUserActivity,
             WebSocketErrorResponse
@@ -262,7 +262,7 @@ async def test_websocket_api_enhanced():
     print("-" * 40)
     
     try:
-        from app.api.v1.websocket_enhanced import (
+        from app.api.v2.websocket_enhanced import (
             WebSocketConnectionResponse, WebSocketStatisticsResponse, WebSocketRoomInfo
         )
         
@@ -370,7 +370,7 @@ async def test_websocket_api_enhanced():
     
     try:
         # Test router imports
-        from app.api.v1.websocket_enhanced import (
+        from app.api.v2.websocket_enhanced import (
             json, asyncio, APIRouter, WebSocket, WebSocketDisconnect,
             Depends, HTTPException, status, Request, HTTPBearer,
             Session, datetime, List, Optional, Dict, Any, Union,
@@ -379,7 +379,7 @@ async def test_websocket_api_enhanced():
         print("✅ FastAPI and Pydantic imports working")
         
         # Test service imports
-        from app.api.v1.websocket_enhanced import (
+        from app.api.v2.websocket_enhanced import (
             WebSocketManagementService, WebSocketManagementError,
             get_db, verify_token, get_structured_logger, RequestLogger
         )

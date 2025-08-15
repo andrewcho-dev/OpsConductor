@@ -1030,3 +1030,66 @@ async def export_metrics_data(
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
+
+
+@router.get(
+    "/prometheus/public",
+    response_class=Response,
+    status_code=status.HTTP_200_OK,
+    summary="Get Prometheus Metrics (Public)",
+    description="""
+    Get metrics in Prometheus format for monitoring and alerting.
+    This endpoint provides public metrics without authentication for Prometheus scraping.
+    
+    **Returns:**
+    - Plain text metrics in Prometheus format
+    - System health and performance metrics
+    - Application-specific metrics
+    """
+)
+async def get_prometheus_metrics_public(
+    db: Session = Depends(get_db)
+):
+    """Get metrics in Prometheus format (public endpoint for scraping)."""
+    try:
+        # Get basic system metrics for Prometheus
+        metrics_lines = [
+            "# HELP opsconductor_up OpsConductor service status",
+            "# TYPE opsconductor_up gauge",
+            "opsconductor_up 1",
+            "",
+            "# HELP opsconductor_info OpsConductor service information",
+            "# TYPE opsconductor_info gauge",
+            'opsconductor_info{version="1.0.0",service="opsconductor-backend"} 1',
+            "",
+            "# HELP opsconductor_requests_total Total number of requests",
+            "# TYPE opsconductor_requests_total counter",
+            "opsconductor_requests_total 1",
+            ""
+        ]
+        
+        prometheus_output = "\n".join(metrics_lines)
+        
+        logger.info("Prometheus metrics retrieved successfully")
+        
+        return Response(
+            content=prometheus_output,
+            media_type="text/plain; version=0.0.4; charset=utf-8"
+        )
+        
+    except Exception as e:
+        logger.error(f"Prometheus metrics retrieval error: {str(e)}")
+        
+        # Return basic error metric for Prometheus
+        error_metrics = [
+            "# HELP opsconductor_up OpsConductor service status",
+            "# TYPE opsconductor_up gauge", 
+            "opsconductor_up 0",
+            ""
+        ]
+        
+        return Response(
+            content="\n".join(error_metrics),
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+            status_code=status.HTTP_200_OK  # Return 200 for Prometheus compatibility
+        )

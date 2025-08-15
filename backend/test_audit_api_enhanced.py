@@ -34,7 +34,7 @@ async def test_audit_api_enhanced():
     print("-" * 40)
     
     try:
-        from app.api.v1.audit_enhanced import (
+        from app.api.v2.audit_enhanced import (
             AuditEventResponse, AuditEventsListResponse, AuditStatisticsResponse,
             AuditSearchRequest, AuditVerificationResponse, ComplianceReportResponse,
             AuditEventTypesResponse, AuditErrorResponse
@@ -290,7 +290,7 @@ async def test_audit_api_enhanced():
     print("-" * 40)
     
     try:
-        from app.api.v1.audit_enhanced import (
+        from app.api.v2.audit_enhanced import (
             AuditEventResponse, AuditEventsListResponse, AuditStatisticsResponse,
             ComplianceReportResponse
         )
@@ -339,7 +339,7 @@ async def test_audit_api_enhanced():
     print("-" * 40)
     
     try:
-        from app.api.v1.audit_enhanced import (
+        from app.api.v2.audit_enhanced import (
             get_current_user, require_audit_permissions, require_admin_permissions
         )
         
@@ -406,7 +406,7 @@ async def test_audit_api_enhanced():
     
     try:
         # Test router imports
-        from app.api.v1.audit_enhanced import (
+        from app.api.v2.audit_enhanced import (
             APIRouter, Depends, HTTPException, status, Query, Request,
             HTTPBearer, Session, datetime, timezone, timedelta,
             List, Optional, Dict, Any, Union, BaseModel, Field, validator
@@ -414,7 +414,7 @@ async def test_audit_api_enhanced():
         print("✅ FastAPI and Pydantic imports working")
         
         # Test service imports
-        from app.api.v1.audit_enhanced import (
+        from app.api.v2.audit_enhanced import (
             AuditManagementService, AuditManagementError,
             get_db, verify_token, get_structured_logger, RequestLogger,
             AuditEventType, AuditSeverity
