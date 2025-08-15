@@ -17,8 +17,9 @@ from typing import List
 from app.shared.middleware.error_handler import ErrorHandlingMiddleware, RequestLoggingMiddleware
 
 from app.database.database import engine, Base
-from app.routers import users, auth, universal_targets, system, notifications, jobs, analytics, celery_monitor, job_safety_routes, job_scheduling_routes, discovery, system_health, log_viewer, audit
-from app.api import system_simple as system_management
+from app.routers import users, auth, universal_targets
+# Legacy routers removed - consolidated into V2 APIs
+# Legacy system_health and system_management removed - consolidated into V2 APIs
 from app.core.config import settings
 from app.core.security import verify_token
 
@@ -98,36 +99,42 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(universal_targets.router, tags=["Universal Targets"])
-app.include_router(system.router)
-app.include_router(notifications.router)
-app.include_router(jobs.router)
-app.include_router(analytics.router)
-app.include_router(celery_monitor.router, prefix="/api")
-app.include_router(job_safety_routes.router)
-app.include_router(job_scheduling_routes.router)
-app.include_router(discovery.router, tags=["Network Discovery"])
-app.include_router(system_health.router, tags=["System Health"])
-app.include_router(log_viewer.router, tags=["Log Viewer"])
-app.include_router(audit.router, tags=["Audit"])
-app.include_router(system_management.router, prefix="/api/system-management", tags=["System Management"])
+# Legacy routers removed - consolidated into V2 APIs
+# system.router -> /api/v2/system/*
+# notifications.router -> /api/v2/notifications/*  
+# discovery.router -> /api/v2/discovery/*
+# Legacy health/metrics/log_viewer routers removed - consolidated into V2 APIs
 
-# Include new versioned API routers
+# Include remaining versioned API routers
 from app.api.v1 import (
-    users as users_v1, 
     websocket as websocket_v1, 
-    targets as targets_v1, 
-    analytics as analytics_v1,
-    monitoring as monitoring_v1,
+    # analytics removed - use /api/v2/metrics/ instead
+    # monitoring removed - use /api/v2/metrics/ instead
     audit as audit_v1,
     device_types as device_types_v1
 )
-app.include_router(users_v1.router, tags=["Users API v1"])
 app.include_router(websocket_v1.router, prefix="/api/v1", tags=["WebSocket API v1"])
-app.include_router(targets_v1.router, tags=["Targets API v1"])
-app.include_router(analytics_v1.router, tags=["Analytics API v1"])
-app.include_router(monitoring_v1.router, tags=["Monitoring API v1"])
+# Legacy analytics v1 removed - use /api/v2/metrics/ instead
 app.include_router(audit_v1.router, tags=["Audit API v1"])
 app.include_router(device_types_v1.router, tags=["Device Types API v1"])
+
+# Include new V2 consolidated API routers
+from app.api.v2 import (
+    health as health_v2,
+    metrics as metrics_v2,
+    jobs as jobs_v2,
+    templates as templates_v2,
+    system as system_v2,
+    discovery as discovery_v2,
+    notifications as notifications_v2
+)
+app.include_router(health_v2.router, tags=["Health & Monitoring v2"])
+app.include_router(metrics_v2.router, tags=["Metrics & Analytics v2"])
+app.include_router(jobs_v2.router, tags=["Jobs Management v2"])
+app.include_router(templates_v2.router, tags=["Templates Management v2"])
+app.include_router(system_v2.router, tags=["System Administration v2"])
+app.include_router(discovery_v2.router, tags=["Network Discovery v2"])
+app.include_router(notifications_v2.router, tags=["Notifications & Alerts v2"])
 
 @app.get("/")
 async def root():
@@ -137,13 +144,7 @@ async def root():
         "status": "running"
     }
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "service": "OpsConductor Platform"}
-
-@app.get("/api/health")
-async def api_health_check():
-    return {"status": "healthy", "service": "OpsConductor Platform"}
+# Legacy health endpoints removed - use /api/v2/health/ instead
 
 if __name__ == "__main__":
     import uvicorn
