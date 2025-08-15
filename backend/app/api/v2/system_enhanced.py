@@ -978,3 +978,699 @@ async def get_system_health(
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
+
+
+# ADDITIONAL ENDPOINTS FOR FRONTEND COMPATIBILITY
+
+class SystemInfoCompatResponse(BaseModel):
+    """Response model for system info (frontend compatibility)"""
+    timezone: Dict[str, Any] = Field(..., description="Timezone information")
+    session_timeout: int = Field(..., description="Session timeout in seconds")
+    max_concurrent_jobs: int = Field(..., description="Maximum concurrent jobs")
+    log_retention_days: int = Field(..., description="Log retention in days")
+    uptime: str = Field(..., description="System uptime")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "timezone": {
+                    "current": "America/New_York",
+                    "display_name": "New York, America (UTC-05:00)",
+                    "current_utc_offset": "-05:00",
+                    "is_dst_active": True
+                },
+                "session_timeout": 28800,
+                "max_concurrent_jobs": 50,
+                "log_retention_days": 30,
+                "uptime": "5d 12h 30m"
+            }
+        }
+
+
+class TimezonesResponse(BaseModel):
+    """Response model for available timezones"""
+    timezones: Dict[str, str] = Field(..., description="Available timezones with display names")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "timezones": {
+                    "UTC": "UTC (Coordinated Universal Time)",
+                    "America/New_York": "New York, America (UTC-05:00)",
+                    "Europe/London": "London, Europe (UTC+00:00)"
+                }
+            }
+        }
+
+
+class CurrentTimeResponse(BaseModel):
+    """Response model for current system time"""
+    utc: str = Field(..., description="Current UTC time")
+    local: str = Field(..., description="Current local time")
+    timezone: str = Field(..., description="Current timezone")
+    is_dst: bool = Field(..., description="Whether DST is active")
+    utc_offset: str = Field(..., description="Current UTC offset")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "utc": "2025-01-01T15:30:00Z",
+                "local": "2025-01-01 10:30:00 EST",
+                "timezone": "America/New_York",
+                "is_dst": False,
+                "utc_offset": "-05:00"
+            }
+        }
+
+
+class TimezoneUpdateRequest(BaseModel):
+    """Request model for timezone updates"""
+    timezone: str = Field(..., description="Timezone to set")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "timezone": "America/New_York"
+            }
+        }
+
+
+class SessionTimeoutUpdateRequest(BaseModel):
+    """Request model for session timeout updates"""
+    timeout_seconds: int = Field(..., description="Session timeout in seconds", ge=60, le=86400)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "timeout_seconds": 28800
+            }
+        }
+
+
+class MaxJobsUpdateRequest(BaseModel):
+    """Request model for max concurrent jobs updates"""
+    max_jobs: int = Field(..., description="Maximum concurrent jobs", ge=1, le=1000)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "max_jobs": 50
+            }
+        }
+
+
+class LogRetentionUpdateRequest(BaseModel):
+    """Request model for log retention updates"""
+    retention_days: int = Field(..., description="Log retention in days", ge=1, le=3650)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "retention_days": 30
+            }
+        }
+
+
+class SettingUpdateResponse(BaseModel):
+    """Response model for setting updates"""
+    success: bool = Field(..., description="Update success status")
+    message: str = Field(..., description="Update message")
+    updated_at: datetime = Field(..., description="Update timestamp")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "message": "Setting updated successfully",
+                "updated_at": "2025-01-01T15:30:00Z"
+            }
+        }
+
+
+@router.get(
+    "/info",
+    response_model=SystemInfoCompatResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get System Information",
+    description="""
+    Get basic system information for frontend compatibility.
+    This endpoint provides the essential system settings that the frontend needs.
+    
+    **Includes:**
+    - Timezone configuration and status
+    - Session timeout settings
+    - Job execution limits
+    - Log retention settings
+    - System uptime
+    """,
+    responses={
+        200: {"description": "System information retrieved successfully", "model": SystemInfoCompatResponse}
+    }
+)
+async def get_system_info(
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> SystemInfoCompatResponse:
+    """Get system information for frontend compatibility"""
+    
+    request_logger = RequestLogger(logger, "get_system_info")
+    request_logger.log_request_start("GET", "/api/v2/system/info", current_user.username)
+    
+    try:
+        # Use the existing system service
+        from app.services.system_service import SystemService
+        system_service = SystemService(db)
+        
+        # Get system information
+        system_info = system_service.get_system_info()
+        
+        response = SystemInfoCompatResponse(**system_info)
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "System info retrieval successful",
+            extra={
+                "timezone": system_info.get("timezone", {}).get("current", "unknown"),
+                "requested_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "System info retrieval error",
+            extra={
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while retrieving system information",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.get(
+    "/timezones",
+    response_model=TimezonesResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Available Timezones",
+    description="""
+    Get list of available timezones with user-friendly display names.
+    
+    **Features:**
+    - Comprehensive timezone list
+    - User-friendly display names
+    - Current UTC offsets
+    - Major cities and regions
+    """,
+    responses={
+        200: {"description": "Timezones retrieved successfully", "model": TimezonesResponse}
+    }
+)
+async def get_timezones(
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> TimezonesResponse:
+    """Get available timezones"""
+    
+    request_logger = RequestLogger(logger, "get_timezones")
+    request_logger.log_request_start("GET", "/api/v2/system/timezones", current_user.username)
+    
+    try:
+        # Use the existing system service
+        from app.services.system_service import SystemService
+        system_service = SystemService(db)
+        
+        # Get available timezones
+        timezones = system_service.get_available_timezones()
+        
+        response = TimezonesResponse(timezones=timezones)
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Timezones retrieval successful",
+            extra={
+                "timezone_count": len(timezones),
+                "requested_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Timezones retrieval error",
+            extra={
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while retrieving timezones",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.get(
+    "/current-time",
+    response_model=CurrentTimeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Current System Time",
+    description="""
+    Get current system time in both UTC and local timezone.
+    
+    **Features:**
+    - Current UTC time
+    - Current local time
+    - DST status
+    - UTC offset information
+    """,
+    responses={
+        200: {"description": "Current time retrieved successfully", "model": CurrentTimeResponse}
+    }
+)
+async def get_current_time(
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> CurrentTimeResponse:
+    """Get current system time"""
+    
+    request_logger = RequestLogger(logger, "get_current_time")
+    request_logger.log_request_start("GET", "/api/v2/system/current-time", current_user.username)
+    
+    try:
+        # Use the existing system service
+        from app.services.system_service import SystemService
+        system_service = SystemService(db)
+        
+        # Get current time information
+        utc_now = datetime.now(timezone.utc)
+        local_time = system_service.utc_to_local(utc_now)
+        
+        response = CurrentTimeResponse(
+            utc=utc_now.isoformat(),
+            local=system_service.utc_to_local_string(utc_now),
+            timezone=system_service.get_timezone(),
+            is_dst=system_service.is_dst_active(),
+            utc_offset=system_service.get_current_utc_offset()
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Current time retrieval successful",
+            extra={
+                "timezone": system_service.get_timezone(),
+                "is_dst": system_service.is_dst_active(),
+                "requested_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Current time retrieval error",
+            extra={
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while retrieving current time",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.put(
+    "/timezone",
+    response_model=SettingUpdateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update System Timezone",
+    description="""
+    Update the system timezone setting.
+    
+    **Features:**
+    - Timezone validation
+    - Immediate effect
+    - Audit logging
+    """,
+    responses={
+        200: {"description": "Timezone updated successfully", "model": SettingUpdateResponse}
+    }
+)
+async def update_timezone(
+    request_data: TimezoneUpdateRequest,
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> SettingUpdateResponse:
+    """Update system timezone"""
+    
+    request_logger = RequestLogger(logger, "update_timezone")
+    request_logger.log_request_start("PUT", "/api/v2/system/timezone", current_user.username)
+    
+    try:
+        # Use the existing system service
+        from app.services.system_service import SystemService
+        system_service = SystemService(db)
+        
+        # Update timezone
+        success = system_service.set_timezone(request_data.timezone)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "invalid_timezone",
+                    "message": f"Invalid timezone: {request_data.timezone}",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+        
+        response = SettingUpdateResponse(
+            success=True,
+            message=f"Timezone updated to {request_data.timezone}",
+            updated_at=datetime.utcnow()
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Timezone update successful",
+            extra={
+                "old_timezone": system_service.get_timezone(),
+                "new_timezone": request_data.timezone,
+                "updated_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Timezone update error",
+            extra={
+                "error": str(e),
+                "timezone": request_data.timezone,
+                "updated_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while updating timezone",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.put(
+    "/session-timeout",
+    response_model=SettingUpdateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Session Timeout",
+    description="""
+    Update the user session timeout setting.
+    
+    **Features:**
+    - Range validation (60s - 86400s)
+    - Immediate effect
+    - Audit logging
+    """,
+    responses={
+        200: {"description": "Session timeout updated successfully", "model": SettingUpdateResponse}
+    }
+)
+async def update_session_timeout(
+    request_data: SessionTimeoutUpdateRequest,
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> SettingUpdateResponse:
+    """Update session timeout"""
+    
+    request_logger = RequestLogger(logger, "update_session_timeout")
+    request_logger.log_request_start("PUT", "/api/v2/system/session-timeout", current_user.username)
+    
+    try:
+        # Use the existing system service
+        from app.services.system_service import SystemService
+        system_service = SystemService(db)
+        
+        # Update session timeout
+        success = system_service.set_session_timeout(request_data.timeout_seconds)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "invalid_timeout",
+                    "message": f"Invalid session timeout: {request_data.timeout_seconds} (must be 60-86400 seconds)",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+        
+        response = SettingUpdateResponse(
+            success=True,
+            message=f"Session timeout updated to {request_data.timeout_seconds} seconds",
+            updated_at=datetime.utcnow()
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Session timeout update successful",
+            extra={
+                "new_timeout": request_data.timeout_seconds,
+                "updated_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Session timeout update error",
+            extra={
+                "error": str(e),
+                "timeout": request_data.timeout_seconds,
+                "updated_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while updating session timeout",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.put(
+    "/max-concurrent-jobs",
+    response_model=SettingUpdateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Max Concurrent Jobs",
+    description="""
+    Update the maximum concurrent jobs setting.
+    
+    **Features:**
+    - Range validation (1-1000)
+    - Immediate effect
+    - Audit logging
+    """,
+    responses={
+        200: {"description": "Max concurrent jobs updated successfully", "model": SettingUpdateResponse}
+    }
+)
+async def update_max_concurrent_jobs(
+    request_data: MaxJobsUpdateRequest,
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> SettingUpdateResponse:
+    """Update max concurrent jobs"""
+    
+    request_logger = RequestLogger(logger, "update_max_concurrent_jobs")
+    request_logger.log_request_start("PUT", "/api/v2/system/max-concurrent-jobs", current_user.username)
+    
+    try:
+        # Use the existing system service
+        from app.services.system_service import SystemService
+        system_service = SystemService(db)
+        
+        # Update max concurrent jobs
+        success = system_service.set_max_concurrent_jobs(request_data.max_jobs)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "invalid_max_jobs",
+                    "message": f"Invalid max concurrent jobs: {request_data.max_jobs} (must be 1-1000)",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+        
+        response = SettingUpdateResponse(
+            success=True,
+            message=f"Max concurrent jobs updated to {request_data.max_jobs}",
+            updated_at=datetime.utcnow()
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Max concurrent jobs update successful",
+            extra={
+                "new_max_jobs": request_data.max_jobs,
+                "updated_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Max concurrent jobs update error",
+            extra={
+                "error": str(e),
+                "max_jobs": request_data.max_jobs,
+                "updated_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while updating max concurrent jobs",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.put(
+    "/log-retention",
+    response_model=SettingUpdateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Log Retention",
+    description="""
+    Update the log retention period setting.
+    
+    **Features:**
+    - Range validation (1-3650 days)
+    - Immediate effect
+    - Audit logging
+    """,
+    responses={
+        200: {"description": "Log retention updated successfully", "model": SettingUpdateResponse}
+    }
+)
+async def update_log_retention(
+    request_data: LogRetentionUpdateRequest,
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> SettingUpdateResponse:
+    """Update log retention"""
+    
+    request_logger = RequestLogger(logger, "update_log_retention")
+    request_logger.log_request_start("PUT", "/api/v2/system/log-retention", current_user.username)
+    
+    try:
+        # Use the existing system service
+        from app.services.system_service import SystemService
+        system_service = SystemService(db)
+        
+        # Update log retention
+        success = system_service.set_log_retention_days(request_data.retention_days)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "invalid_retention",
+                    "message": f"Invalid log retention: {request_data.retention_days} (must be 1-3650 days)",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+        
+        response = SettingUpdateResponse(
+            success=True,
+            message=f"Log retention updated to {request_data.retention_days} days",
+            updated_at=datetime.utcnow()
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Log retention update successful",
+            extra={
+                "new_retention_days": request_data.retention_days,
+                "updated_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Log retention update error",
+            extra={
+                "error": str(e),
+                "retention_days": request_data.retention_days,
+                "updated_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while updating log retention",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )

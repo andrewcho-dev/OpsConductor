@@ -50,10 +50,37 @@ export const AuthProvider = ({ children }) => {
 
     window.addEventListener('forceLogout', handleForceLogout);
     
+    // Set up periodic token validation (every 5 minutes)
+    const tokenCheckInterval = setInterval(() => {
+      const currentToken = localStorage.getItem('access_token');
+      if (currentToken && isAuthenticated) {
+        // Try to decode the JWT to check expiration
+        try {
+          const payload = JSON.parse(atob(currentToken.split('.')[1]));
+          const currentTime = Math.floor(Date.now() / 1000);
+          
+          // If token expires in less than 5 minutes, try to refresh
+          if (payload.exp && payload.exp - currentTime < 300) {
+            console.log('🔄 Token expiring soon, attempting refresh...');
+            authService.getCurrentUser().catch(() => {
+              console.log('🚪 Token refresh failed, forcing logout...');
+              handleForceLogout();
+              window.location.href = '/login';
+            });
+          }
+        } catch (error) {
+          console.log('🚪 Invalid token format, forcing logout...');
+          handleForceLogout();
+          window.location.href = '/login';
+        }
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
+    
     return () => {
       window.removeEventListener('forceLogout', handleForceLogout);
+      clearInterval(tokenCheckInterval);
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const login = async (username, password) => {
     try {
