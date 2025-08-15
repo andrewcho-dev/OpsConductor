@@ -23,9 +23,9 @@ class User(Base):
     # Temporarily comment out the problematic relationship
     # jobs = relationship("Job", back_populates="creator")
     
-    # Device type relationships (Phase 3)
-    created_device_types = relationship("DeviceTypeModel", back_populates="creator")
-    device_type_templates = relationship("DeviceTypeTemplateModel", back_populates="creator")
+    # Device type relationships (Phase 3) - using string references to avoid import issues
+    # created_device_types = relationship("DeviceTypeModel", back_populates="creator")
+    # device_type_templates = relationship("DeviceTypeTemplateModel", back_populates="creator")
 
 
 class UserSession(Base):

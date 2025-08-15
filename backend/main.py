@@ -130,30 +130,23 @@ app.include_router(universal_targets.router, tags=["Universal Targets"])
 # discovery.router -> /api/v2/discovery/*
 # Legacy health/metrics/log_viewer routers removed - consolidated into V2 APIs
 
-# Include remaining versioned API routers
-from app.api.v1 import (
-    websocket as websocket_v1, 
-    # analytics removed - use /api/v2/metrics/ instead
-    # monitoring removed - use /api/v2/metrics/ instead
-    audit as audit_v1,
-    device_types as device_types_v1
-)
-app.include_router(websocket_v1.router, prefix="/api/v1", tags=["WebSocket API v1"])
-# Legacy analytics v1 removed - use /api/v2/metrics/ instead
-app.include_router(audit_v1.router, tags=["Audit API v1"])
-app.include_router(device_types_v1.router, tags=["Device Types API v1"])
-
-# Include new V2 consolidated API routers
+# Include enhanced V2 API routers
 from app.api.v2 import (
-    health as health_v2,
-    metrics as metrics_v2,
-    jobs as jobs_v2,
-    templates as templates_v2,
-    system as system_v2,
-    discovery as discovery_v2,
-    notifications as notifications_v2,
-    device_types as device_types_v2  # Phase 3 addition
+    websocket_enhanced as websocket_v2,
+    audit_enhanced as audit_v2,
+    device_types_enhanced as device_types_v2,
+    health_enhanced as health_v2,
+    metrics_enhanced as metrics_v2,
+    jobs_enhanced as jobs_v2,
+    templates_enhanced as templates_v2,
+    system_enhanced as system_v2,
+    discovery_enhanced as discovery_v2,
+    notifications_enhanced as notifications_v2
 )
+# Include enhanced V2 routers (routers already have their own prefixes)
+app.include_router(websocket_v2.router, tags=["WebSocket API v2"])
+app.include_router(audit_v2.router, tags=["Audit API v2"])
+app.include_router(device_types_v2.router, tags=["Device Types API v2"])
 app.include_router(health_v2.router, tags=["Health & Monitoring v2"])
 app.include_router(metrics_v2.router, tags=["Metrics & Analytics v2"])
 app.include_router(jobs_v2.router, tags=["Jobs Management v2"])
@@ -161,7 +154,6 @@ app.include_router(templates_v2.router, tags=["Templates Management v2"])
 app.include_router(system_v2.router, tags=["System Administration v2"])
 app.include_router(discovery_v2.router, tags=["Network Discovery v2"])
 app.include_router(notifications_v2.router, tags=["Notifications & Alerts v2"])
-app.include_router(device_types_v2.router, tags=["Device Types Management v2"])  # Phase 3 addition
 
 @app.get("/")
 async def root():
@@ -170,6 +162,11 @@ async def root():
         "version": "1.0.0",
         "status": "running"
     }
+
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint for Docker health checks"""
+    return {"status": "healthy", "service": "opsconductor-backend"}
 
 # Legacy health endpoints removed - use /api/v2/health/ instead
 

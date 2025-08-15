@@ -47,8 +47,8 @@ class DeviceTypeModel(Base):
     search_vector = Column(Text)  # For full-text search
     tags = Column(JSON, default=list)  # User-defined tags
     
-    # Relationships
-    creator = relationship("User", back_populates="created_device_types")
+    # Relationships - temporarily disabled to avoid circular import issues
+    # creator = relationship("User", back_populates="created_device_types")
     
     def to_dict(self) -> Dict:
         """Convert to dictionary for API responses"""
@@ -143,8 +143,8 @@ class DeviceTypeTemplateModel(Base):
     usage_count = Column(Integer, default=0)
     last_used = Column(DateTime(timezone=True))
     
-    # Relationships
-    creator = relationship("User", back_populates="device_type_templates")
+    # Relationships - temporarily disabled to avoid circular import issues
+    # creator = relationship("User", back_populates="device_type_templates")
     
     def to_dict(self) -> Dict:
         """Convert to dictionary for API responses"""
