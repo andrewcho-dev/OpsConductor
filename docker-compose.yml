@@ -1,5 +1,5 @@
 # =============================================================================
-# OPSCONDUCTOR - ENTERPRISE AUTOMATION ORCHESTRATION PLATFORM
+# OPSCONDUCTOR - UNIVERSAL AUTOMATION ORCHESTRATION PLATFORM
 # =============================================================================
 # Complete Docker Compose setup for OpsConductor platform
 # All services run behind nginx with SSL termination
@@ -21,10 +21,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
-    # Port exposed for development/debugging only
-    # In production, only nginx should expose ports
-    # ports:
-    #   # - "5432:5432"  # Commented out for security - use docker exec for DB access  # Commented out for security - use docker exec for DB access
     networks:
       - opsconductor-network
     restart: unless-stopped
@@ -40,10 +36,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: opsconductor-redis
-    # Port exposed for development/debugging only
-    # In production, only nginx should expose ports
-    # ports:
-    #   # - "6379:6379"  # Commented out for security - use docker exec for Redis access  # Commented out for security - use docker exec for Redis access
     networks:
       - opsconductor-network
     restart: unless-stopped
@@ -215,7 +207,7 @@ services:
       start_period: 30s
 
   # =============================================================================
-  # NGINX REVERSE PROXY - FIREWALL & SSL TERMINATION
+  # NGINX REVERSE PROXY - HTTPS ONLY & SSL TERMINATION
   # =============================================================================
   nginx:
     image: nginx:alpine

@@ -15,13 +15,17 @@ class User(Base):
     role = Column(String(20), nullable=False, 
                   default="user")  # administrator, manager, user, guest
     is_active = Column(Boolean, default=True)
-    last_login = Column(DateTime, nullable=True)
+    last_login = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     # Temporarily comment out the problematic relationship
     # jobs = relationship("Job", back_populates="creator")
+    
+    # Device type relationships (Phase 3)
+    created_device_types = relationship("DeviceTypeModel", back_populates="creator")
+    device_type_templates = relationship("DeviceTypeTemplateModel", back_populates="creator")
 
 
 class UserSession(Base):

@@ -162,7 +162,13 @@ docker-compose -f docker-compose.prod.yml up -d
 - **[API Reference](docs/API_REFERENCE.md)** - Comprehensive API documentation
 - **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)** - Production deployment instructions
 - **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Development setup and contribution guide
+- **[Security Guide](docs/SECURITY_GUIDE.md)** - Security configuration and best practices
+- **[Testing Guide](docs/TESTING_GUIDE.md)** - Testing procedures and automation
 - **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
+
+### Testing
+- **[Test Suite](tests/)** - Comprehensive E2E and API tests
+- **[Test Documentation](tests/README.md)** - Testing setup and execution guide
 
 ### Quick Start Workflows
 

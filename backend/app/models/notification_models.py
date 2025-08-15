@@ -1,6 +1,7 @@
 from sqlalchemy import (
-    Column, Integer, String, Text, JSON, DateTime, Boolean, ForeignKey
+    Column, Integer, String, Text, JSON, DateTime, Boolean, ForeignKey, Enum, text, Float
 )
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database.database import Base
@@ -65,28 +66,22 @@ class AlertRule(Base):
     __tablename__ = "alert_rules"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), unique=True, nullable=False, index=True)
-    description = Column(Text)
-    alert_type = Column(String(50), nullable=False)  # job_failure, system_error, performance, security
-    trigger_condition = Column(JSON, nullable=False)  # Condition configuration
-    notification_template_id = Column(Integer, ForeignKey("notification_templates.id"), nullable=True)
-    recipients = Column(JSON, nullable=False)  # List of recipient emails
-    is_active = Column(Boolean, default=True)
-    created_at = Column(
-        DateTime(timezone=True), 
-        server_default=func.now()
-    )
-    updated_at = Column(
-        DateTime(timezone=True), 
-        server_default=func.now(), 
-        onupdate=func.now()
-    )
-    
-    # Relationships
-    template = relationship("NotificationTemplate", backref="alert_rules")
+    name = Column(String(100), nullable=False)
+    description = Column(String(500), nullable=True)
+    metric_type = Column(String(50), nullable=False)
+    condition = Column(String(20), nullable=False)  # gt, lt, eq, ne, gte, lte
+    threshold_value = Column(Float, nullable=False)  # DOUBLE PRECISION in database
+    evaluation_period = Column(Integer, nullable=True, default=5)
+    is_active = Column(Integer, nullable=True, default=1)  # Database uses INTEGER not BOOLEAN
+    severity = Column(String(20), nullable=True, default='warning')
+    notification_channels = Column(JSONB, nullable=True)
+    last_triggered = Column(DateTime(timezone=True), nullable=True)
+    trigger_count = Column(Integer, nullable=True, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     def __repr__(self):
-        return f"<AlertRule(name='{self.name}', type='{self.alert_type}', active={self.is_active})>"
+        return f"<AlertRule(name='{self.name}', metric='{self.metric_type}', active={self.is_active})>"
 
 
 class AlertLog(Base):
@@ -94,18 +89,22 @@ class AlertLog(Base):
     __tablename__ = "alert_logs"
     
     id = Column(Integer, primary_key=True, index=True)
+    alert_uuid = Column(UUID, nullable=False, server_default=func.gen_random_uuid())
+    alert_serial = Column(String(50), nullable=False, server_default=text("'ALERT-' || LPAD(nextval('alert_logs_id_seq')::text, 8, '0')"))
     alert_rule_id = Column(Integer, ForeignKey("alert_rules.id"), nullable=True)
-    alert_type = Column(String(50), nullable=False)
-    severity = Column(String(20), nullable=False, default="info")  # info, warning, error, critical
+    severity = Column(Enum('low', 'medium', 'high', 'critical', name='alert_severity'), nullable=False)
+    status = Column(Enum('active', 'acknowledged', 'resolved', 'suppressed', name='alert_status'), nullable=False, default='active')
+    title = Column(String(500), nullable=False)
     message = Column(Text, nullable=False)
-    context_data = Column(JSON, nullable=True)  # Additional context
-    is_resolved = Column(Boolean, default=False)
+    triggered_at = Column(DateTime(timezone=True), server_default=func.now())
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    acknowledged_by = Column(Integer, nullable=True)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     resolved_by = Column(String(100), nullable=True)
-    created_at = Column(
-        DateTime(timezone=True), 
-        server_default=func.now()
-    )
+    context_data = Column(JSONB, nullable=True)
+    notification_sent = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    alert_type = Column(String(50), nullable=False)
     
     # Relationships
     alert_rule = relationship("AlertRule", backref="alert_logs")

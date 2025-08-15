@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.database.database import Base
 import uuid
 
@@ -44,12 +44,12 @@ class TargetCommunicationMethod(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     target_id = Column(Integer, ForeignKey("universal_targets.id"), nullable=False)
-    method_type = Column(String(20), nullable=False)  # ssh, winrm, mysql, postgresql, mssql, oracle, sqlite, mongodb, redis, elasticsearch
+    method_type = Column(String(50), nullable=False)  # ssh, winrm, mysql, postgresql, mssql, oracle, sqlite, mongodb, redis, elasticsearch
     method_name = Column(String(100), nullable=False)  # auto-generated: method_type_timestamp
     is_primary = Column(Boolean, default=False)
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, nullable=False, default=True)
     priority = Column(Integer, default=1)
-    config = Column(JSON, nullable=False)  # Contains: {host: "IP_ADDRESS", port: 22/5985, additional_params}
+    config = Column(JSONB, nullable=False)  # Contains: {host: "IP_ADDRESS", port: 22/5985, additional_params}
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -74,7 +74,7 @@ class TargetCredential(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     communication_method_id = Column(Integer, ForeignKey("target_communication_methods.id"), nullable=False)
-    credential_type = Column(String(20), nullable=False)  # password, ssh_key (simplified for initial release)
+    credential_type = Column(String(50), nullable=False)  # password, ssh_key (simplified for initial release)
     credential_name = Column(String(100), nullable=False)
     is_primary = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)

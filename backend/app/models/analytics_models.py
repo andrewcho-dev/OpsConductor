@@ -2,7 +2,8 @@
 Analytics data models for OpsConductor Platform.
 These models store aggregated metrics and performance data for reporting.
 """
-from sqlalchemy import Column, Integer, String, DateTime, Float, JSON, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, DateTime, Float, ForeignKey, Index
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.database import Base
@@ -51,7 +52,7 @@ class PerformanceMetric(Base):
     p95_duration = Column(Float, nullable=True)
     
     # Additional metric data as JSON
-    metric_data = Column(JSON, nullable=True)
+    metric_data = Column(JSONB, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -96,7 +97,7 @@ class SystemHealthSnapshot(Base):
     avg_queue_wait_time = Column(Float, nullable=True)
     
     # Additional system data
-    system_data = Column(JSON, nullable=True)
+    system_data = Column(JSONB, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -121,7 +122,7 @@ class AnalyticsAlertRule(Base):
     # Alert configuration
     is_active = Column(Integer, default=1)
     severity = Column(String(20), default="warning")  # info, warning, critical
-    notification_channels = Column(JSON, nullable=True)  # email, webhook, etc.
+    notification_channels = Column(JSONB, nullable=True)  # email, webhook, etc.
     
     # Tracking
     last_triggered = Column(DateTime(timezone=True), nullable=True)
@@ -144,17 +145,17 @@ class ReportTemplate(Base):
     report_type = Column(String(50), nullable=False)  # executive, operational, compliance
     
     # Report configuration
-    data_sources = Column(JSON, nullable=False)  # Which metrics to include
+    data_sources = Column(JSONB, nullable=False)  # Which metrics to include
     time_range = Column(String(20), default="last_7_days")
     format = Column(String(20), default="json")  # json, pdf, csv
     
     # Scheduling
     is_scheduled = Column(Integer, default=0)
     schedule_cron = Column(String(100), nullable=True)
-    recipients = Column(JSON, nullable=True)
+    recipients = Column(JSONB, nullable=True)
     
     # Template data
-    template_config = Column(JSON, nullable=True)
+    template_config = Column(JSONB, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -177,7 +178,7 @@ class GeneratedReport(Base):
     generated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     
     # Report data
-    report_data = Column(JSON, nullable=True)  # For JSON reports
+    report_data = Column(JSONB, nullable=True)  # For JSON reports
     file_path = Column(String(500), nullable=True)  # For file-based reports
     file_size = Column(Integer, nullable=True)
     

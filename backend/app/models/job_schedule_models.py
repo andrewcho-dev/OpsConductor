@@ -2,9 +2,9 @@
 Job Schedule Models - Database models for job scheduling
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, func, Enum, text
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime, timezone
 import uuid
 import enum
@@ -76,11 +76,12 @@ class ScheduleExecution(Base):
     __tablename__ = "schedule_executions"
 
     id = Column(Integer, primary_key=True, index=True)
-    execution_uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True)
+    execution_uuid = Column(UUID, nullable=False, server_default=func.gen_random_uuid())
+    execution_serial = Column(String(50), nullable=False, server_default=text("'SEXEC-' || LPAD(nextval('schedule_executions_id_seq')::text, 8, '0')"))
     
-    # Schedule relationship
-    schedule_id = Column(Integer, ForeignKey("job_schedules.id"), nullable=False)
-    schedule = relationship("JobSchedule")
+    # Schedule relationship - database uses job_schedule_id, not schedule_id
+    job_schedule_id = Column(Integer, ForeignKey("job_schedules.id"), nullable=False)
+    job_schedule = relationship("JobSchedule")
     
     # Job execution relationship
     job_execution_id = Column(Integer, ForeignKey("job_executions.id"), nullable=True)
@@ -88,13 +89,15 @@ class ScheduleExecution(Base):
     
     # Execution details
     scheduled_at = Column(DateTime(timezone=True), nullable=False)
-    executed_at = Column(DateTime(timezone=True), nullable=True)
-    status = Column(String(20), default="pending")  # pending, executed, failed, skipped
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(Enum('scheduled', 'running', 'completed', 'failed', 'skipped', name='execution_status_schedule'), nullable=False, default='scheduled')
+    result_summary = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
+    execution_context = Column(JSONB, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     def __repr__(self):
-        return f"<ScheduleExecution(id={self.id}, schedule_id={self.schedule_id}, status={self.status})>"
+        return f"<ScheduleExecution(id={self.id}, job_schedule_id={self.job_schedule_id}, status={self.status})>"

@@ -3,8 +3,8 @@ Celery Task History Models
 For tracking task execution statistics and metrics
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Float, Text, Boolean
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, Integer, String, DateTime, Float, Text, Boolean, text, Enum
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime, timezone
 from app.database.database import Base
 
@@ -13,29 +13,25 @@ class CeleryTaskHistory(Base):
     __tablename__ = "celery_task_history"
     
     id = Column(Integer, primary_key=True, index=True)
-    task_id = Column(String(255), unique=True, index=True, nullable=False)
-    task_name = Column(String(255), index=True, nullable=False)
-    worker_name = Column(String(255), index=True)
-    queue_name = Column(String(100), index=True)
-    
-    # Timing information
-    started_at = Column(DateTime(timezone=True))
-    completed_at = Column(DateTime(timezone=True))
-    duration = Column(Float)  # Duration in seconds
-    
-    # Status and result
-    status = Column(String(50), index=True)  # SUCCESS, FAILURE, RETRY, REVOKED
-    result = Column(Text)  # Task result or error message
-    exception = Column(Text)  # Exception details if failed
-    traceback = Column(Text)  # Full traceback if failed
-    
-    # Task details
-    args = Column(Text)  # JSON string of task arguments
-    kwargs = Column(Text)  # JSON string of task keyword arguments
+    task_uuid = Column(UUID, nullable=False, server_default=text("gen_random_uuid()"))
+    task_serial = Column(String(50), nullable=False, server_default=text("'TASK-' || LPAD(nextval('celery_task_history_id_seq')::text, 8, '0')"))
+    task_id = Column(String(255), nullable=False)
+    task_name = Column(String(255), nullable=False)
+    status = Column(Enum('pending', 'started', 'retry', 'failure', 'success', 'revoked', name='task_status'), nullable=False, default='pending')
+    result = Column(Text, nullable=True)
+    traceback = Column(Text, nullable=True)
+    args = Column(JSONB, nullable=True)
+    kwargs = Column(JSONB, nullable=True)
+    eta = Column(DateTime(timezone=True), nullable=True)
+    expires = Column(DateTime(timezone=True), nullable=True)
     retries = Column(Integer, default=0)
-    
-    # Metadata
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    max_retries = Column(Integer, default=3)
+    queue = Column(String(100), nullable=True)
+    routing_key = Column(String(100), nullable=True)
+    worker = Column(String(255), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
     
     def __repr__(self):
         return f"<CeleryTaskHistory(task_id='{self.task_id}', name='{self.task_name}', status='{self.status}')>"
@@ -45,27 +41,19 @@ class CeleryMetricsSnapshot(Base):
     __tablename__ = "celery_metrics_snapshots"
     
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
-    
-    # Task metrics
+    snapshot_uuid = Column(UUID, nullable=False, server_default=text("gen_random_uuid()"))
+    snapshot_serial = Column(String(50), nullable=False, server_default=text("'SNAP-' || LPAD(nextval('celery_metrics_snapshots_id_seq')::text, 8, '0')"))
+    worker_name = Column(String(255), nullable=False)
     active_tasks = Column(Integer, default=0)
-    scheduled_tasks = Column(Integer, default=0)
-    completed_tasks_last_hour = Column(Integer, default=0)
-    failed_tasks_last_hour = Column(Integer, default=0)
-    tasks_per_minute = Column(Float, default=0.0)
-    avg_task_duration = Column(Float, default=0.0)
-    
-    # Worker metrics
-    total_workers = Column(Integer, default=0)
-    active_workers = Column(Integer, default=0)
-    avg_worker_load = Column(Float, default=0.0)
-    
-    # Queue metrics (JSON string with queue depths)
-    queue_depths = Column(Text)  # JSON: {"celery": 5, "job_execution": 2}
-    
-    # Error rates
-    error_rate = Column(Float, default=0.0)
-    success_rate = Column(Float, default=100.0)
+    processed_tasks = Column(Integer, default=0)
+    failed_tasks = Column(Integer, default=0)
+    retried_tasks = Column(Integer, default=0)
+    queue_lengths = Column(JSONB, nullable=True)
+    worker_stats = Column(JSONB, nullable=True)
+    system_load = Column(JSONB, nullable=True)
+    memory_usage = Column(JSONB, nullable=True)
+    snapshot_time = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
+    created_at = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
     
     def __repr__(self):
-        return f"<CeleryMetricsSnapshot(timestamp='{self.timestamp}', active_tasks={self.active_tasks})>"
+        return f"<CeleryMetricsSnapshot(worker='{self.worker_name}', active_tasks={self.active_tasks})>"
