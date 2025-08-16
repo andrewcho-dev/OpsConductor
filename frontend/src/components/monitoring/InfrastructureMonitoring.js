@@ -375,7 +375,14 @@ const InfrastructureMonitoring = () => {
                 </Box>
               </Box>
               
-              <TableContainer component={Paper} variant="outlined">
+              <TableContainer 
+                component={Paper} 
+                variant="outlined"
+                sx={{ 
+                  maxHeight: '100%', // Dynamic height - stops 70px above footer
+                  overflow: 'auto'
+                }}
+              >
                 <Table size="small">
                   <TableHead>
                     <TableRow>

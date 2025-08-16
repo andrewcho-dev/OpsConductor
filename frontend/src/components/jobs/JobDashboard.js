@@ -5,6 +5,7 @@ import {
   IconButton,
   Tooltip,
   CircularProgress,
+  Box,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -23,6 +24,7 @@ import JobSafetyControls from './JobSafetyControls';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAlert } from '../layout/BottomStatusBar';
 import { authService } from '../../services/authService';
+import '../../styles/dashboard.css';
 
 const JobDashboard = () => {
     const { addAlert } = useAlert();
@@ -180,7 +182,15 @@ const JobDashboard = () => {
     };
 
     return (
-        <div className="dashboard-container">
+        <div className="dashboard-container" style={{ 
+            height: 'calc(100vh - 92px)', // Account for header (64px) + footer (28px)
+            minHeight: 'calc(100vh - 92px)', 
+            maxHeight: 'calc(100vh - 92px)', 
+            overflow: 'hidden', 
+            display: 'flex', 
+            flexDirection: 'column',
+            padding: '12px'
+        }}>
             {/* Compact Page Header */}
             <div className="page-header">
                 <Typography className="page-title">
@@ -215,112 +225,25 @@ const JobDashboard = () => {
                 </div>
             </div>
 
-            {/* Compact Statistics Grid - Key Metrics Only */}
-            <div className="stats-grid">
-                <div className="stat-card fade-in">
-                    <div className="stat-card-content">
-                        <div className="stat-icon primary">
-                            <WorkIcon fontSize="small" />
-                        </div>
-                        <div className="stat-details">
-                            <h3>{stats.total}</h3>
-                            <p>Total Jobs</p>
-                        </div>
+            {/* Direct Table Display */}
+            {loading ? (
+                <div className="table-content-area">
+                    <div className="loading-container">
+                        <CircularProgress size={24} />
+                        <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
+                            Loading jobs...
+                        </Typography>
                     </div>
                 </div>
-                
-                <div className="stat-card fade-in">
-                    <div className="stat-card-content">
-                        <div className="stat-icon info">
-                            <PlayArrowIcon fontSize="small" />
-                        </div>
-                        <div className="stat-details">
-                            <h3>{stats.running}</h3>
-                            <p>Running</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="stat-card fade-in">
-                    <div className="stat-card-content">
-                        <div className="stat-icon success">
-                            <CheckCircleIcon fontSize="small" />
-                        </div>
-                        <div className="stat-details">
-                            <h3>{stats.completed}</h3>
-                            <p>Completed</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="stat-card fade-in">
-                    <div className="stat-card-content">
-                        <div className="stat-icon error">
-                            <ErrorIcon fontSize="small" />
-                        </div>
-                        <div className="stat-details">
-                            <h3>{stats.failed}</h3>
-                            <p>Failed</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="stat-card fade-in">
-                    <div className="stat-card-content">
-                        <div className="stat-icon warning">
-                            <WorkIcon fontSize="small" />
-                        </div>
-                        <div className="stat-details">
-                            <h3>{workerStats.active}</h3>
-                            <p>Workers</p>
-                        </div>
-                    </div>
-                </div>
-                
-                {/* Empty slot to maintain 6-column grid */}
-                <div className="stat-card" style={{ visibility: 'hidden' }}>
-                    <div className="stat-card-content">
-                        <div className="stat-icon primary">
-                            <WorkIcon fontSize="small" />
-                        </div>
-                        <div className="stat-details">
-                            <h3>-</h3>
-                            <p>-</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Main Content Card */}
-            <div className="main-content-card fade-in">
-                <div className="content-card-header">
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
-                        JOB MANAGEMENT
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                        {jobs.length} jobs configured
-                    </Typography>
-                </div>
-                
-                <div className="content-card-body">
-                    {loading ? (
-                        <div className="loading-container">
-                            <CircularProgress size={24} />
-                            <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
-                                Loading jobs...
-                            </Typography>
-                        </div>
-                    ) : (
-                        <JobList
-                            jobs={jobs}
-                            onExecuteJob={handleExecuteJob}
-                            onScheduleJob={handleScheduleJob}
-                            onUpdateJob={handleUpdateJob}
-                            onDeleteJob={handleDeleteJob}
-                        />
-                    )}
-                </div>
-            </div>
+            ) : (
+                <JobList
+                    jobs={jobs}
+                    onExecuteJob={handleExecuteJob}
+                    onScheduleJob={handleScheduleJob}
+                    onUpdateJob={handleUpdateJob}
+                    onDeleteJob={handleDeleteJob}
+                />
+            )}
 
             {/* Create Job Modal */}
             <JobCreateModal

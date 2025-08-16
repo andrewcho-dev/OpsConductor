@@ -358,15 +358,7 @@ function AuditDashboard() {
   // }
 
   return (
-    <div className="dashboard-container" style={{ 
-      height: 'calc(100vh - 92px)', // Account for header (64px) + footer (28px)
-      minHeight: 'calc(100vh - 92px)', 
-      maxHeight: 'calc(100vh - 92px)', 
-      overflow: 'hidden', 
-      display: 'flex', 
-      flexDirection: 'column',
-      padding: '12px'
-    }}>
+    <div className="datatable-page-container">
 
 
       {/* Page Header */}
@@ -381,8 +373,11 @@ function AuditDashboard() {
             color="textSecondary" 
             sx={{ 
               marginRight: 2,
-              fontSize: '0.875rem',
-              fontWeight: 500
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              height: '32px',
+              display: 'flex',
+              alignItems: 'center'
             }}
           >
             {paginatedEvents.length} of {totalFilteredRecords} records {totalFilteredRecords > pageSize ? `(Page ${currentPage} of ${totalPages})` : ''}
@@ -397,17 +392,13 @@ function AuditDashboard() {
             title="Export to CSV"
           />
           <IconButton
+            className="btn-icon"
             size="small"
             onClick={() => handleExport('json')}
             disabled={loading || filteredAndSortedEvents.length === 0}
             title="Export to JSON"
-            sx={{ 
-              marginRight: 1,
-              color: 'primary.main',
-              '&:hover': { backgroundColor: 'primary.light' }
-            }}
           >
-            <SaveIcon sx={{ fontSize: 18 }} />
+            <SaveIcon fontSize="small" />
           </IconButton>
           
           <RefreshAction onClick={fetchAuditData} disabled={loading} />
@@ -415,56 +406,43 @@ function AuditDashboard() {
       </div>
 
       {/* Audit Events Table */}
-      <Box sx={{ 
-        mt: 2, 
-        flex: 1, 
-        display: 'flex', 
-        flexDirection: 'column',
-        minHeight: 0 // Important for flex child to shrink
-      }}>
+      <div className="table-content-area">
 
         <TableContainer 
           component={Paper} 
           variant="outlined"
-          sx={{ 
-            flex: 1, // Take up remaining space in flex container
-            minHeight: '400px',
-            overflow: 'auto', // Only the table scrolls, not the page
-            border: '1px solid', 
-            borderColor: 'divider',
-            borderRadius: 1
-          }}
+          className="standard-table-container"
         >
           <Table size="small">
             <TableHead>
               {/* Column Headers */}
               <TableRow sx={{ backgroundColor: 'grey.100' }}>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell className="standard-table-header">
                   Timestamp
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell className="standard-table-header">
                   Event Type
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell className="standard-table-header">
                   Action
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell className="standard-table-header">
                   User
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell className="standard-table-header">
                   Resource
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell className="standard-table-header">
                   Severity
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell className="standard-table-header">
                   Actions
                 </TableCell>
               </TableRow>
               
               {/* Filter Row */}
               <TableRow sx={{ backgroundColor: 'grey.50' }}>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                     <TextField
                       size="small"
@@ -472,7 +450,7 @@ function AuditDashboard() {
                       type="datetime-local"
                       value={columnFilters.timestamp_start || ''}
                       onChange={(e) => handleColumnFilterChange('timestamp_start', e.target.value)}
-                      sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px' } }}
+                      className="standard-filter-input"
                     />
                     <TextField
                       size="small"
@@ -480,11 +458,11 @@ function AuditDashboard() {
                       type="datetime-local"
                       value={columnFilters.timestamp_end || ''}
                       onChange={(e) => handleColumnFilterChange('timestamp_end', e.target.value)}
-                      sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px' } }}
+                      className="standard-filter-input"
                     />
                   </Box>
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <Select
                     size="small"
                     fullWidth
@@ -523,37 +501,37 @@ function AuditDashboard() {
                     <MenuItem value="job_executed">job_executed</MenuItem>
                   </Select>
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <TextField
                     size="small"
                     fullWidth
                     placeholder="Filter action..."
                     value={columnFilters.action || ''}
                     onChange={(e) => handleColumnFilterChange('action', e.target.value)}
-                    sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px' } }}
+                    className="standard-filter-input"
                   />
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <TextField
                     size="small"
                     fullWidth
                     placeholder="Filter user..."
                     value={columnFilters.user_id || ''}
                     onChange={(e) => handleColumnFilterChange('user_id', e.target.value)}
-                    sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px' } }}
+                    className="standard-filter-input"
                   />
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <TextField
                     size="small"
                     fullWidth
                     placeholder="Filter resource..."
                     value={columnFilters.resource || ''}
                     onChange={(e) => handleColumnFilterChange('resource', e.target.value)}
-                    sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px' } }}
+                    className="standard-filter-input"
                   />
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <Select
                     size="small"
                     fullWidth
@@ -584,7 +562,7 @@ function AuditDashboard() {
                     <MenuItem value="critical">critical</MenuItem>
                   </Select>
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   {/* Empty cell for actions column */}
                 </TableCell>
               </TableRow>
@@ -607,25 +585,25 @@ function AuditDashboard() {
                     key={event.id || index} 
                     sx={getSeverityRowStyling(event.severity, theme)}
                   >
-                    <TableCell sx={getTableCellStyle()}>
+                    <TableCell className="standard-table-cell">
                       {formatTimestamp(event.timestamp)}
                     </TableCell>
-                    <TableCell sx={getTableCellStyle()}>
+                    <TableCell className="standard-table-cell">
                       {event.event_type}
                     </TableCell>
-                    <TableCell sx={getTableCellStyle()}>
+                    <TableCell className="standard-table-cell">
                       {event.action}
                     </TableCell>
-                    <TableCell sx={getTableCellStyle()}>
+                    <TableCell className="standard-table-cell">
                       {auditService.getEnrichedUserDisplay(event)}
                     </TableCell>
-                    <TableCell sx={getTableCellStyle()}>
+                    <TableCell className="standard-table-cell">
                       {auditService.getEnrichedResourceDisplay(event)}
                     </TableCell>
-                    <TableCell sx={getTableCellStyle()}>
+                    <TableCell className="standard-table-cell">
                       {event.severity}
                     </TableCell>
-                    <TableCell sx={{ padding: '4px 8px' }}>
+                    <TableCell className="standard-table-cell">
                       <ViewDetailsAction
                         onClick={() => setSelectedEvent(event)}
                       />
@@ -638,20 +616,10 @@ function AuditDashboard() {
         </TableContainer>
         
         {/* Pagination Controls */}
-        <Box 
-          sx={{ 
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mt: 1, // Reduced margin
-            py: 1, // Reduced padding
-            px: 1,
-            flexShrink: 0 // Don't shrink this area
-          }}
-        >
+        <div className="standard-pagination-area">
           {/* Page Size Selector */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+          <div className="standard-page-size-selector">
+            <Typography variant="body2" className="standard-pagination-info">
               Show:
             </Typography>
             <Select
@@ -661,24 +629,17 @@ function AuditDashboard() {
                 setCurrentPage(1); // Reset to first page
               }}
               size="small"
-              sx={{ 
-                minWidth: '70px',
-                '& .MuiSelect-select': {
-                  fontSize: '0.75rem',
-                  py: 0.5
-                }
-              }}
+              className="standard-page-size-selector"
             >
               <MenuItem value={25}>25</MenuItem>
               <MenuItem value={50}>50</MenuItem>
               <MenuItem value={100}>100</MenuItem>
               <MenuItem value={200}>200</MenuItem>
-              <MenuItem value={500}>500</MenuItem>
             </Select>
-            <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+            <Typography variant="body2" className="standard-pagination-info">
               per page
             </Typography>
-          </Box>
+          </div>
 
           {/* Pagination */}
           {totalFilteredRecords > pageSize && (
@@ -691,37 +652,16 @@ function AuditDashboard() {
               color="primary"
               size="small"
               variant="outlined"
-              sx={{ 
-                '& .MuiPaginationItem-root': {
-                  fontSize: '0.75rem',
-                  minWidth: '28px',
-                  height: '28px',
-                  margin: '0 2px',
-                  border: '1px solid #e0e0e0',
-                  color: '#666',
-                  '&:hover': {
-                    backgroundColor: '#f5f5f5',
-                    borderColor: '#ccc'
-                  },
-                  '&.Mui-selected': {
-                    backgroundColor: '#1976d2',
-                    color: 'white',
-                    borderColor: '#1976d2',
-                    '&:hover': {
-                      backgroundColor: '#1565c0'
-                    }
-                  }
-                }
-              }}
+              className="standard-pagination"
             />
           )}
           
           {/* Show pagination info on the right */}
-          <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+          <Typography variant="body2" className="standard-pagination-info">
             Showing {startIndex + 1}-{Math.min(endIndex, totalFilteredRecords)} of {totalFilteredRecords} results (sample data)
           </Typography>
-        </Box>
-      </Box>
+        </div>
+      </div>
 
       {/* Event Details Dialog */}
       <Dialog
