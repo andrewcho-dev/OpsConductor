@@ -1136,3 +1136,315 @@ async def get_audit_event_types(
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
+
+
+# PHASE 3: DATA ENRICHMENT ENDPOINTS FOR AUDIT INVESTIGATION
+
+class UserLookupResponse(BaseModel):
+    """Response model for user lookup"""
+    users: Dict[int, Dict[str, Any]] = Field(..., description="User lookup data by ID")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Lookup metadata")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "users": {
+                    "1": {
+                        "id": 1,
+                        "username": "admin",
+                        "email": "admin@example.com",
+                        "role": "administrator",
+                        "display_name": "Administrator"
+                    },
+                    "2": {
+                        "id": 2,
+                        "username": "operator",
+                        "email": "operator@example.com", 
+                        "role": "manager",
+                        "display_name": "System Operator"
+                    }
+                },
+                "metadata": {
+                    "total_users": 2,
+                    "requested_by": "admin",
+                    "timestamp": "2025-01-01T10:30:00Z"
+                }
+            }
+        }
+
+
+class TargetLookupResponse(BaseModel):
+    """Response model for target lookup"""
+    targets: Dict[str, Dict[str, Any]] = Field(..., description="Target lookup data by ID")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Lookup metadata")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "targets": {
+                    "123": {
+                        "id": 123,
+                        "name": "Server-01",
+                        "target_type": "system",
+                        "os_type": "linux",
+                        "environment": "production",
+                        "display_name": "Server-01 (Linux Production)"
+                    },
+                    "124": {
+                        "id": 124,
+                        "name": "DB-Server",
+                        "target_type": "database",
+                        "os_type": "linux",
+                        "environment": "production",
+                        "display_name": "DB-Server (Database Production)"
+                    }
+                },
+                "metadata": {
+                    "total_targets": 2,
+                    "requested_by": "admin",
+                    "timestamp": "2025-01-01T10:30:00Z"
+                }
+            }
+        }
+
+
+@router.get(
+    "/lookups/users",
+    response_model=UserLookupResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get User Lookup Data",
+    description="""
+    Get user lookup data for audit event enrichment.
+    
+    **Purpose:**
+    - Provides user ID to name mapping for audit investigation
+    - Enables user-friendly display of audit events
+    - Supports bulk lookup for efficient data enrichment
+    """,
+    responses={
+        200: {"description": "User lookup data retrieved successfully", "model": UserLookupResponse}
+    }
+)
+async def get_user_lookups(
+    user_ids: Optional[str] = Query(None, description="Comma-separated list of user IDs to lookup"),
+    current_user = Depends(require_audit_permissions),
+    db: Session = Depends(get_db)
+) -> UserLookupResponse:
+    """Get user lookup data for audit event enrichment"""
+    
+    request_logger = RequestLogger(logger, "get_user_lookups")
+    request_logger.log_request_start("GET", "/api/v1/audit/lookups/users", current_user.username)
+    
+    try:
+        from app.services.user_service import UserService
+        
+        # Parse user IDs if provided
+        target_user_ids = None
+        if user_ids:
+            try:
+                target_user_ids = [int(uid.strip()) for uid in user_ids.split(',') if uid.strip()]
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid user IDs format. Use comma-separated integers."
+                )
+        
+        # Get users from database
+        if target_user_ids:
+            # Get specific users
+            users_data = {}
+            for user_id in target_user_ids:
+                user = UserService.get_user_by_id(db, user_id)
+                if user:
+                    users_data[user_id] = {
+                        "id": user.id,
+                        "username": user.username,
+                        "email": user.email,
+                        "role": user.role,
+                        "display_name": f"{user.username} ({user.role})",
+                        "is_active": user.is_active
+                    }
+        else:
+            # Get all users (limited for performance)
+            users = UserService.get_users(db, skip=0, limit=1000)
+            users_data = {}
+            for user in users:
+                users_data[user.id] = {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "role": user.role,
+                    "display_name": f"{user.username} ({user.role})",
+                    "is_active": user.is_active
+                }
+        
+        response = UserLookupResponse(
+            users=users_data,
+            metadata={
+                "total_users": len(users_data),
+                "requested_by": current_user.username,
+                "timestamp": datetime.utcnow().isoformat(),
+                "filtered": bool(user_ids)
+            }
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "User lookup data retrieval successful",
+            extra={
+                "users_count": len(users_data),
+                "filtered": bool(user_ids),
+                "requested_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "User lookup data retrieval error",
+            extra={
+                "error": str(e),
+                "user_ids": user_ids,
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while retrieving user lookup data",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.get(
+    "/lookups/targets",
+    response_model=TargetLookupResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Target Lookup Data",
+    description="""
+    Get target lookup data for audit event enrichment.
+    
+    **Purpose:**
+    - Provides target ID to name mapping for audit investigation
+    - Enables user-friendly display of audit events
+    - Supports bulk lookup for efficient data enrichment
+    """,
+    responses={
+        200: {"description": "Target lookup data retrieved successfully", "model": TargetLookupResponse}
+    }
+)
+async def get_target_lookups(
+    target_ids: Optional[str] = Query(None, description="Comma-separated list of target IDs to lookup"),
+    current_user = Depends(require_audit_permissions),
+    db: Session = Depends(get_db)
+) -> TargetLookupResponse:
+    """Get target lookup data for audit event enrichment"""
+    
+    request_logger = RequestLogger(logger, "get_target_lookups")
+    request_logger.log_request_start("GET", "/api/v1/audit/lookups/targets", current_user.username)
+    
+    try:
+        from app.services.universal_target_service import UniversalTargetService
+        
+        # Parse target IDs if provided
+        target_target_ids = None
+        if target_ids:
+            try:
+                target_target_ids = [int(tid.strip()) for tid in target_ids.split(',') if tid.strip()]
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid target IDs format. Use comma-separated integers."
+                )
+        
+        # Get targets from database
+        target_service = UniversalTargetService(db)
+        
+        if target_target_ids:
+            # Get specific targets
+            targets_data = {}
+            for target_id in target_target_ids:
+                target = target_service.get_target_by_id(target_id)
+                if target:
+                    targets_data[str(target_id)] = {
+                        "id": target.id,
+                        "name": target.name,
+                        "target_type": target.target_type,
+                        "os_type": target.os_type,
+                        "environment": target.environment,
+                        "display_name": f"{target.name} ({target.target_type.title()} {target.environment.title()})",
+                        "is_active": target.is_active,
+                        "status": target.status
+                    }
+        else:
+            # Get all targets (limited for performance)
+            targets = target_service.get_targets_summary()
+            targets_data = {}
+            for target in targets:
+                targets_data[str(target["id"])] = {
+                    "id": target["id"],
+                    "name": target["name"],
+                    "target_type": target["target_type"],
+                    "os_type": target["os_type"],
+                    "environment": target["environment"],
+                    "display_name": f"{target['name']} ({target['target_type'].title()} {target['environment'].title()})",
+                    "is_active": target["is_active"],
+                    "status": target["status"]
+                }
+        
+        response = TargetLookupResponse(
+            targets=targets_data,
+            metadata={
+                "total_targets": len(targets_data),
+                "requested_by": current_user.username,
+                "timestamp": datetime.utcnow().isoformat(),
+                "filtered": bool(target_ids)
+            }
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Target lookup data retrieval successful",
+            extra={
+                "targets_count": len(targets_data),
+                "filtered": bool(target_ids),
+                "requested_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Target lookup data retrieval error",
+            extra={
+                "error": str(e),
+                "target_ids": target_ids,
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while retrieving target lookup data",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )

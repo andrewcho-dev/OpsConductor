@@ -347,9 +347,9 @@ const UniversalTargetList = ({
                     <MenuItem value="" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                       <em>All Status</em>
                     </MenuItem>
-                    <MenuItem value="active" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Active</MenuItem>
-                    <MenuItem value="inactive" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Inactive</MenuItem>
-                    <MenuItem value="maintenance" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Maintenance</MenuItem>
+                    <MenuItem value="active" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>active</MenuItem>
+                    <MenuItem value="inactive" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>inactive</MenuItem>
+                    <MenuItem value="maintenance" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>maintenance</MenuItem>
                   </Select>
                 </FormControl>
               </TableCell>

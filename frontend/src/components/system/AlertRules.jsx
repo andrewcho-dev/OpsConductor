@@ -79,7 +79,7 @@ const AlertRules = () => {
                   </td>
                   <td>
                     <span className={`badge ${rule.is_active ? 'badge-success' : 'badge-error'}`}>
-                      {rule.is_active ? 'Active' : 'Inactive'}
+                      {rule.is_active ? 'active' : 'inactive'}
                     </span>
                   </td>
                   <td>

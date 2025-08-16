@@ -442,3 +442,8 @@
   background: rgba(33, 150, 243, 0.1);
   color: var(--color-info);
 }
+
+/* Global Chip Styling - More Squared Off Ends */
+.MuiChip-root {
+  border-radius: 4px !important; /* Override default pill shape */
+}

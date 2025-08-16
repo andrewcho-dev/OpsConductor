@@ -128,7 +128,7 @@ const TemplateCard = ({ template, onUpdate }) => {
         </div>
         <div className="template-status">
           <span className={`status-badge ${template.is_active ? 'active' : 'inactive'}`}>
-            {template.is_active ? '✅ Active' : '⏸️ Inactive'}
+            {template.is_active ? '✅ active' : '⏸️ inactive'}
           </span>
         </div>
       </div>
@@ -566,9 +566,9 @@ const CreateTemplateModal = ({ onClose, onTemplateCreated }) => {
                     disabled={creating}
                   />
                   <span className="checkmark"></span>
-                  Template is Active
+                  template is active
                 </label>
-                <small>Active templates appear in the template selection list</small>
+                <small>active templates appear in the template selection list</small>
               </div>
             </div>
 

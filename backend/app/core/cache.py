@@ -48,9 +48,24 @@ _redis_client: Optional[redis.Redis] = None
 @lru_cache(maxsize=1)
 def get_redis_config():
     """Get Redis configuration from environment"""
+    # Check for REDIS_URL first, then fall back to individual settings
+    redis_url = os.getenv('REDIS_URL')
+    if redis_url:
+        # Parse redis://redis:6379 format
+        if redis_url.startswith('redis://'):
+            url_parts = redis_url.replace('redis://', '').split(':')
+            host = url_parts[0] if len(url_parts) > 0 else 'localhost'
+            port = int(url_parts[1]) if len(url_parts) > 1 else 6379
+        else:
+            host = 'localhost'
+            port = 6379
+    else:
+        host = os.getenv('REDIS_HOST', 'redis')  # Default to 'redis' service name
+        port = int(os.getenv('REDIS_PORT', 6379))
+    
     return {
-        'host': os.getenv('REDIS_HOST', 'localhost'),
-        'port': int(os.getenv('REDIS_PORT', 6379)),
+        'host': host,
+        'port': port,
         'db': int(os.getenv('REDIS_DB', 0)),
         'password': os.getenv('REDIS_PASSWORD'),
         'decode_responses': True,

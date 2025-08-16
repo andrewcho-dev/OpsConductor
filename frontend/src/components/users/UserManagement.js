@@ -391,7 +391,7 @@ const UserManagement = () => {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={user.is_active ? 'Active' : 'Inactive'}
+                          label={user.is_active ? 'active' : 'inactive'}
                           size="small"
                           className="chip-compact"
                           color={user.is_active ? 'success' : 'default'}
@@ -487,10 +487,10 @@ const UserManagement = () => {
               className="form-control-compact"
               sx={{ fontSize: '0.875rem' }}
             >
-              <MenuItem value="user" sx={{ fontSize: '0.875rem' }}>User</MenuItem>
-              <MenuItem value="manager" sx={{ fontSize: '0.875rem' }}>Manager</MenuItem>
-              <MenuItem value="administrator" sx={{ fontSize: '0.875rem' }}>Administrator</MenuItem>
-              <MenuItem value="guest" sx={{ fontSize: '0.875rem' }}>Guest</MenuItem>
+              <MenuItem value="user" sx={{ fontSize: '0.875rem' }}>user</MenuItem>
+              <MenuItem value="manager" sx={{ fontSize: '0.875rem' }}>manager</MenuItem>
+              <MenuItem value="administrator" sx={{ fontSize: '0.875rem' }}>administrator</MenuItem>
+              <MenuItem value="guest" sx={{ fontSize: '0.875rem' }}>guest</MenuItem>
             </Select>
           </FormControl>
         </DialogContent>

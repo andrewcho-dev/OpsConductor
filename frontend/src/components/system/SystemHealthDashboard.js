@@ -1,181 +1,101 @@
 import React, { useState, useEffect } from 'react';
 import {
   Typography,
+  Button,
+  IconButton,
   CircularProgress,
+  Tooltip,
+  Chip,
+  Box,
+  Paper,
   Grid,
   Card,
   CardContent,
-  Box,
-  Chip,
   LinearProgress,
-  IconButton,
-  Tooltip,
-  Alert,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Divider,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
-  CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
-  Warning as WarningIcon,
-  Computer as ComputerIcon,
-  Storage as StorageIcon,
-  Memory as MemoryIcon,
-  Speed as SpeedIcon,
-  Cloud as CloudIcon,
-  AccountTree as DatabaseIcon,
-  Api as ApiIcon,
-  Widgets as ContainerIcon,
-  Monitor as MonitorHeartIcon,
-  RestartAlt as RestartIcon,
-  Replay as ReloadIcon,
+  People as PeopleIcon,
+  Security as SecurityIcon,
 } from '@mui/icons-material';
 import { useAlert } from '../layout/BottomStatusBar';
-import { useAuth } from '../../contexts/AuthContext';
+import '../../styles/dashboard.css';
 
 const SystemHealthDashboard = () => {
   const { addAlert } = useAlert();
-  const { user } = useAuth();
   const [healthData, setHealthData] = useState(null);
+  const [systemData, setSystemData] = useState(null);
+  const [databaseData, setDatabaseData] = useState(null);
+  const [applicationData, setApplicationData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [restarting, setRestarting] = useState({});
-  
-  // Check if current user is admin
-  const isAdmin = user?.role === 'administrator';
 
   useEffect(() => {
-    fetchSystemHealth();
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchSystemHealth, 30000);
+    fetchAllHealthData();
+    const interval = setInterval(fetchAllHealthData, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchSystemHealth = async () => {
+  const fetchAllHealthData = async () => {
+    if (!refreshing) setRefreshing(true);
+    
     try {
-      const token = localStorage.getItem('access_token');
-      
-      // Fetch both system health and monitoring metrics
-      const [healthResponse, metricsResponse] = await Promise.all([
-        fetch('/api/system-health/health', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+      const [overallRes, systemRes, databaseRes, applicationRes] = await Promise.all([
+        fetch('/api/v2/health/', { 
+          headers: { 'Content-Type': 'application/json' }
         }),
-        fetch('/api/v1/monitoring/metrics', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+        fetch('/api/v2/health/system', { 
+          headers: { 'Content-Type': 'application/json' }
+        }),
+        fetch('/api/v2/health/database', { 
+          headers: { 'Content-Type': 'application/json' }
+        }),
+        fetch('/api/v2/health/application', { 
+          headers: { 'Content-Type': 'application/json' }
         })
       ]);
 
-      if (!healthResponse.ok) {
-        throw new Error(`Health API error! status: ${healthResponse.status}`);
+      if (overallRes.ok) {
+        const data = await overallRes.json();
+        setHealthData(data);
       }
 
-      const healthData = await healthResponse.json();
-      let metricsData = null;
-      
-      if (metricsResponse.ok) {
-        metricsData = await metricsResponse.json();
+      if (systemRes.ok) {
+        const data = await systemRes.json();
+        setSystemData(data);
       }
 
-      // Combine the data
-      const combinedData = {
-        ...healthData,
-        metrics: metricsData
-      };
+      if (databaseRes.ok) {
+        const data = await databaseRes.json();
+        setDatabaseData(data);
+      }
 
-      setHealthData(combinedData);
+      if (applicationRes.ok) {
+        const data = await applicationRes.json();
+        setApplicationData(data);
+      }
+
       setLastUpdated(new Date());
       
-      // Check for critical issues
-      const criticalIssues = healthData.services?.filter(s => s.status === 'critical').length || 0;
-      if (criticalIssues > 0) {
-        addAlert(`${criticalIssues} critical system issues detected`, 'error', 5000);
-      }
-    } catch (err) {
-      console.error('Failed to fetch system health:', err);
-      addAlert('Failed to load system health data', 'error', 5000);
+    } catch (error) {
+      console.error('Failed to fetch health data:', error);
+      addAlert('Failed to fetch system health data', 'error', 5000);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'healthy':
-      case 'running':
-      case 'online':
-        return 'success';
-      case 'warning':
-      case 'degraded':
-        return 'warning';
-      case 'critical':
-      case 'error':
-      case 'offline':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'healthy':
-      case 'running':
-      case 'online':
-        return <CheckCircleIcon fontSize="small" />;
-      case 'warning':
-      case 'degraded':
-        return <WarningIcon fontSize="small" />;
-      case 'critical':
-      case 'error':
-      case 'offline':
-        return <ErrorIcon fontSize="small" />;
-      default:
-        return <ComputerIcon fontSize="small" />;
-    }
-  };
-
-  const formatBytes = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatUptime = (seconds) => {
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    
-    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  };
-
-  const restartContainer = async (containerName) => {
-    if (!isAdmin) {
-      addAlert('Only administrators can restart containers', 'error', 5000);
-      return;
-    }
-
-    setRestarting(prev => ({ ...prev, [containerName]: true }));
-    
+  const handleServiceAction = async (serviceName, action) => {
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`/api/system-health/containers/${containerName}/restart`, {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        addAlert('Authentication required', 'error', 5000);
+        return;
+      }
+
+      const response = await fetch(`/api/v2/health/services/${serviceName}/${action}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -183,88 +103,54 @@ const SystemHealthDashboard = () => {
         }
       });
 
-      const data = await response.json();
-
       if (response.ok) {
-        addAlert(`${containerName} restarted successfully`, 'success', 5000);
-        // Refresh health data after a short delay
-        setTimeout(fetchSystemHealth, 3000);
+        const result = await response.json();
+        addAlert(result.message, 'success', 5000);
+        
+        // Refresh health data after action
+        setTimeout(() => {
+          fetchAllHealthData();
+        }, 2000);
       } else {
-        addAlert(`Failed to restart ${containerName}: ${data.detail}`, 'error', 5000);
+        const error = await response.json();
+        addAlert(error.detail || `Failed to ${action} service`, 'error', 5000);
       }
-    } catch (err) {
-      console.error('Failed to restart container:', err);
-      addAlert(`Failed to restart ${containerName}`, 'error', 5000);
-    } finally {
-      setRestarting(prev => ({ ...prev, [containerName]: false }));
-    }
-  };
-
-  const reloadService = async (serviceName) => {
-    if (!isAdmin) {
-      addAlert('Only administrators can reload services', 'error', 5000);
-      return;
-    }
-
-    setRestarting(prev => ({ ...prev, [serviceName]: true }));
-    
-    try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`/api/system-health/services/${serviceName}/reload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        addAlert(`${serviceName} reloaded successfully`, 'success', 5000);
-        // Refresh health data after a short delay
-        setTimeout(fetchSystemHealth, 3000);
-      } else {
-        addAlert(`Failed to reload ${serviceName}: ${data.detail}`, 'error', 5000);
-      }
-    } catch (err) {
-      console.error('Failed to reload service:', err);
-      addAlert(`Failed to reload ${serviceName}`, 'error', 5000);
-    } finally {
-      setRestarting(prev => ({ ...prev, [serviceName]: false }));
+    } catch (error) {
+      console.error(`Service ${action} error:`, error);
+      addAlert(`Failed to ${action} service: ${error.message}`, 'error', 5000);
     }
   };
 
   if (loading) {
     return (
       <div className="dashboard-container">
-        <div className="page-header">
-          <Typography className="page-title">System Health & Status</Typography>
-        </div>
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-          <CircularProgress />
-          <Typography variant="body2" sx={{ ml: 2 }}>
-            Loading system health data...
+        <div className="loading-container">
+          <CircularProgress size={40} />
+          <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
+            Loading System Health...
           </Typography>
-        </Box>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="dashboard-container">
-      {/* Page Header */}
       <div className="page-header">
         <Typography className="page-title">
-          <MonitorHeartIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-          System Health & Status
+          System Health Dashboard
         </Typography>
         <div className="page-actions">
-          <Tooltip title="Refresh system health">
+          {lastUpdated && (
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', mr: 2 }}>
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </Typography>
+          )}
+          <Tooltip title="Refresh Data">
             <IconButton 
-              className="btn-icon" 
-              onClick={fetchSystemHealth} 
-              disabled={loading}
+              onClick={fetchAllHealthData}
+              disabled={refreshing}
+              className="btn-icon"
               size="small"
             >
               <RefreshIcon fontSize="small" />
@@ -273,337 +159,710 @@ const SystemHealthDashboard = () => {
         </div>
       </div>
 
-      {/* Last Updated */}
-      {lastUpdated && (
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="caption" color="text.secondary">
-            Last updated: {lastUpdated.toLocaleString()}
-          </Typography>
-        </Box>
+      {healthData && (
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-card-content">
+              <div className="stat-icon info">
+                <SecurityIcon fontSize="small" />
+              </div>
+              <div className="stat-details">
+                <h3>{healthData.uptime || 'Unknown'}</h3>
+                <p>Uptime</p>
+              </div>
+            </div>
+          </div>
+
+          {systemData ? (
+            <>
+              <div className="stat-card">
+                <div className="stat-card-content">
+                  <div className={`stat-icon ${systemData.cpu?.usage_percent > 80 ? 'error' : systemData.cpu?.usage_percent > 60 ? 'warning' : 'success'}`}>
+                    <RefreshIcon fontSize="small" />
+                  </div>
+                  <div className="stat-details">
+                    <h3>{systemData.cpu?.usage_percent?.toFixed(1) || 0}%</h3>
+                    <p>CPU Usage</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-card-content">
+                  <div className={`stat-icon ${systemData.memory?.usage_percent > 85 ? 'error' : systemData.memory?.usage_percent > 70 ? 'warning' : 'success'}`}>
+                    <PeopleIcon fontSize="small" />
+                  </div>
+                  <div className="stat-details">
+                    <h3>{systemData.memory?.usage_percent?.toFixed(1) || 0}%</h3>
+                    <p>Memory Usage</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-card-content">
+                  <div className={`stat-icon ${systemData.disk?.usage_percent > 90 ? 'error' : systemData.disk?.usage_percent > 75 ? 'warning' : 'success'}`}>
+                    <SecurityIcon fontSize="small" />
+                  </div>
+                  <div className="stat-details">
+                    <h3>{systemData.disk?.usage_percent?.toFixed(1) || 0}%</h3>
+                    <p>Disk Usage</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-card-content">
+                  <div className="stat-icon success">
+                    <PeopleIcon fontSize="small" />
+                  </div>
+                  <div className="stat-details">
+                    <h3>
+                      {healthData.health_checks?.docker_containers?.details?.summary?.running || 0}/
+                      {healthData.health_checks?.docker_containers?.details?.summary?.total || 0}
+                    </h3>
+                    <p>Containers</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="stat-card">
+                <div className="stat-card-content">
+                  <div className="stat-icon success">
+                    <PeopleIcon fontSize="small" />
+                  </div>
+                  <div className="stat-details">
+                    <h3>
+                      {healthData.health_checks?.docker_containers?.details?.summary?.running || 0}/
+                      {healthData.health_checks?.docker_containers?.details?.summary?.total || 0}
+                    </h3>
+                    <p>Containers</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+
+        </div>
       )}
 
-      {/* System Overview Cards */}
-      <div className="stats-grid">
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon primary">
-              <ComputerIcon fontSize="small" />
+      {/* Docker Containers Section */}
+      {healthData?.health_checks?.docker_containers && (
+        <div className="main-content-card" style={{ marginBottom: '20px' }}>
+          <div className="content-card-header">
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Docker Containers
+            </Typography>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Chip 
+                label={`${healthData.health_checks.docker_containers.details?.summary?.running || 0} Running`}
+                size="small"
+                color="success"
+                variant="outlined"
+              />
+              <Chip 
+                label={`${healthData.health_checks.docker_containers.details?.summary?.total || 0} Total`}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
             </div>
-            <div className="stat-details">
-              <h3>{healthData?.overall_status || 'Unknown'}</h3>
-              <p>System Status</p>
-            </div>
+          </div>
+          <div className="content-card-body">
+            <Grid container spacing={2}>
+              {healthData.health_checks.docker_containers.details?.containers && 
+                Object.entries(healthData.health_checks.docker_containers.details.containers).map(([name, container]) => (
+                  <Grid item xs={12} sm={4} md={3} lg={2} key={name}>
+                    <Paper 
+                      variant="outlined"
+                      sx={{ 
+                        p: 2, 
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        border: container.healthy ? '1px solid #4caf50' : '1px solid #f44336'
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Box 
+                          sx={{ 
+                            width: 8, 
+                            height: 8, 
+                            borderRadius: '50%', 
+                            backgroundColor: container.healthy ? '#4caf50' : '#f44336',
+                            mr: 1 
+                          }} 
+                        />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                          {name.replace('opsconductor-', '')}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        Status: <strong>{container.status}</strong>
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        Health: <strong>{container.health_status}</strong>
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem', mb: 1 }}>
+                        {container.image}
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          sx={{ fontSize: '0.7rem', minWidth: 'auto', px: 1 }}
+                          onClick={() => handleServiceAction(name, 'restart')}
+                        >
+                          Restart
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="warning"
+                          sx={{ fontSize: '0.7rem', minWidth: 'auto', px: 1 }}
+                          onClick={() => handleServiceAction(name, 'stop')}
+                        >
+                          Stop
+                        </Button>
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))
+              }
+            </Grid>
           </div>
         </div>
-        
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon warning">
-              <SpeedIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{healthData?.metrics?.system?.cpu?.percent?.toFixed(1) || healthData?.system_metrics?.cpu_usage || 0}%</h3>
-              <p>CPU Usage</p>
-            </div>
+      )}
+
+      {/* System Services Section */}
+      {healthData?.health_checks?.nginx && (
+        <div className="main-content-card" style={{ marginBottom: '20px' }}>
+          <div className="content-card-header">
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              System Services
+            </Typography>
+          </div>
+          <div className="content-card-body">
+            <Grid container spacing={2}>
+              {/* Nginx Status */}
+              <Grid item xs={12} sm={4} md={3} lg={2}>
+                <Paper variant="outlined" sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Box 
+                      sx={{ 
+                        width: 8, 
+                        height: 8, 
+                        borderRadius: '50%', 
+                        backgroundColor: healthData.health_checks.nginx.healthy ? '#4caf50' : '#f44336',
+                        mr: 1 
+                      }} 
+                    />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      Nginx Proxy
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                    Status: <strong>{healthData.health_checks.nginx.status || 'Unknown'}</strong>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Container: <strong>{healthData.health_checks.nginx.details?.container_name || 'N/A'}</strong>
+                  </Typography>
+                </Paper>
+              </Grid>
+
+              {/* Celery Status */}
+              {healthData.health_checks.celery && (
+                <Grid item xs={12} sm={4} md={3} lg={2}>
+                  <Paper variant="outlined" sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <Box 
+                        sx={{ 
+                          width: 8, 
+                          height: 8, 
+                          borderRadius: '50%', 
+                          backgroundColor: healthData.health_checks.celery.healthy ? '#4caf50' : '#f44336',
+                          mr: 1 
+                        }} 
+                      />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        Task Queue
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                      Workers: <strong>{healthData.health_checks.celery.details?.workers_count || 0}</strong>
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Scheduler: <strong>{healthData.health_checks.celery.details?.scheduler_running ? 'Running' : 'Stopped'}</strong>
+                    </Typography>
+                  </Paper>
+                </Grid>
+              )}
+
+              {/* Volumes Status */}
+              {healthData.health_checks.volumes && (
+                <Grid item xs={12} sm={4} md={3} lg={2}>
+                  <Paper variant="outlined" sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <Box 
+                        sx={{ 
+                          width: 8, 
+                          height: 8, 
+                          borderRadius: '50%', 
+                          backgroundColor: healthData.health_checks.volumes.healthy ? '#4caf50' : '#f44336',
+                          mr: 1 
+                        }} 
+                      />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        Storage
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                      Volumes: <strong>{healthData.health_checks.volumes.details?.volumes_count || 0}</strong>
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Disk: <strong>{healthData.health_checks.volumes.details?.disk_usage?.percent?.toFixed(1) || 0}%</strong>
+                    </Typography>
+                  </Paper>
+                </Grid>
+              )}
+            </Grid>
           </div>
         </div>
-        
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon info">
-              <MemoryIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{healthData?.metrics?.system?.memory?.percent?.toFixed(1) || healthData?.system_metrics?.memory_usage || 0}%</h3>
-              <p>Memory Usage</p>
-            </div>
-          </div>
+      )}
+
+      {/* System Utilities Section */}
+      <div className="main-content-card" style={{ marginBottom: '20px' }}>
+        <div className="content-card-header">
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            System Utilities
+          </Typography>
         </div>
-        
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon error">
-              <StorageIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{healthData?.metrics?.system?.disk?.percent?.toFixed(1) || healthData?.system_metrics?.disk_usage || 0}%</h3>
-              <p>Disk Usage</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon success">
-              <DatabaseIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{healthData?.metrics?.application?.targets?.total || 0}</h3>
-              <p>Total Targets</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon primary">
-              <ApiIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{healthData?.metrics?.application?.jobs?.total || 0}</h3>
-              <p>Total Jobs</p>
-            </div>
-          </div>
+        <div className="content-card-body">
+          <Grid container spacing={2}>
+            {/* System Information */}
+            <Grid item xs={12} sm={4} md={3} lg={2}>
+              <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  System Info
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  CPU: {healthData?.health_checks?.system?.details?.cpu_usage?.toFixed(1) || 0}%
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Memory: {healthData?.health_checks?.system?.details?.memory_usage?.toFixed(1) || 0}%
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Disk: {healthData?.health_checks?.system?.details?.disk_usage?.toFixed(1) || 0}%
+                </Typography>
+              </Paper>
+            </Grid>
+
+            {/* Database Info */}
+            <Grid item xs={12} sm={4} md={3} lg={2}>
+              <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  Database
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Status: <strong>{healthData?.health_checks?.database?.status || 'Unknown'}</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Response: {healthData?.health_checks?.database?.response_time?.toFixed(1) || 0}ms
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Health: <strong>{healthData?.health_checks?.database?.healthy ? 'Good' : 'Issues'}</strong>
+                </Typography>
+              </Paper>
+            </Grid>
+
+            {/* Redis Info */}
+            <Grid item xs={12} sm={4} md={3} lg={2}>
+              <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  Cache (Redis)
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Status: <strong>{healthData?.health_checks?.redis?.status || 'Unknown'}</strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Response: {healthData?.health_checks?.redis?.response_time?.toFixed(1) || 0}ms
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Health: <strong>{healthData?.health_checks?.redis?.healthy ? 'Good' : 'Issues'}</strong>
+                </Typography>
+              </Paper>
+            </Grid>
+
+            {/* System Actions */}
+            <Grid item xs={12} sm={4} md={3} lg={2}>
+              <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  Quick Actions
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 'auto' }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                    onClick={() => fetchAllHealthData()}
+                    disabled={refreshing}
+                  >
+                    Refresh All
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    onClick={() => handleServiceAction('nginx', 'restart')}
+                  >
+                    Restart Nginx
+                  </Button>
+                </Box>
+              </Paper>
+            </Grid>
+          </Grid>
         </div>
       </div>
 
-      <Grid container spacing={3}>
-        {/* Container Health */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: 400 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                <ContainerIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Container Health
-              </Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Container</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Uptime</TableCell>
-                      <TableCell>Health</TableCell>
-                      {isAdmin && <TableCell>Actions</TableCell>}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {healthData?.containers?.map((container, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{container.name}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={container.status} 
-                            color={getStatusColor(container.status)}
-                            size="small"
-                            icon={getStatusIcon(container.status)}
-                          />
-                        </TableCell>
-                        <TableCell>{formatUptime(container.uptime || 0)}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={container.health || 'Unknown'} 
-                            color={getStatusColor(container.health)}
-                            size="small"
-                          />
-                        </TableCell>
-                        {isAdmin && (
-                          <TableCell>
-                            <Tooltip title="Restart Container">
-                              <IconButton
-                                size="small"
-                                onClick={() => restartContainer(container.name)}
-                                disabled={restarting[container.name]}
-                                color="primary"
-                              >
-                                {restarting[container.name] ? (
-                                  <CircularProgress size={16} />
-                                ) : (
-                                  <RestartIcon fontSize="small" />
-                                )}
-                              </IconButton>
-                            </Tooltip>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Service Health */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: 400 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                <CloudIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Service Health
-              </Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Service</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Response Time</TableCell>
-                      <TableCell>Last Check</TableCell>
-                      {isAdmin && <TableCell>Actions</TableCell>}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {healthData?.services?.map((service, index) => {
-                      // Map service names to reload endpoints
-                      const getServiceKey = (serviceName) => {
-                        if (serviceName.includes('Nginx')) return 'nginx';
-                        if (serviceName.includes('Celery Workers')) return 'celery-workers';
-                        if (serviceName.includes('Celery Scheduler')) return 'celery-scheduler';
-                        if (serviceName.includes('FastAPI')) return 'backend';
-                        if (serviceName.includes('React')) return 'frontend';
-                        return null;
-                      };
-                      
-                      const serviceKey = getServiceKey(service.name);
-                      const canReload = serviceKey && ['nginx', 'celery-workers', 'celery-scheduler', 'backend', 'frontend'].includes(serviceKey);
-                      
-                      return (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <Box display="flex" alignItems="center">
-                              {service.type === 'database' ? <DatabaseIcon fontSize="small" sx={{ mr: 1 }} /> : <ApiIcon fontSize="small" sx={{ mr: 1 }} />}
-                              {service.name}
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={service.status} 
-                              color={getStatusColor(service.status)}
-                              size="small"
-                              icon={getStatusIcon(service.status)}
-                            />
-                          </TableCell>
-                          <TableCell>{service.response_time || 'N/A'}</TableCell>
-                          <TableCell>
-                            <Typography variant="caption">
-                              {service.last_check ? new Date(service.last_check).toLocaleString() : 'Never'}
-                            </Typography>
-                          </TableCell>
-                          {isAdmin && (
-                            <TableCell>
-                              {canReload ? (
-                                <Tooltip title={`Reload ${service.name}`}>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => reloadService(serviceKey)}
-                                    disabled={restarting[serviceKey]}
-                                    color="secondary"
-                                  >
-                                    {restarting[serviceKey] ? (
-                                      <CircularProgress size={16} />
-                                    ) : (
-                                      <ReloadIcon fontSize="small" />
-                                    )}
-                                  </IconButton>
-                                </Tooltip>
-                              ) : (
-                                <Typography variant="caption" color="text.secondary">
-                                  N/A
-                                </Typography>
-                              )}
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Performance Metrics */}
-        {healthData?.metrics?.performance && (
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  <SpeedIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  Performance Metrics (24h)
+      <Grid container spacing={2}>
+        {healthData?.health_checks && (
+          <Grid item xs={12} md={2}>
+            <div className="main-content-card" style={{ height: '100%' }}>
+              <div className="content-card-header">
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  Service Status
                 </Typography>
-                <Grid container spacing={3}>
-                  <Grid item xs={12} md={3}>
-                    <Box textAlign="center">
-                      <Typography variant="h4" color="primary">
-                        {healthData.metrics.performance.avg_execution_time_seconds || 0}s
+                <Chip 
+                  label={`${Object.keys(healthData.health_checks).length} Services`}
+                  size="small"
+                  className="chip-compact"
+                  color="primary"
+                  variant="outlined"
+                />
+              </div>
+              <div className="content-card-body">
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+                  {Object.entries(healthData.health_checks).map(([service, status]) => (
+                    <Paper 
+                      key={service}
+                      variant="outlined"
+                      sx={{ 
+                        p: 1, 
+                        display: 'flex', 
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center'
+                      }}
+                    >
+                      <SecurityIcon 
+                        color={status.healthy ? 'success' : 'error'} 
+                        fontSize="small" 
+                        sx={{ mb: 0.5 }}
+                      />
+                      <Typography variant="caption" sx={{ fontWeight: 500, textTransform: 'capitalize', fontSize: '0.7rem' }}>
+                        {service}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Avg Execution Time
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                        {status.status}
                       </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <Box textAlign="center">
-                      <Typography variant="h4" color="success.main">
-                        {healthData.metrics.performance.success_rate_24h || 0}%
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Success Rate
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <Box textAlign="center">
-                      <Typography variant="h4" color="info.main">
-                        {healthData.metrics.performance.total_executions_24h || 0}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Total Executions
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <Box textAlign="center">
-                      <Typography variant="h4" color="success.main">
-                        {healthData.metrics.performance.successful_executions_24h || 0}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Successful Executions
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
+                      {status.response_time && (
+                        <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.disabled' }}>
+                          {status.response_time.toFixed(1)}ms
+                        </Typography>
+                      )}
+                    </Paper>
+                  ))}
+                </Box>
+              </div>
+            </div>
           </Grid>
         )}
 
-        {/* System Alerts */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                System Alerts & Warnings
+        <Grid item xs={12} md={2}>
+          <div className="main-content-card" style={{ height: '100%' }}>
+            <div className="content-card-header">
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                System Information
               </Typography>
-              {healthData?.alerts?.length > 0 ? (
-                <Box>
-                  {healthData.alerts.map((alert, index) => (
-                    <Alert 
-                      key={index}
-                      severity={alert.severity || 'info'}
-                      sx={{ mb: 1 }}
-                    >
-                      <Typography variant="body2">
-                        <strong>{alert.title}</strong>: {alert.message}
+            </div>
+            <div className="content-card-body">
+              {healthData ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                      Status
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                      {healthData.status || 'Unknown'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                      Environment
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                      {healthData.environment || 'Unknown'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                      Version
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                      {healthData.version || 'Unknown'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                      Uptime
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                      {healthData.uptime || 'Unknown'}
+                    </Typography>
+                  </Box>
+                  {healthData.timestamp && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                        Last Updated
                       </Typography>
-                      {alert.timestamp && (
-                        <Typography variant="caption" color="text.secondary">
-                          {new Date(alert.timestamp).toLocaleString()}
-                        </Typography>
-                      )}
-                    </Alert>
-                  ))}
+                      <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                        {new Date(healthData.timestamp).toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
+                  
+                  {/* Test Progress Bar */}
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                      System Health
+                    </Typography>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={healthData.status === 'healthy' ? 100 : 50}
+                      color={healthData.status === 'healthy' ? 'success' : 'warning'}
+                      sx={{ height: 4, borderRadius: 2, mt: 0.5 }}
+                    />
+                  </Box>
                 </Box>
               ) : (
-                <Alert severity="success">
-                  No system alerts. All systems are operating normally.
-                </Alert>
+                <Typography variant="body2">
+                  No system information available
+                </Typography>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </Grid>
+
+        {/* System Resources Card */}
+        {systemData && (
+          <Grid item xs={12} md={2}>
+            <div className="main-content-card" style={{ height: '100%' }}>
+              <div className="content-card-header">
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  System Resources
+                </Typography>
+                <Chip 
+                  label={systemData.status?.toUpperCase() || 'UNKNOWN'}
+                  size="small"
+                  className="chip-compact"
+                  color="primary"
+                />
+              </div>
+              <div className="content-card-body">
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {/* CPU */}
+                  <Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 500, fontSize: '0.65rem' }}>
+                        CPU
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>
+                        {systemData.cpu?.usage_percent?.toFixed(1) || 0}%
+                      </Typography>
+                    </Box>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={systemData.cpu?.usage_percent || 0}
+                      color={systemData.cpu?.usage_percent > 80 ? 'error' : systemData.cpu?.usage_percent > 60 ? 'warning' : 'success'}
+                      sx={{ height: 4, borderRadius: 2 }}
+                    />
+                  </Box>
+
+                  {/* Memory */}
+                  <Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 500, fontSize: '0.65rem' }}>
+                        Memory
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>
+                        {systemData.memory?.usage_percent?.toFixed(1) || 0}%
+                      </Typography>
+                    </Box>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={systemData.memory?.usage_percent || 0}
+                      color={systemData.memory?.usage_percent > 85 ? 'error' : systemData.memory?.usage_percent > 70 ? 'warning' : 'success'}
+                      sx={{ height: 4, borderRadius: 2 }}
+                    />
+                  </Box>
+
+                  {/* Disk */}
+                  <Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 500, fontSize: '0.65rem' }}>
+                        Disk
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>
+                        {systemData.disk?.usage_percent?.toFixed(1) || 0}%
+                      </Typography>
+                    </Box>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={systemData.disk?.usage_percent || 0}
+                      color={systemData.disk?.usage_percent > 90 ? 'error' : systemData.disk?.usage_percent > 75 ? 'warning' : 'success'}
+                      sx={{ height: 4, borderRadius: 2 }}
+                    />
+                  </Box>
+
+                  {/* System Info */}
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Platform</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>{systemData.platform || 'Unknown'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Processes</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>{systemData.processes || 0}</Typography>
+                  </Box>
+                </Box>
+              </div>
+            </div>
+          </Grid>
+        )}
+
+        {/* Database Health Card */}
+        {databaseData && (
+          <Grid item xs={12} md={2}>
+            <div className="main-content-card" style={{ height: '100%' }}>
+              <div className="content-card-header">
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  Database Health
+                </Typography>
+                <Chip 
+                  label={databaseData.status?.toUpperCase() || 'UNKNOWN'}
+                  size="small"
+                  className="chip-compact"
+                  color="primary"
+                />
+              </div>
+              <div className="content-card-body">
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Connection</Typography>
+                    <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.7rem' }}>
+                      <SecurityIcon 
+                        color={databaseData.connection?.healthy ? 'success' : 'error'} 
+                        fontSize="small" 
+                        sx={{ fontSize: '12px' }}
+                      />
+                      {databaseData.connection?.status || 'Unknown'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Response Time</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                      {databaseData.connection?.response_time?.toFixed(1) || 0}ms
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Pool Size</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                      {databaseData.connection_pool?.pool_size || 0}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Active Connections</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                      {databaseData.statistics?.active_connections || 0}
+                    </Typography>
+                  </Box>
+                </Box>
+              </div>
+            </div>
+          </Grid>
+        )}
+
+        {/* Application Health Card */}
+        {applicationData && (
+          <Grid item xs={12} md={2}>
+            <div className="main-content-card" style={{ height: '100%' }}>
+              <div className="content-card-header">
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  Application Health
+                </Typography>
+                <Chip 
+                  label={applicationData.status?.toUpperCase() || 'UNKNOWN'}
+                  size="small"
+                  className="chip-compact"
+                  color="primary"
+                />
+              </div>
+              <div className="content-card-body">
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Avg Response Time</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                      {applicationData.metrics?.avg_response_time?.toFixed(1) || 0}ms
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Success Rate</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                      {applicationData.performance?.success_rate?.toFixed(1) || 0}%
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Total Requests</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                      {applicationData.metrics?.total_requests?.toLocaleString() || 0}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Error Rate</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                      {(applicationData.performance?.error_rate * 100)?.toFixed(2) || 0}%
+                    </Typography>
+                  </Box>
+
+                  {/* Service Status */}
+                  {applicationData.services && (
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem', fontWeight: 600 }}>
+                        Services
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                        {Object.entries(applicationData.services).map(([service, status]) => (
+                          <Chip
+                            key={service}
+                            label={service}
+                            color={status === 'running' || status === 'connected' ? 'success' : 'error'}
+                            variant="outlined"
+                            size="small"
+                            sx={{ fontSize: '0.6rem', height: '16px' }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              </div>
+            </div>
+          </Grid>
+        )}
+
       </Grid>
     </div>
   );

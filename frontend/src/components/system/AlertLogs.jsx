@@ -86,7 +86,7 @@ const AlertLogs = () => {
                   </td>
                   <td>
                     <span className={`badge ${alert.is_resolved ? 'badge-success' : 'badge-warning'}`}>
-                      {alert.is_resolved ? 'Resolved' : 'Active'}
+                      {alert.is_resolved ? 'resolved' : 'active'}
                     </span>
                   </td>
                   <td>

@@ -12,42 +12,38 @@ export const getRowStyling = (status, theme) => {
   
   const statusLower = status.toLowerCase();
   
-  // ONLY Critical/Error/Failed states get RED coloring - truly significant problems
+  // ONLY Critical/Error/Failed states get MORE DISTINCTIVE RED coloring - truly significant problems
   if (['critical', 'error', 'failed', 'terminated'].includes(statusLower)) {
     return {
-      backgroundColor: theme.palette.error.light,
-      color: theme.palette.error.contrastText,
+      backgroundColor: 'rgba(244, 67, 54, 0.22)', // More distinctive red tint
+      color: 'inherit', // Keep normal text color
       '& .MuiTableCell-root': {
-        color: theme.palette.error.contrastText,
+        color: 'inherit',
         fontFamily: 'monospace',
         padding: '4px 8px'
       },
       '&:hover': {
-        backgroundColor: theme.palette.error.contrastText,
-        color: theme.palette.error.light,
+        backgroundColor: 'rgba(244, 67, 54, 0.28)', // More visible on hover
         '& .MuiTableCell-root': {
-          color: theme.palette.error.light,
           backgroundColor: 'transparent'
         }
       }
     };
   }
   
-  // ONLY High severity warnings get YELLOW coloring - significant issues requiring attention
+  // ONLY High severity warnings get MORE DISTINCTIVE ORANGE coloring - significant issues requiring attention
   if (['high'].includes(statusLower)) {
     return {
-      backgroundColor: theme.palette.warning.light,
-      color: theme.palette.warning.contrastText,
+      backgroundColor: 'rgba(255, 152, 0, 0.18)', // More distinctive orange tint
+      color: 'inherit', // Keep normal text color
       '& .MuiTableCell-root': {
-        color: theme.palette.warning.contrastText,
+        color: 'inherit',
         fontFamily: 'monospace',
         padding: '4px 8px'
       },
       '&:hover': {
-        backgroundColor: theme.palette.warning.contrastText,
-        color: theme.palette.warning.light,
+        backgroundColor: 'rgba(255, 152, 0, 0.25)', // More visible on hover
         '& .MuiTableCell-root': {
-          color: theme.palette.warning.light,
           backgroundColor: 'transparent'
         }
       }
