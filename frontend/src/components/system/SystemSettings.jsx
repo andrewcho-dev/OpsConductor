@@ -436,22 +436,25 @@ const SystemSettings = () => {
         </div>
       </div>
 
-      {/* Core System Configuration Card - Following Design Guidelines */}
-      <div className="main-content-card fade-in" style={{ marginBottom: '16px' }}>
-        <div className="content-card-header">
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
-            <SettingsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-            CORE SYSTEM CONFIGURATION
-          </Typography>
-          {currentTime && (
-            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-              Current: {currentTime.local} ({currentTime.is_dst ? 'DST' : 'STD'})
-            </Typography>
-          )}
-        </div>
+      {/* Core System Configuration & Appearance - Side by Side */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 3fr', gap: '16px', marginBottom: '16px' }}>
         
-        <div className="content-card-body">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+        {/* Core System Configuration Card */}
+        <div className="main-content-card fade-in">
+          <div className="content-card-header">
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+              <SettingsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+              CORE SYSTEM CONFIGURATION
+            </Typography>
+            {currentTime && (
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                Current: {currentTime.local} ({currentTime.is_dst ? 'DST' : 'STD'})
+              </Typography>
+            )}
+          </div>
+          
+          <div className="content-card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
             
             {/* Timezone Settings - Enhanced but following design */}
             <div>
@@ -543,80 +546,89 @@ const SystemSettings = () => {
                 }}
               />
             </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Appearance & Interface Card */}
-      <div className="main-content-card fade-in" style={{ marginBottom: '16px' }}>
-        <div className="content-card-header">
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
-            <PaletteIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-            APPEARANCE & INTERFACE
-          </Typography>
-        </div>
-        
-        <div className="content-card-body">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-            
-            {/* Theme Settings */}
-            <div>
-              <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
-                <PaletteIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Theme Selection
-              </Typography>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-                {Object.entries(availableThemes).map(([key, themeData]) => (
-                  <Button
-                    key={key}
-                    variant={theme === key ? 'contained' : 'outlined'}
-                    onClick={() => handleThemeChange(key)}
-                    size="small"
-                    sx={{ 
-                      height: '32px',
-                      fontSize: '0.75rem',
-                      backgroundColor: theme === key ? themeData.primaryColor : 'transparent',
-                      borderColor: themeData.primaryColor,
-                      '&:hover': {
-                        backgroundColor: themeData.primaryColor,
-                        opacity: 0.8
-                      }
-                    }}
-                  >
-                    {themeData.name}
-                  </Button>
-                ))}
+        {/* Appearance & Interface Card */}
+        <div className="main-content-card fade-in">
+          <div className="content-card-header">
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+              <PaletteIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+              APPEARANCE & INTERFACE
+            </Typography>
+          </div>
+          
+          <div className="content-card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+              
+              {/* Theme Settings */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <PaletteIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Theme Selection
+                </Typography>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                  {Object.entries(availableThemes).map(([key, themeData]) => (
+                    <Button
+                      key={key}
+                      variant={theme === key ? 'contained' : 'outlined'}
+                      onClick={() => handleThemeChange(key)}
+                      size="small"
+                      sx={{ 
+                        height: '32px',
+                        fontSize: '0.75rem',
+                        backgroundColor: theme === key ? themeData.primaryColor : 'transparent',
+                        borderColor: themeData.primaryColor,
+                        '&:hover': {
+                          backgroundColor: themeData.primaryColor,
+                          opacity: 0.8
+                        }
+                      }}
+                    >
+                      {themeData.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Interface Settings */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <PaletteIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Interface Settings
+                </Typography>
+                <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 1 }}>
+                  Language: English (US)
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                  Additional interface options coming soon
+                </Typography>
+              </div>
+
+              {/* Empty Third Column */}
+              <div>
+                {/* Intentionally empty */}
               </div>
             </div>
-
-            {/* System Information */}
-            <div>
-              <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
-                <ComputerIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-                System Information
-              </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 1 }}>
-                Platform: OpsConductor v{stats.version}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                Enterprise Automation Orchestration Platform
-              </Typography>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Advanced System Configuration Card */}
-      <div className="main-content-card fade-in" style={{ marginBottom: '16px' }}>
-        <div className="content-card-header">
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
-            <SettingsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-            ADVANCED SYSTEM CONFIGURATION
-          </Typography>
-        </div>
+      {/* Advanced System Configuration & System Maintenance - Side by Side */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 3fr', gap: '16px', marginBottom: '16px' }}>
         
-        <div className="content-card-body">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+        {/* Advanced System Configuration Card */}
+        <div className="main-content-card fade-in">
+          <div className="content-card-header">
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+              <SettingsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+              ADVANCED SYSTEM CONFIGURATION
+            </Typography>
+          </div>
+          
+          <div className="content-card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
             
             {/* Database Settings */}
             <div>
@@ -734,12 +746,12 @@ const SystemSettings = () => {
                 Advanced logging settings
               </Typography>
             </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* System Maintenance Card */}
-      <div className="main-content-card fade-in" style={{ marginBottom: '16px' }}>
+        {/* System Maintenance Card */}
+        <div className="main-content-card fade-in">
         <div className="content-card-header">
           <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
             <SettingsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
@@ -748,115 +760,68 @@ const SystemSettings = () => {
         </div>
         
         <div className="content-card-body">
-          <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 2, color: 'text.secondary' }}>
-            System maintenance operations for backup, restore, and service management.
-          </Typography>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
             
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<StorageIcon fontSize="small" />}
-              size="small"
-              sx={{ height: '40px', fontSize: '0.75rem' }}
-              onClick={() => addAlert('Backup functionality coming soon', 'info', 3000)}
-            >
-              Create Backup
-            </Button>
-            
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<ComputerIcon fontSize="small" />}
-              size="small"
-              sx={{ height: '40px', fontSize: '0.75rem' }}
-              onClick={() => addAlert('Restore functionality coming soon', 'info', 3000)}
-            >
-              Restore Configuration
-            </Button>
-            
-            <Button
-              fullWidth
-              variant="outlined"
-              color="warning"
-              startIcon={<RefreshIcon fontSize="small" />}
-              size="small"
-              sx={{ height: '40px', fontSize: '0.75rem' }}
-              onClick={() => addAlert('Service restart functionality coming soon', 'info', 3000)}
-            >
-              Restart Services
-            </Button>
-            
-            <Button
-              fullWidth
-              variant="outlined"
-              color="error"
-              startIcon={<SettingsIcon fontSize="small" />}
-              size="small"
-              sx={{ height: '40px', fontSize: '0.75rem' }}
-              onClick={() => addAlert('Maintenance mode functionality coming soon', 'info', 3000)}
-            >
-              Maintenance Mode
-            </Button>
-          </div>
-        </div>
-      </div>
+            {/* Backup & Restore */}
+            <div>
+              <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                <StorageIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                Backup & Restore
+              </Typography>
+              <div style={{ display: 'grid', gap: '8px' }}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<StorageIcon fontSize="small" />}
+                  size="small"
+                  sx={{ height: '32px', fontSize: '0.75rem' }}
+                  onClick={() => addAlert('Backup functionality coming soon', 'info', 3000)}
+                >
+                  Create Backup
+                </Button>
+                
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<ComputerIcon fontSize="small" />}
+                  size="small"
+                  sx={{ height: '32px', fontSize: '0.75rem' }}
+                  onClick={() => addAlert('Restore functionality coming soon', 'info', 3000)}
+                >
+                  Restore Configuration
+                </Button>
+              </div>
+            </div>
 
-      {/* System Monitoring Card */}
-      <div className="main-content-card fade-in">
-        <div className="content-card-header">
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
-            <StorageIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-            SYSTEM MONITORING & STATUS
-          </Typography>
-        </div>
-        
-        <div className="content-card-body">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            
-            {/* System Health */}
+            {/* Maintenance Operations */}
             <div>
               <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
                 <SettingsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-                System Health
+                Maintenance Operations
               </Typography>
-              <Typography variant="body2" sx={{ color: 'success.main', fontSize: '0.8rem' }}>
-                ● {stats.health}
+              <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 1 }}>
+                System maintenance tools
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                All services operational
+                Additional operations coming soon
               </Typography>
             </div>
 
-            {/* Resource Usage */}
+            {/* System Status */}
             <div>
               <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
                 <ComputerIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Resource Usage
+                System Status
               </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
-                CPU: {stats.cpu}% | Memory: {stats.memory}%
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                Disk: {stats.disk}% used
-              </Typography>
-            </div>
-
-            {/* System Uptime */}
-            <div>
-              <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
-                <AccessTimeIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-                System Uptime
-              </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
-                {stats.uptime}
+              <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 1 }}>
+                Status: Operational
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                Since last restart
+                All systems running normally
               </Typography>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>

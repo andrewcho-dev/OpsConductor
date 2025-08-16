@@ -19,6 +19,8 @@ import time
 import json
 import asyncio
 import psutil
+import subprocess
+import docker
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from functools import wraps
@@ -180,7 +182,11 @@ class HealthManagementService:
                 "redis": await self._check_redis_health(),
                 "system": await self._check_system_health(),
                 "application": await self._check_application_health(),
-                "services": await self._check_services_health()
+                "services": await self._check_services_health(),
+                "docker_containers": await self._check_docker_containers_health(),
+                "nginx": await self._check_nginx_health(),
+                "celery": await self._check_celery_health(),
+                "volumes": await self._check_volumes_health()
             }
             
             # Calculate overall health status
@@ -617,18 +623,21 @@ class HealthManagementService:
             
             return {
                 "healthy": True,
-                "response_time": response_time,
                 "status": "connected",
-                "last_check": datetime.utcnow().isoformat()
+                "response_time": response_time,
+                "last_check": datetime.utcnow(),
+                "error": None,
+                "details": None
             }
             
         except Exception as e:
             return {
                 "healthy": False,
-                "response_time": 0,
                 "status": "disconnected",
+                "response_time": 0,
+                "last_check": datetime.utcnow(),
                 "error": str(e),
-                "last_check": datetime.utcnow().isoformat()
+                "details": None
             }
     
     async def _check_redis_health(self) -> Dict[str, Any]:
@@ -639,7 +648,10 @@ class HealthManagementService:
                 return {
                     "healthy": False,
                     "status": "not_configured",
-                    "last_check": datetime.utcnow().isoformat()
+                    "response_time": 0,
+                    "last_check": datetime.utcnow(),
+                    "error": "Redis not configured",
+                    "details": None
                 }
             
             start_time = time.time()
@@ -651,18 +663,21 @@ class HealthManagementService:
             
             return {
                 "healthy": True,
-                "response_time": response_time,
                 "status": "connected",
-                "last_check": datetime.utcnow().isoformat()
+                "response_time": response_time,
+                "last_check": datetime.utcnow(),
+                "error": None,
+                "details": None
             }
             
         except Exception as e:
             return {
                 "healthy": False,
-                "response_time": 0,
                 "status": "disconnected",
+                "response_time": 0,
+                "last_check": datetime.utcnow(),
                 "error": str(e),
-                "last_check": datetime.utcnow().isoformat()
+                "details": None
             }
     
     async def _check_system_health(self) -> Dict[str, Any]:
@@ -679,42 +694,274 @@ class HealthManagementService:
             
             overall_healthy = cpu_healthy and memory_healthy and disk_healthy
             
+            status = "healthy" if overall_healthy else "degraded"
             return {
                 "healthy": overall_healthy,
-                "cpu_healthy": cpu_healthy,
-                "memory_healthy": memory_healthy,
-                "disk_healthy": disk_healthy,
-                "cpu_usage": cpu_usage,
-                "memory_usage": memory.percent,
-                "disk_usage": (disk.used / disk.total) * 100,
-                "last_check": datetime.utcnow().isoformat()
+                "status": status,
+                "response_time": None,
+                "last_check": datetime.utcnow(),
+                "error": None,
+                "details": {
+                    "cpu_healthy": cpu_healthy,
+                    "memory_healthy": memory_healthy,
+                    "disk_healthy": disk_healthy,
+                    "cpu_usage": cpu_usage,
+                    "memory_usage": memory.percent,
+                    "disk_usage": (disk.used / disk.total) * 100
+                }
             }
             
         except Exception as e:
             return {
                 "healthy": False,
+                "status": "error",
+                "response_time": None,
+                "last_check": datetime.utcnow(),
                 "error": str(e),
-                "last_check": datetime.utcnow().isoformat()
+                "details": None
             }
     
     async def _check_application_health(self) -> Dict[str, Any]:
         """Check application component health"""
         return {
             "healthy": True,
-            "api_server": {"healthy": True, "status": "running"},
-            "task_queue": {"healthy": True, "status": "running"},
-            "scheduler": {"healthy": True, "status": "running"},
-            "last_check": datetime.utcnow().isoformat()
+            "status": "running",
+            "response_time": None,
+            "last_check": datetime.utcnow(),
+            "error": None,
+            "details": {
+                "api_server": {"healthy": True, "status": "running"},
+                "task_queue": {"healthy": True, "status": "running"},
+                "scheduler": {"healthy": True, "status": "running"}
+            }
         }
     
     async def _check_services_health(self) -> Dict[str, Any]:
         """Check external services health"""
         return {
             "healthy": True,
-            "external_apis": {"healthy": True, "count": 0},
-            "integrations": {"healthy": True, "count": 0},
-            "last_check": datetime.utcnow().isoformat()
+            "status": "running",
+            "response_time": None,
+            "last_check": datetime.utcnow(),
+            "error": None,
+            "details": {
+                "external_apis": {"healthy": True, "count": 0},
+                "integrations": {"healthy": True, "count": 0}
+            }
         }
+    
+    async def _check_docker_containers_health(self) -> Dict[str, Any]:
+        """Check Docker container health status"""
+        try:
+            client = docker.from_env()
+            containers = client.containers.list(all=True)
+            
+            container_status = {}
+            healthy_count = 0
+            total_count = len(containers)
+            
+            for container in containers:
+                name = container.name
+                status = container.status
+                health = container.attrs.get('State', {}).get('Health', {})
+                health_status = health.get('Status', 'unknown') if health else 'no-healthcheck'
+                
+                is_healthy = status == 'running' and health_status in ['healthy', 'no-healthcheck']
+                if is_healthy:
+                    healthy_count += 1
+                
+                container_status[name] = {
+                    "healthy": is_healthy,
+                    "status": status,
+                    "health_status": health_status,
+                    "image": container.image.tags[0] if container.image.tags else "unknown",
+                    "created": container.attrs.get('Created', ''),
+                    "ports": container.attrs.get('NetworkSettings', {}).get('Ports', {}),
+                    "last_check": datetime.utcnow().isoformat()
+                }
+            
+            all_healthy = healthy_count == total_count
+            return {
+                "healthy": all_healthy,
+                "status": "healthy" if all_healthy else "degraded",
+                "response_time": None,
+                "last_check": datetime.utcnow(),
+                "error": None,
+                "details": {
+                    "containers": container_status,
+                    "summary": {
+                        "total": total_count,
+                        "running": len([c for c in containers if c.status == 'running']),
+                        "healthy": healthy_count,
+                        "unhealthy": total_count - healthy_count
+                    }
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Docker health check failed: {str(e)}")
+            return {
+                "healthy": False,
+                "status": "error",
+                "response_time": None,
+                "last_check": datetime.utcnow(),
+                "error": str(e),
+                "details": {
+                    "containers": {},
+                    "summary": {"total": 0, "running": 0, "healthy": 0, "unhealthy": 0}
+                }
+            }
+    
+    async def _check_nginx_health(self) -> Dict[str, Any]:
+        """Check Nginx status and configuration"""
+        try:
+            # Check if nginx container is running
+            client = docker.from_env()
+            nginx_container = None
+            
+            for container in client.containers.list():
+                if 'nginx' in container.name.lower():
+                    nginx_container = container
+                    break
+            
+            if not nginx_container:
+                return {
+                    "healthy": False,
+                    "status": "container_not_found",
+                    "response_time": None,
+                    "last_check": datetime.utcnow(),
+                    "error": "Nginx container not found",
+                    "details": None
+                }
+            
+            # Check container status
+            is_running = nginx_container.status == 'running'
+            
+            return {
+                "healthy": is_running,
+                "status": nginx_container.status,
+                "response_time": None,
+                "last_check": datetime.utcnow(),
+                "error": None if is_running else f"Container status: {nginx_container.status}",
+                "details": {
+                    "container_name": nginx_container.name,
+                    "image": nginx_container.image.tags[0] if nginx_container.image.tags else "unknown",
+                    "ports": nginx_container.attrs.get('NetworkSettings', {}).get('Ports', {})
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Nginx health check failed: {str(e)}")
+            return {
+                "healthy": False,
+                "status": "check_failed",
+                "response_time": None,
+                "last_check": datetime.utcnow(),
+                "error": str(e),
+                "details": None
+            }
+    
+    async def _check_celery_health(self) -> Dict[str, Any]:
+        """Check Celery worker and queue health"""
+        try:
+            # Check celery containers
+            client = docker.from_env()
+            celery_containers = []
+            
+            for container in client.containers.list():
+                if 'celery' in container.name.lower() or 'scheduler' in container.name.lower():
+                    celery_containers.append({
+                        "name": container.name,
+                        "status": container.status,
+                        "healthy": container.status == 'running'
+                    })
+            
+            # TODO: Add actual Celery queue monitoring when Celery is properly configured
+            # For now, just check container status
+            
+            all_healthy = all(c["healthy"] for c in celery_containers)
+            
+            return {
+                "healthy": all_healthy,
+                "status": "healthy" if all_healthy else "degraded",
+                "response_time": None,
+                "last_check": datetime.utcnow(),
+                "error": None,
+                "details": {
+                    "containers": celery_containers,
+                    "workers_count": len([c for c in celery_containers if 'worker' in c['name']]),
+                    "scheduler_running": any('scheduler' in c['name'] and c['healthy'] for c in celery_containers)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Celery health check failed: {str(e)}")
+            return {
+                "healthy": False,
+                "status": "error",
+                "response_time": None,
+                "last_check": datetime.utcnow(),
+                "error": str(e),
+                "details": {
+                    "containers": [],
+                    "workers_count": 0,
+                    "scheduler_running": False
+                }
+            }
+    
+    async def _check_volumes_health(self) -> Dict[str, Any]:
+        """Check Docker volumes and disk usage"""
+        try:
+            client = docker.from_env()
+            volumes = client.volumes.list()
+            
+            volume_info = {}
+            for volume in volumes:
+                volume_info[volume.name] = {
+                    "driver": volume.attrs.get('Driver', 'unknown'),
+                    "mountpoint": volume.attrs.get('Mountpoint', ''),
+                    "created": volume.attrs.get('CreatedAt', ''),
+                    "scope": volume.attrs.get('Scope', 'unknown')
+                }
+            
+            # Get disk usage for main filesystem
+            disk_usage = psutil.disk_usage('/')
+            
+            disk_percent = (disk_usage.used / disk_usage.total) * 100
+            disk_healthy = disk_percent < 90
+            
+            return {
+                "healthy": disk_healthy,
+                "status": "healthy" if disk_healthy else "warning",
+                "response_time": None,
+                "last_check": datetime.utcnow(),
+                "error": None if disk_healthy else f"Disk usage high: {disk_percent:.1f}%",
+                "details": {
+                    "volumes": volume_info,
+                    "volumes_count": len(volumes),
+                    "disk_usage": {
+                        "total": disk_usage.total,
+                        "used": disk_usage.used,
+                        "free": disk_usage.free,
+                        "percent": disk_percent
+                    }
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Volumes health check failed: {str(e)}")
+            return {
+                "healthy": False,
+                "status": "error",
+                "response_time": None,
+                "last_check": datetime.utcnow(),
+                "error": str(e),
+                "details": {
+                    "volumes": {},
+                    "volumes_count": 0,
+                    "disk_usage": {}
+                }
+            }
     
     async def _calculate_overall_health_status(self, health_checks: Dict[str, Any]) -> str:
         """Calculate overall health status from individual checks"""

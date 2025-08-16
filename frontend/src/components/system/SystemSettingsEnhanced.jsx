@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { authService } from '../../services/authService';
 import { 
   Typography, 
   Button, 
@@ -74,27 +74,10 @@ import {
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAlert } from '../layout/BottomStatusBar';
 
-// Create axios instance with auth configuration
-const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || '',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+// Use centralized auth service with automatic token refresh and logout
+const api = authService.api;
 
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+
 
 const SystemSettingsEnhanced = () => {
   // Existing state
@@ -515,214 +498,224 @@ const SystemSettingsEnhanced = () => {
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <SettingsIcon sx={{ mr: 2 }} />
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Core System Configuration
+              Core System Configuration & Appearance
             </Typography>
           </Box>
         </AccordionSummary>
         <AccordionDetails>
-          <Grid container spacing={3}>
-            {/* Timezone Configuration */}
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardHeader 
-                  avatar={<PublicIcon />}
-                  title="Timezone Configuration"
-                  subheader={currentTime && `Current: ${currentTime.local} (${currentTime.is_dst ? 'DST' : 'STD'})`}
-                />
-                <CardContent>
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel>System Timezone</InputLabel>
-                    <Select
-                      value={selectedTimezone}
-                      label="System Timezone"
-                      onChange={(e) => setSelectedTimezone(e.target.value)}
-                    >
-                      {Object.entries(timezones).map(([tz, display]) => (
-                        <MenuItem key={tz} value={tz}>
-                          {display}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  {systemInfo?.timezone && (
-                    <Typography variant="caption" color="text.secondary">
-                      UTC Offset: {systemInfo.timezone.current_utc_offset}
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Security Settings */}
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardHeader 
-                  avatar={<SecurityIcon />}
-                  title="Security Settings"
-                  subheader="Session and authentication"
-                />
-                <CardContent>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Session Timeout (seconds)"
-                    type="number"
-                    value={sessionTimeout}
-                    onChange={(e) => setSessionTimeout(parseInt(e.target.value))}
-                    inputProps={{ min: 60, max: 86400 }}
-                    sx={{ mb: 2 }}
-                  />
-                  <Typography variant="caption" color="text.secondary">
-                    Range: 60 seconds to 24 hours
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Job Management */}
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardHeader 
-                  avatar={<CloudQueueIcon />}
-                  title="Job Management"
-                  subheader="Execution and logging"
-                />
-                <CardContent>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Max Concurrent Jobs"
-                    type="number"
-                    value={maxJobs}
-                    onChange={(e) => setMaxJobs(parseInt(e.target.value))}
-                    inputProps={{ min: 1, max: 1000 }}
-                    sx={{ mb: 2 }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Log Retention (days)"
-                    type="number"
-                    value={logRetention}
-                    onChange={(e) => setLogRetention(parseInt(e.target.value))}
-                    inputProps={{ min: 1, max: 3650 }}
-                  />
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </AccordionDetails>
-      </Accordion>
-
-      {/* Appearance & Interface */}
-      <Accordion 
-        expanded={expandedSections.appearance} 
-        onChange={() => handleSectionToggle('appearance')}
-        sx={{ mb: 2 }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <PaletteIcon sx={{ mr: 2 }} />
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Appearance & Interface
-            </Typography>
-          </Box>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Grid container spacing={3}>
-            {/* Theme Settings */}
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardHeader 
-                  avatar={<PaletteIcon />}
-                  title="Theme Settings"
-                  subheader="Visual appearance"
-                />
-                <CardContent>
-                  <Grid container spacing={2}>
-                    {Object.entries(availableThemes).map(([key, themeData]) => (
-                      <Grid item xs={6} key={key}>
-                        <Button
-                          fullWidth
-                          variant={theme === key ? 'contained' : 'outlined'}
-                          onClick={() => handleThemeChange(key)}
-                          sx={{ 
-                            height: '60px',
-                            backgroundColor: theme === key ? themeData.primaryColor : 'transparent',
-                            borderColor: themeData.primaryColor,
-                            '&:hover': {
-                              backgroundColor: themeData.primaryColor,
-                              opacity: 0.8
-                            }
-                          }}
+          <Grid container spacing={2}>
+            {/* Core System Configuration - 3 columns */}
+            <Grid item xs={12} md={3}>
+              <Grid container spacing={2}>
+                {/* Timezone Configuration */}
+                <Grid item xs={12}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardHeader 
+                      avatar={<PublicIcon />}
+                      title="Timezone"
+                      subheader={currentTime && `${currentTime.local.split(' ')[1]}`}
+                      titleTypographyProps={{ variant: 'subtitle2', fontWeight: 600 }}
+                      subheaderTypographyProps={{ variant: 'caption' }}
+                    />
+                    <CardContent sx={{ pt: 0 }}>
+                      <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                        <InputLabel>System Timezone</InputLabel>
+                        <Select
+                          value={selectedTimezone}
+                          label="System Timezone"
+                          onChange={(e) => setSelectedTimezone(e.target.value)}
                         >
-                          {themeData.name}
-                        </Button>
+                          {Object.entries(timezones).map(([tz, display]) => (
+                            <MenuItem key={tz} value={tz}>
+                              {display}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      {systemInfo?.timezone && (
+                        <Typography variant="caption" color="text.secondary">
+                          UTC: {systemInfo.timezone.current_utc_offset}
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Security Settings */}
+                <Grid item xs={12}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardHeader 
+                      avatar={<SecurityIcon />}
+                      title="Security"
+                      subheader="Session timeout"
+                      titleTypographyProps={{ variant: 'subtitle2', fontWeight: 600 }}
+                      subheaderTypographyProps={{ variant: 'caption' }}
+                    />
+                    <CardContent sx={{ pt: 0 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Session Timeout (sec)"
+                        type="number"
+                        value={sessionTimeout}
+                        onChange={(e) => setSessionTimeout(parseInt(e.target.value))}
+                        inputProps={{ min: 60, max: 86400 }}
+                        sx={{ mb: 1 }}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        60s - 24h range
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Job Management */}
+                <Grid item xs={12}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardHeader 
+                      avatar={<CloudQueueIcon />}
+                      title="Jobs"
+                      subheader="Execution limits"
+                      titleTypographyProps={{ variant: 'subtitle2', fontWeight: 600 }}
+                      subheaderTypographyProps={{ variant: 'caption' }}
+                    />
+                    <CardContent sx={{ pt: 0 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Max Concurrent"
+                        type="number"
+                        value={maxJobs}
+                        onChange={(e) => setMaxJobs(parseInt(e.target.value))}
+                        inputProps={{ min: 1, max: 1000 }}
+                        sx={{ mb: 1 }}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Log Retention (days)"
+                        type="number"
+                        value={logRetention}
+                        onChange={(e) => setLogRetention(parseInt(e.target.value))}
+                        inputProps={{ min: 1, max: 3650 }}
+                      />
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </Grid>
+
+            {/* Appearance & Interface - 2 columns */}
+            <Grid item xs={12} md={2}>
+              <Grid container spacing={2}>
+                {/* Theme Settings */}
+                <Grid item xs={12}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardHeader 
+                      avatar={<PaletteIcon />}
+                      title="Theme"
+                      subheader="Visual style"
+                      titleTypographyProps={{ variant: 'subtitle2', fontWeight: 600 }}
+                      subheaderTypographyProps={{ variant: 'caption' }}
+                    />
+                    <CardContent sx={{ pt: 0 }}>
+                      <Grid container spacing={1}>
+                        {Object.entries(availableThemes).map(([key, themeData]) => (
+                          <Grid item xs={6} key={key}>
+                            <Button
+                              fullWidth
+                              size="small"
+                              variant={theme === key ? 'contained' : 'outlined'}
+                              onClick={() => handleThemeChange(key)}
+                              sx={{ 
+                                height: '40px',
+                                fontSize: '0.7rem',
+                                backgroundColor: theme === key ? themeData.primaryColor : 'transparent',
+                                borderColor: themeData.primaryColor,
+                                '&:hover': {
+                                  backgroundColor: themeData.primaryColor,
+                                  opacity: 0.8
+                                }
+                              }}
+                            >
+                              {themeData.name}
+                            </Button>
+                          </Grid>
+                        ))}
                       </Grid>
-                    ))}
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
+                    </CardContent>
+                  </Card>
+                </Grid>
 
-            {/* UI Settings */}
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardHeader 
-                  avatar={<LanguageIcon />}
-                  title="Interface Settings"
-                  subheader="Language and format"
-                />
-                <CardContent>
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel>Language</InputLabel>
-                    <Select value="en" label="Language">
-                      <MenuItem value="en">English</MenuItem>
-                      <MenuItem value="es">Español</MenuItem>
-                      <MenuItem value="fr">Français</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Date Format</InputLabel>
-                    <Select value="MM/DD/YYYY" label="Date Format">
-                      <MenuItem value="MM/DD/YYYY">MM/DD/YYYY</MenuItem>
-                      <MenuItem value="DD/MM/YYYY">DD/MM/YYYY</MenuItem>
-                      <MenuItem value="YYYY-MM-DD">YYYY-MM-DD</MenuItem>
-                    </Select>
-                  </FormControl>
-                </CardContent>
-              </Card>
-            </Grid>
+                {/* UI Settings */}
+                <Grid item xs={12}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardHeader 
+                      avatar={<LanguageIcon />}
+                      title="Interface"
+                      subheader="Language & format"
+                      titleTypographyProps={{ variant: 'subtitle2', fontWeight: 600 }}
+                      subheaderTypographyProps={{ variant: 'caption' }}
+                    />
+                    <CardContent sx={{ pt: 0 }}>
+                      <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                        <InputLabel>Language</InputLabel>
+                        <Select value="en" label="Language">
+                          <MenuItem value="en">English</MenuItem>
+                          <MenuItem value="es">Español</MenuItem>
+                          <MenuItem value="fr">Français</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Date Format</InputLabel>
+                        <Select value="MM/DD/YYYY" label="Date Format">
+                          <MenuItem value="MM/DD/YYYY">MM/DD/YYYY</MenuItem>
+                          <MenuItem value="DD/MM/YYYY">DD/MM/YYYY</MenuItem>
+                          <MenuItem value="YYYY-MM-DD">YYYY-MM-DD</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </CardContent>
+                  </Card>
+                </Grid>
 
-            {/* Notification Settings */}
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardHeader 
-                  avatar={<NotificationsIcon />}
-                  title="Notifications"
-                  subheader="Alert preferences"
-                />
-                <CardContent>
-                  <Stack spacing={2}>
-                    <FormControlLabel
-                      control={<Switch defaultChecked />}
-                      label="System Alerts"
+                {/* Notification Settings */}
+                <Grid item xs={12}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardHeader 
+                      avatar={<NotificationsIcon />}
+                      title="Notifications"
+                      subheader="Alert settings"
+                      titleTypographyProps={{ variant: 'subtitle2', fontWeight: 600 }}
+                      subheaderTypographyProps={{ variant: 'caption' }}
                     />
-                    <FormControlLabel
-                      control={<Switch defaultChecked />}
-                      label="Job Notifications"
-                    />
-                    <FormControlLabel
-                      control={<Switch />}
-                      label="Email Notifications"
-                    />
-                  </Stack>
-                </CardContent>
-              </Card>
+                    <CardContent sx={{ pt: 0 }}>
+                      <Stack spacing={1}>
+                        <FormControlLabel
+                          control={<Switch defaultChecked size="small" />}
+                          label="System Alerts"
+                          componentsProps={{ typography: { variant: 'caption' } }}
+                        />
+                        <FormControlLabel
+                          control={<Switch defaultChecked size="small" />}
+                          label="Job Notifications"
+                          componentsProps={{ typography: { variant: 'caption' } }}
+                        />
+                        <FormControlLabel
+                          control={<Switch size="small" />}
+                          label="Email Notifications"
+                          componentsProps={{ typography: { variant: 'caption' } }}
+                        />
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
             </Grid>
           </Grid>
         </AccordionDetails>
       </Accordion>
+
+
 
       {/* Advanced System Configuration */}
       <Accordion 
@@ -734,7 +727,7 @@ const SystemSettingsEnhanced = () => {
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <BuildIcon sx={{ mr: 2 }} />
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Advanced System Configuration
+              Advanced Configuration & Maintenance
             </Typography>
             <Chip 
               label="Advanced" 
@@ -750,295 +743,185 @@ const SystemSettingsEnhanced = () => {
             These settings can significantly impact system performance. Change with caution.
           </Alert>
           
-          <Grid container spacing={3}>
-            {/* Database Configuration */}
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardHeader 
-                  avatar={<DatabaseIcon />}
-                  title="Database Settings"
-                  subheader="Connection and performance"
-                />
-                <CardContent>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Connection Pool Size"
-                    type="number"
-                    value={databaseConfig.poolSize}
-                    onChange={(e) => setDatabaseConfig(prev => ({ ...prev, poolSize: parseInt(e.target.value) }))}
-                    sx={{ mb: 2 }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Query Timeout (seconds)"
-                    type="number"
-                    value={databaseConfig.timeout}
-                    onChange={(e) => setDatabaseConfig(prev => ({ ...prev, timeout: parseInt(e.target.value) }))}
-                    sx={{ mb: 2 }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Health Check Interval (seconds)"
-                    type="number"
-                    value={databaseConfig.healthCheckInterval}
-                    onChange={(e) => setDatabaseConfig(prev => ({ ...prev, healthCheckInterval: parseInt(e.target.value) }))}
-                  />
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Performance Settings */}
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardHeader 
-                  avatar={<SpeedIcon />}
-                  title="Performance Settings"
-                  subheader="Resource allocation"
-                />
-                <CardContent>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Worker Processes"
-                    type="number"
-                    value={performanceConfig.workerCount}
-                    onChange={(e) => setPerformanceConfig(prev => ({ ...prev, workerCount: parseInt(e.target.value) }))}
-                    sx={{ mb: 2 }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Memory Limit (MB)"
-                    type="number"
-                    value={performanceConfig.memoryLimit}
-                    onChange={(e) => setPerformanceConfig(prev => ({ ...prev, memoryLimit: parseInt(e.target.value) }))}
-                    sx={{ mb: 2 }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Cache Size (MB)"
-                    type="number"
-                    value={performanceConfig.cacheSize}
-                    onChange={(e) => setPerformanceConfig(prev => ({ ...prev, cacheSize: parseInt(e.target.value) }))}
-                  />
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Logging Configuration */}
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardHeader 
-                  avatar={<VisibilityIcon />}
-                  title="Logging Settings"
-                  subheader="Debug and monitoring"
-                />
-                <CardContent>
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel>Log Level</InputLabel>
-                    <Select
-                      value={loggingConfig.level}
-                      label="Log Level"
-                      onChange={(e) => setLoggingConfig(prev => ({ ...prev, level: e.target.value }))}
-                    >
-                      <MenuItem value="DEBUG">DEBUG</MenuItem>
-                      <MenuItem value="INFO">INFO</MenuItem>
-                      <MenuItem value="WARNING">WARNING</MenuItem>
-                      <MenuItem value="ERROR">ERROR</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel>Log Format</InputLabel>
-                    <Select
-                      value={loggingConfig.format}
-                      label="Log Format"
-                      onChange={(e) => setLoggingConfig(prev => ({ ...prev, format: e.target.value }))}
-                    >
-                      <MenuItem value="json">JSON</MenuItem>
-                      <MenuItem value="text">Plain Text</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Log Rotation</InputLabel>
-                    <Select
-                      value={loggingConfig.rotation}
-                      label="Log Rotation"
-                      onChange={(e) => setLoggingConfig(prev => ({ ...prev, rotation: e.target.value }))}
-                    >
-                      <MenuItem value="daily">Daily</MenuItem>
-                      <MenuItem value="weekly">Weekly</MenuItem>
-                      <MenuItem value="monthly">Monthly</MenuItem>
-                    </Select>
-                  </FormControl>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </AccordionDetails>
-      </Accordion>
-
-      {/* System Maintenance */}
-      <Accordion 
-        expanded={expandedSections.maintenance} 
-        onChange={() => handleSectionToggle('maintenance')}
-        sx={{ mb: 2 }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <BuildIcon sx={{ mr: 2 }} />
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              System Maintenance
-            </Typography>
-            <Chip 
-              label="Admin Only" 
-              size="small" 
-              color="error" 
-              sx={{ ml: 2 }} 
-            />
-          </Box>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Alert severity="error" sx={{ mb: 3 }}>
-            <AlertTitle>Maintenance Operations</AlertTitle>
-            These operations can affect system availability. Use with extreme caution.
-          </Alert>
-          
-          <Grid container spacing={3}>
+          <Grid container spacing={2}>
+            {/* Advanced System Configuration - 3 columns */}
             <Grid item xs={12} md={3}>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<BackupIcon />}
-                onClick={() => handleConfirmAction('backup', 'Create Configuration Backup', 'This will create a backup of all system configurations.')}
-                sx={{ mb: 2, height: '60px' }}
-              >
-                Backup Configuration
-              </Button>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<UploadIcon />}
-                sx={{ mb: 2, height: '60px' }}
-              >
-                Restore Configuration
-              </Button>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Button
-                fullWidth
-                variant="outlined"
-                color="warning"
-                startIcon={<RestartAltIcon />}
-                onClick={() => handleConfirmAction('restart', 'Restart System Services', 'This will restart all system services. Users may experience temporary downtime.')}
-                sx={{ mb: 2, height: '60px' }}
-              >
-                Restart Services
-              </Button>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Button
-                fullWidth
-                variant="outlined"
-                color="error"
-                startIcon={<BuildIcon />}
-                onClick={() => handleConfirmAction('maintenance', 'Toggle Maintenance Mode', 'This will put the system in maintenance mode, blocking user access.')}
-                sx={{ mb: 2, height: '60px' }}
-              >
-                Maintenance Mode
-              </Button>
-            </Grid>
-          </Grid>
-
-          {/* System Information */}
-          <Card sx={{ mt: 3 }}>
-            <CardHeader 
-              title="System Information"
-              subheader="Detailed system status and configuration"
-            />
-            <CardContent>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <List dense>
-                    <ListItem>
-                      <ListItemIcon><ComputerIcon /></ListItemIcon>
-                      <ListItemText 
-                        primary="Platform" 
-                        secondary={systemStatus?.system_info?.platform || 'N/A'} 
+                {/* Database Configuration */}
+                <Grid item xs={12}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardHeader 
+                      avatar={<DatabaseIcon />}
+                      title="Database"
+                      subheader="Connection settings"
+                      titleTypographyProps={{ variant: 'subtitle2', fontWeight: 600 }}
+                      subheaderTypographyProps={{ variant: 'caption' }}
+                    />
+                    <CardContent sx={{ pt: 0 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Pool Size"
+                        type="number"
+                        value={databaseConfig.poolSize}
+                        onChange={(e) => setDatabaseConfig(prev => ({ ...prev, poolSize: parseInt(e.target.value) }))}
+                        sx={{ mb: 1 }}
                       />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemIcon><MemoryIcon /></ListItemIcon>
-                      <ListItemText 
-                        primary="Architecture" 
-                        secondary={systemStatus?.system_info?.architecture || 'N/A'} 
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Timeout (sec)"
+                        type="number"
+                        value={databaseConfig.timeout}
+                        onChange={(e) => setDatabaseConfig(prev => ({ ...prev, timeout: parseInt(e.target.value) }))}
+                        sx={{ mb: 1 }}
                       />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemIcon><DnsIcon /></ListItemIcon>
-                      <ListItemText 
-                        primary="Python Version" 
-                        secondary={systemStatus?.system_info?.python_version || 'N/A'} 
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Health Check (sec)"
+                        type="number"
+                        value={databaseConfig.healthCheckInterval}
+                        onChange={(e) => setDatabaseConfig(prev => ({ ...prev, healthCheckInterval: parseInt(e.target.value) }))}
                       />
-                    </ListItem>
-                  </List>
+                    </CardContent>
+                  </Card>
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <List dense>
-                    <ListItem>
-                      <ListItemIcon><DatabaseIcon /></ListItemIcon>
-                      <ListItemText 
-                        primary="Database Status" 
-                        secondary={systemStatus?.service_status?.database?.status || 'N/A'} 
+
+                {/* Performance Settings */}
+                <Grid item xs={12}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardHeader 
+                      avatar={<SpeedIcon />}
+                      title="Performance"
+                      subheader="Resource allocation"
+                      titleTypographyProps={{ variant: 'subtitle2', fontWeight: 600 }}
+                      subheaderTypographyProps={{ variant: 'caption' }}
+                    />
+                    <CardContent sx={{ pt: 0 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Workers"
+                        type="number"
+                        value={performanceConfig.workerCount}
+                        onChange={(e) => setPerformanceConfig(prev => ({ ...prev, workerCount: parseInt(e.target.value) }))}
+                        sx={{ mb: 1 }}
                       />
-                      <ListItemSecondaryAction>
-                        <Chip 
-                          size="small" 
-                          label={systemStatus?.service_status?.database?.healthy ? 'Healthy' : 'Unhealthy'}
-                          color={systemStatus?.service_status?.database?.healthy ? 'success' : 'error'}
-                        />
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                    <ListItem>
-                      <ListItemIcon><CloudQueueIcon /></ListItemIcon>
-                      <ListItemText 
-                        primary="Redis Status" 
-                        secondary={systemStatus?.service_status?.redis?.status || 'N/A'} 
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Memory (MB)"
+                        type="number"
+                        value={performanceConfig.memoryLimit}
+                        onChange={(e) => setPerformanceConfig(prev => ({ ...prev, memoryLimit: parseInt(e.target.value) }))}
+                        sx={{ mb: 1 }}
                       />
-                      <ListItemSecondaryAction>
-                        <Chip 
-                          size="small" 
-                          label={systemStatus?.service_status?.redis?.healthy ? 'Healthy' : 'Unhealthy'}
-                          color={systemStatus?.service_status?.redis?.healthy ? 'success' : 'error'}
-                        />
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                    <ListItem>
-                      <ListItemIcon><SpeedIcon /></ListItemIcon>
-                      <ListItemText 
-                        primary="Task Queue Status" 
-                        secondary={systemStatus?.service_status?.task_queue?.status || 'N/A'} 
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Cache (MB)"
+                        type="number"
+                        value={performanceConfig.cacheSize}
+                        onChange={(e) => setPerformanceConfig(prev => ({ ...prev, cacheSize: parseInt(e.target.value) }))}
                       />
-                      <ListItemSecondaryAction>
-                        <Chip 
-                          size="small" 
-                          label={systemStatus?.service_status?.task_queue?.healthy ? 'Healthy' : 'Unhealthy'}
-                          color={systemStatus?.service_status?.task_queue?.healthy ? 'success' : 'error'}
-                        />
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  </List>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Logging Configuration */}
+                <Grid item xs={12}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardHeader 
+                      avatar={<VisibilityIcon />}
+                      title="Logging"
+                      subheader="Debug & monitoring"
+                      titleTypographyProps={{ variant: 'subtitle2', fontWeight: 600 }}
+                      subheaderTypographyProps={{ variant: 'caption' }}
+                    />
+                    <CardContent sx={{ pt: 0 }}>
+                      <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                        <InputLabel>Level</InputLabel>
+                        <Select
+                          value={loggingConfig.level}
+                          label="Level"
+                          onChange={(e) => setLoggingConfig(prev => ({ ...prev, level: e.target.value }))}
+                        >
+                          <MenuItem value="DEBUG">DEBUG</MenuItem>
+                          <MenuItem value="INFO">INFO</MenuItem>
+                          <MenuItem value="WARNING">WARNING</MenuItem>
+                          <MenuItem value="ERROR">ERROR</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                        <InputLabel>Format</InputLabel>
+                        <Select
+                          value={loggingConfig.format}
+                          label="Format"
+                          onChange={(e) => setLoggingConfig(prev => ({ ...prev, format: e.target.value }))}
+                        >
+                          <MenuItem value="json">JSON</MenuItem>
+                          <MenuItem value="text">Text</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Rotation</InputLabel>
+                        <Select
+                          value={loggingConfig.rotation}
+                          label="Rotation"
+                          onChange={(e) => setLoggingConfig(prev => ({ ...prev, rotation: e.target.value }))}
+                        >
+                          <MenuItem value="daily">Daily</MenuItem>
+                          <MenuItem value="weekly">Weekly</MenuItem>
+                          <MenuItem value="monthly">Monthly</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </CardContent>
+                  </Card>
                 </Grid>
               </Grid>
-            </CardContent>
-          </Card>
+            </Grid>
+
+            {/* System Maintenance & Operations - 1 column */}
+            <Grid item xs={12} md={1}>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardHeader 
+                      avatar={<BackupIcon />}
+                      title="Maintenance"
+                      subheader="Config operations"
+                      titleTypographyProps={{ variant: 'subtitle2', fontWeight: 600 }}
+                      subheaderTypographyProps={{ variant: 'caption' }}
+                    />
+                    <CardContent sx={{ pt: 0 }}>
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        startIcon={<BackupIcon />}
+                        onClick={() => handleConfirmAction('backup', 'Create Configuration Backup', 'This will create a backup of all system configurations.')}
+                        sx={{ mb: 1, height: '40px', fontSize: '0.7rem' }}
+                      >
+                        Backup
+                      </Button>
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        startIcon={<UploadIcon />}
+                        sx={{ height: '40px', fontSize: '0.7rem' }}
+                      >
+                        Restore
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </Grid>
+          </Grid>
         </AccordionDetails>
       </Accordion>
+
+
 
       {/* Action Buttons */}
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 4 }}>
