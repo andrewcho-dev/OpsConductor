@@ -28,6 +28,7 @@ import {
   CardContent,
   TablePagination,
   TableSortLabel,
+  Pagination,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -227,15 +228,9 @@ const UserManagementSimplified = () => {
   }, [filteredAndSortedUsers, page, rowsPerPage]);
 
   return (
-    <Box sx={{ 
-      height: '100vh', 
-      display: 'flex', 
-      flexDirection: 'column',
-      backgroundColor: 'background.default',
-      padding: 2
-    }}>
+    <div className="datatable-page-container">
       {/* Page Header */}
-      <div className="page-header">
+      <div className="datatable-page-header">
         <Typography className="page-title">
           User Management
         </Typography>
@@ -272,49 +267,41 @@ const UserManagementSimplified = () => {
       </div>
 
       {/* User Accounts Table */}
-      <Box sx={{ 
-        mt: 2, 
-        flex: 1, 
-        display: 'flex', 
-        flexDirection: 'column',
-        minHeight: 0 // Important for flex child to shrink
-      }}>
+      <div className="datatable-content-area">
 
         <TableContainer 
           component={Paper} 
           variant="outlined"
+          className="datatable-table-container"
           sx={{ 
-            flex: 1, // Take up remaining space in flex container
-            minHeight: '400px',
-            overflow: 'auto', // Only the table scrolls, not the page
-            border: '1px solid', 
-            borderColor: 'divider',
-            borderRadius: 1
+            height: 'auto !important',
+            '& .MuiPaper-root': { height: 'auto !important' },
+            '& .MuiTable-root': { height: 'auto !important' }
           }}
         >
           <Table size="small">
             <TableHead>
               {/* Column Headers */}
               <TableRow sx={{ backgroundColor: 'grey.100' }}>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
                   ID
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
                   Username
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
                   Email
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
                   Role
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
                   Status
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
                   Last Login
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
                   Actions
                 </TableCell>
               </TableRow>
@@ -446,7 +433,7 @@ const UserManagementSimplified = () => {
                 </TableRow>
               ) : (
                 paginatedUsers.map((user) => (
-                  <TableRow key={user.id} hover>
+                  <TableRow key={user.id} hover sx={{ height: '32px !important', '& .MuiTableCell-root': { height: '32px !important', padding: '2px 4px !important' } }}>
                     <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', padding: '4px 8px' }}>
                       {user.id}
                     </TableCell>
@@ -457,24 +444,10 @@ const UserManagementSimplified = () => {
                       {user.email}
                     </TableCell>
                     <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', padding: '4px 8px' }}>
-                      <Chip
-                        label={user.role}
-                        size="small"
-                        sx={{ fontSize: '0.7rem' }}
-                        color={
-                          user.role === 'administrator' ? 'error' :
-                          user.role === 'manager' ? 'warning' :
-                          user.role === 'user' ? 'primary' : 'default'
-                        }
-                      />
+                      {user.role}
                     </TableCell>
                     <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', padding: '4px 8px' }}>
-                      <Chip
-                        label={user.is_active ? 'active' : 'inactive'}
-                        size="small"
-                        sx={{ fontSize: '0.7rem' }}
-                        color={user.is_active ? 'success' : 'default'}
-                      />
+                      {user.is_active ? 'active' : 'inactive'}
                     </TableCell>
                     <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', padding: '4px 8px' }}>
                       {user.last_login 
@@ -486,7 +459,7 @@ const UserManagementSimplified = () => {
                       <IconButton
                         size="small"
                         onClick={() => handleOpenDialog(user)}
-                        sx={{ marginRight: 0.5 }}
+                        sx={{ padding: '2px', marginRight: 0.5 }}
                       >
                         <EditIcon fontSize="small" />
                       </IconButton>
@@ -494,6 +467,7 @@ const UserManagementSimplified = () => {
                         size="small"
                         onClick={() => handleDeleteUser(user.id)}
                         color="error"
+                        sx={{ padding: '2px' }}
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
@@ -505,22 +479,81 @@ const UserManagementSimplified = () => {
           </Table>
         </TableContainer>
         
-        {/* Pagination */}
-        <TablePagination
-          component="div"
-          count={filteredAndSortedUsers.length}
-          page={page}
-          onPageChange={handleChangePage}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          rowsPerPageOptions={[5, 10, 25, 50]}
-          sx={{ 
-            borderTop: '1px solid', 
-            borderColor: 'divider',
-            backgroundColor: 'background.paper'
-          }}
-        />
-      </Box>
+        {/* Pagination Controls */}
+        <div className="datatable-pagination-area">
+          {/* Page Size Selector */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+              Show:
+            </Typography>
+            <Select
+              value={rowsPerPage}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setPage(0); // Reset to first page
+              }}
+              size="small"
+              sx={{ 
+                minWidth: '70px',
+                '& .MuiSelect-select': {
+                  fontSize: '0.75rem',
+                  py: 0.5
+                }
+              }}
+            >
+              <MenuItem value={25}>25</MenuItem>
+              <MenuItem value={50}>50</MenuItem>
+              <MenuItem value={100}>100</MenuItem>
+              <MenuItem value={200}>200</MenuItem>
+              <MenuItem value={500}>500</MenuItem>
+            </Select>
+            <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+              per page
+            </Typography>
+          </Box>
+
+          {/* Pagination */}
+          {filteredAndSortedUsers.length > rowsPerPage && (
+            <Pagination
+              count={Math.ceil(filteredAndSortedUsers.length / rowsPerPage)}
+              page={page + 1}
+              onChange={(event, newPage) => {
+                setPage(newPage - 1);
+              }}
+              color="primary"
+              size="small"
+              variant="outlined"
+              sx={{ 
+                '& .MuiPaginationItem-root': {
+                  fontSize: '0.75rem',
+                  minWidth: '28px',
+                  height: '28px',
+                  margin: '0 2px',
+                  border: '1px solid #e0e0e0',
+                  color: '#666',
+                  '&:hover': {
+                    backgroundColor: '#f5f5f5',
+                    borderColor: '#ccc'
+                  },
+                  '&.Mui-selected': {
+                    backgroundColor: '#1976d2',
+                    color: 'white',
+                    borderColor: '#1976d2',
+                    '&:hover': {
+                      backgroundColor: '#1565c0'
+                    }
+                  }
+                }
+              }}
+            />
+          )}
+          
+          {/* Show pagination info on the right */}
+          <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+            Showing {page * rowsPerPage + 1}-{Math.min((page + 1) * rowsPerPage, filteredAndSortedUsers.length)} of {filteredAndSortedUsers.length} users
+          </Typography>
+        </div>
+      </div>
 
       {/* User Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
@@ -579,7 +612,7 @@ const UserManagementSimplified = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 };
 
