@@ -45,7 +45,7 @@ const JobDashboard = () => {
         try {
             setLoading(true);
             
-            const response = await authService.api.get('/jobs/');
+            const response = await authService.api.get('/v2/jobs/');
             setJobs(response.data.jobs || []);
             addAlert(`Loaded ${response.data.jobs?.length || 0} jobs successfully`, 'success', 3000);
         } catch (error) {
@@ -62,19 +62,21 @@ const JobDashboard = () => {
 
     const fetchWorkerStats = async () => {
         try {
-            const response = await authService.api.get('/celery/workers');
-            const activeWorkers = response.data.workers ? response.data.workers.length : 0;
-            setWorkerStats({ active: activeWorkers, total: activeWorkers });
+            // TODO: Update to use v2 system health endpoint when available
+            // const response = await authService.api.get('/v2/system/health');
+            // For now, set default worker stats
+            setWorkerStats({ active: 1, total: 1 });
         } catch (error) {
             // Silently fail - monitoring is optional
             console.log('Worker stats unavailable:', error.message);
+            setWorkerStats({ active: 0, total: 0 });
         }
     };
 
     const handleCreateJob = async (jobData, scheduleConfig) => {
         try {
             // First create the job
-            const response = await authService.api.post('/jobs/', jobData);
+            const response = await authService.api.post('/v2/jobs/', jobData);
             const newJob = response.data;
             setJobs(prevJobs => [newJob, ...prevJobs]);
             
@@ -110,7 +112,7 @@ const JobDashboard = () => {
 
     const handleExecuteJob = async (jobId, targetIds = null) => {
         try {
-            const response = await authService.api.post(`/jobs/${jobId}/execute`, { target_ids: targetIds });
+            const response = await authService.api.post(`/v2/jobs/${jobId}/execute`, { target_ids: targetIds });
             fetchJobs(); // Refresh job list
             addAlert(`Job execution started successfully`, 'success', 3000);
             return true;
@@ -122,7 +124,7 @@ const JobDashboard = () => {
 
     const handleScheduleJob = async (jobId, scheduledAt) => {
         try {
-            const response = await authService.api.post(`/jobs/${jobId}/schedule`, { scheduled_at: scheduledAt });
+            const response = await authService.api.post(`/v2/jobs/${jobId}/schedule`, { scheduled_at: scheduledAt });
             fetchJobs(); // Refresh job list
             return true;
         } catch (error) {
@@ -143,7 +145,7 @@ const JobDashboard = () => {
                 target_ids: updatedJobData.target_ids,
                 scheduled_at: updatedJobData.scheduled_at
             };
-            const response = await authService.api.put(`/jobs/${updatedJobData.id || updatedJobData.job_id}`, jobData);
+            const response = await authService.api.put(`/v2/jobs/${updatedJobData.id || updatedJobData.job_id}`, jobData);
             const updatedJob = response.data;
             // Update the job in the local state
             setJobs(prevJobs => 
@@ -162,7 +164,7 @@ const JobDashboard = () => {
 
     const handleDeleteJob = async (jobId) => {
         try {
-            await authService.api.delete(`/jobs/${jobId}`);
+            await authService.api.delete(`/v2/jobs/${jobId}`);
             // Remove the job from the local state
             setJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
             addAlert(`Job deleted successfully`, 'success', 3000);

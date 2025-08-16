@@ -319,7 +319,7 @@ const JobList = ({
 
         for (const job of jobsToTerminate) {
             try {
-                const response = await fetch(`/api/jobs/${job.id}/terminate`, {
+                const response = await fetch(`/api/v2/jobs/${job.id}/terminate`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
