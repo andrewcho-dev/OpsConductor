@@ -267,12 +267,12 @@ const UserManagementSimplified = () => {
       </div>
 
       {/* User Accounts Table */}
-      <div className="datatable-content-area">
+      <div className="table-content-area">
 
         <TableContainer 
           component={Paper} 
           variant="outlined"
-          className="datatable-table-container"
+          className="standard-table-container"
           sx={{ 
             height: 'auto !important',
             '& .MuiPaper-root': { height: 'auto !important' },
@@ -283,32 +283,32 @@ const UserManagementSimplified = () => {
             <TableHead>
               {/* Column Headers */}
               <TableRow sx={{ backgroundColor: 'grey.100' }}>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
+                <TableCell className="standard-table-header">
                   ID
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
+                <TableCell className="standard-table-header">
                   Username
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
+                <TableCell className="standard-table-header">
                   Email
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
+                <TableCell className="standard-table-header">
                   Role
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
+                <TableCell className="standard-table-header">
                   Status
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
+                <TableCell className="standard-table-header">
                   Last Login
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '4px 8px' }}>
+                <TableCell className="standard-table-header">
                   Actions
                 </TableCell>
               </TableRow>
               
               {/* Filter Row */}
               <TableRow sx={{ backgroundColor: 'grey.50' }}>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <TextField
                     size="small"
                     fullWidth
@@ -318,7 +318,7 @@ const UserManagementSimplified = () => {
                     sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px', fontFamily: 'monospace' } }}
                   />
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <TextField
                     size="small"
                     fullWidth
@@ -328,7 +328,7 @@ const UserManagementSimplified = () => {
                     sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px', fontFamily: 'monospace' } }}
                   />
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <TextField
                     size="small"
                     fullWidth
@@ -338,7 +338,7 @@ const UserManagementSimplified = () => {
                     sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px', fontFamily: 'monospace' } }}
                   />
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <Select
                     size="small"
                     fullWidth
@@ -369,7 +369,7 @@ const UserManagementSimplified = () => {
                     <MenuItem value="guest">guest</MenuItem>
                   </Select>
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <Select
                     size="small"
                     fullWidth
@@ -398,7 +398,7 @@ const UserManagementSimplified = () => {
                     <MenuItem value="false">inactive</MenuItem>
                   </Select>
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   <TextField
                     size="small"
                     fullWidth
@@ -408,7 +408,7 @@ const UserManagementSimplified = () => {
                     sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px', fontFamily: 'monospace' } }}
                   />
                 </TableCell>
-                <TableCell sx={{ padding: '4px 8px' }}>
+                <TableCell className="standard-filter-cell">
                   {/* Empty cell for actions column */}
                 </TableCell>
               </TableRow>
@@ -433,29 +433,29 @@ const UserManagementSimplified = () => {
                 </TableRow>
               ) : (
                 paginatedUsers.map((user) => (
-                  <TableRow key={user.id} hover sx={{ height: '32px !important', '& .MuiTableCell-root': { height: '32px !important', padding: '2px 4px !important' } }}>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', padding: '4px 8px' }}>
+                  <TableRow key={user.id} hover>
+                    <TableCell className="standard-table-cell">
                       {user.id}
                     </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', padding: '4px 8px', fontWeight: 600 }}>
+                    <TableCell className="standard-table-cell" sx={{ fontWeight: 600 }}>
                       {user.username}
                     </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', padding: '4px 8px' }}>
+                    <TableCell className="standard-table-cell">
                       {user.email}
                     </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', padding: '4px 8px' }}>
+                    <TableCell className="standard-table-cell">
                       {user.role}
                     </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', padding: '4px 8px' }}>
+                    <TableCell className="standard-table-cell">
                       {user.is_active ? 'active' : 'inactive'}
                     </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', padding: '4px 8px' }}>
+                    <TableCell className="standard-table-cell">
                       {user.last_login 
                         ? new Date(user.last_login).toLocaleDateString()
                         : 'never'
                       }
                     </TableCell>
-                    <TableCell sx={{ padding: '4px 8px' }}>
+                    <TableCell className="standard-table-cell">
                       <IconButton
                         size="small"
                         onClick={() => handleOpenDialog(user)}
@@ -480,7 +480,7 @@ const UserManagementSimplified = () => {
         </TableContainer>
         
         {/* Pagination Controls */}
-        <div className="datatable-pagination-area">
+        <div className="standard-pagination-area">
           {/* Page Size Selector */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>

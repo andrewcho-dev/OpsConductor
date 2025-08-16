@@ -223,15 +223,9 @@ const UserList = () => {
   const totalCount = usersData?.pagination?.total_count || 0;
 
   return (
-    <Box sx={{ 
-      height: '100vh', 
-      display: 'flex', 
-      flexDirection: 'column',
-      backgroundColor: 'background.default',
-      padding: 2
-    }}>
+    <div className="datatable-page-container">
       {/* Page Header */}
-      <div className="page-header">
+      <div className="datatable-page-header">
         <Typography className="page-title">
           User Management
         </Typography>
@@ -253,25 +247,12 @@ const UserList = () => {
       </div>
 
       {/* User Accounts Table */}
-      <Box sx={{ 
-        mt: 2, 
-        flex: 1, 
-        display: 'flex', 
-        flexDirection: 'column',
-        minHeight: 0 // Important for flex child to shrink
-      }}>
+      <div className="datatable-content-area">
 
         <TableContainer 
           component={Paper} 
           variant="outlined"
-          sx={{ 
-            flex: 1, // Take up remaining space in flex container
-            minHeight: '400px',
-            overflow: 'auto', // Only the table scrolls, not the page
-            border: '1px solid', 
-            borderColor: 'divider',
-            borderRadius: 1
-          }}
+          className="datatable-table-container"
         >
           <Table size="small">
             <TableHead>
@@ -469,22 +450,24 @@ const UserList = () => {
         </TableContainer>
         
         {/* Pagination */}
-        <TablePagination
-          component="div"
-          count={totalCount}
-          page={(pagination.users.page - 1)} // Convert to 0-based for MUI
-          onPageChange={handlePageChange}
-          rowsPerPage={pagination.users.pageSize}
-          onRowsPerPageChange={handlePageSizeChange}
-          rowsPerPageOptions={[10, 25, 50, 100]}
-          sx={{ 
-            borderTop: '1px solid', 
-            borderColor: 'divider',
-            backgroundColor: 'background.paper'
-          }}
-        />
-      </Box>
-    </Box>
+        <div className="datatable-pagination-area">
+          <TablePagination
+            component="div"
+            count={totalCount}
+            page={(pagination.users.page - 1)} // Convert to 0-based for MUI
+            onPageChange={handlePageChange}
+            rowsPerPage={pagination.users.pageSize}
+            onRowsPerPageChange={handlePageSizeChange}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+            sx={{ 
+              borderTop: '1px solid', 
+              borderColor: 'divider',
+              backgroundColor: 'background.paper'
+            }}
+          />
+        </div>
+      </div>
+    </div>
   );
 };
 

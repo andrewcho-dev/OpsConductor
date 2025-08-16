@@ -535,7 +535,14 @@ const SystemManagement = () => {
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>Services Status</Typography>
-              <TableContainer component={Paper} variant="outlined">
+              <TableContainer 
+                component={Paper} 
+                variant="outlined"
+                sx={{ 
+                  maxHeight: '100%', // Dynamic height - stops 70px above footer
+                  overflow: 'auto'
+                }}
+              >
                 <Table>
                   <TableHead>
                     <TableRow>

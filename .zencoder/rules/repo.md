@@ -6,7 +6,7 @@ alwaysApply: true
 # OpsConductor Universal Automation Orchestration Platform
 
 ## Repository Summary
-OpsConductor is a job-centric automation platform for orchestrating tasks across various target systems. It features a modern architecture with a FastAPI backend, React frontend, and uses PostgreSQL for data storage and Redis for caching.
+OpsConductor is a comprehensive job-centric automation platform for orchestrating tasks across various target systems. It features a modern architecture with a FastAPI backend, React frontend, and uses PostgreSQL for data storage and Redis for caching.
 
 ## Repository Structure
 - **backend/**: FastAPI application with API endpoints, database models, and business logic
@@ -14,6 +14,8 @@ OpsConductor is a job-centric automation platform for orchestrating tasks across
 - **database/**: SQL initialization scripts for PostgreSQL
 - **nginx/**: Nginx configuration for reverse proxy and SSL termination
 - **docs/**: Documentation files including API references and deployment guides
+- **tests/**: Comprehensive E2E and API tests using Playwright
+- **monitoring/**: Prometheus and Grafana configurations
 - **logs/**: Application logs directory
 
 ### Main Repository Components
@@ -22,6 +24,7 @@ OpsConductor is a job-centric automation platform for orchestrating tasks across
 - **Job System**: Celery-based task execution and scheduling
 - **Database**: PostgreSQL for persistent storage
 - **Cache**: Redis for session management and task queuing
+- **Monitoring**: Prometheus and Grafana for metrics and visualization
 
 ## Projects
 
@@ -85,6 +88,7 @@ python -m unittest discover
 - react-router-dom==6.20.1
 - @mui/material==5.14.20
 - @mui/x-data-grid==6.18.2
+- @reduxjs/toolkit==2.8.2
 - axios==1.6.2
 - chart.js==4.5.0
 
@@ -117,6 +121,29 @@ npm test
 npm run test:comprehensive
 ```
 
+### Testing Framework
+**Configuration File**: tests/package.json
+
+#### Language & Runtime
+**Language**: TypeScript
+**Framework**: Playwright 1.40.0
+**Package Manager**: npm
+
+#### Test Types
+- **API Tests**: Comprehensive testing of REST API endpoints
+- **E2E Tests**: Full user workflow testing with browser automation
+- **Smoke Tests**: Basic functionality verification
+
+#### Run Commands
+```bash
+cd tests
+npm install
+npm test           # All tests
+npm run test:smoke # Smoke tests only
+npm run test:api   # API tests only
+npm run test:e2e   # E2E tests only
+```
+
 ### Infrastructure
 **Configuration File**: docker-compose.yml
 
@@ -125,6 +152,8 @@ npm run test:comprehensive
 - Redis 7 (Cache)
 - Nginx (Reverse Proxy)
 - Celery (Task Queue)
+- Prometheus (Metrics Collection)
+- Grafana (Monitoring Dashboards)
 
 #### Usage & Operations
 ```bash
@@ -140,6 +169,6 @@ docker-compose up -d --build
 
 #### Docker
 **Main File**: docker-compose.yml
-**Services**: postgres, redis, backend, frontend, celery-worker, scheduler, nginx
-**Network**: enabledrm-network (bridge)
-**Volumes**: postgres_data (persistent database storage)
+**Services**: postgres, redis, backend, frontend, celery-worker, scheduler, nginx, prometheus, grafana
+**Network**: opsconductor-network (bridge)
+**Volumes**: postgres_data, prometheus_data, grafana_data (persistent storage)

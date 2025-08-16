@@ -1,0 +1,69 @@
+/* 
+ * UNIVERSAL DATA TABLE LAYOUT - ONE SIZE FITS ALL
+ * Use these classes on ANY page with datatables for consistent behavior
+ */
+
+/* Main page container - use this on the outermost div */
+.datatable-page-container {
+  height: calc(100vh - 92px) !important; /* Header + Footer space */
+  min-height: calc(100vh - 92px) !important;
+  max-height: calc(100vh - 92px) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 12px !important;
+}
+
+/* Content area that holds the table + pagination */
+.datatable-content-area {
+  margin-top: 0px !important; /* No gap - absolute maximum screen space utilization */
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important; /* Critical for flex shrinking */
+}
+
+/* The actual table container */
+.datatable-table-container {
+  flex: 1 !important;
+  min-height: 300px !important;
+  max-height: 100% !important;
+  overflow: auto !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  border-radius: 4px !important;
+}
+
+/* Pagination area */
+.datatable-pagination-area {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-top: 8px !important;
+  padding: 8px 0 !important;
+  flex-shrink: 0 !important; /* Never shrink pagination */
+}
+
+/* Page header area */
+.datatable-page-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 0 !important;
+  flex-shrink: 0 !important; /* Never shrink header */
+}
+
+/* Override any MUI styles that might interfere */
+.datatable-table-container .MuiTableContainer-root {
+  max-height: 100% !important;
+  height: 100% !important;
+}
+
+.datatable-table-container .MuiPaper-root {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.datatable-table-container .MuiTable-root {
+  height: 100% !important;
+}

@@ -10,21 +10,15 @@ import {
   CircularProgress,
   IconButton,
   Tooltip,
+  Box,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
-  Computer as ComputerIcon,
-  Storage as StorageIcon,
-  Security as SecurityIcon,
   NetworkCheck as NetworkCheckIcon,
-  Dashboard as DashboardIcon,
   Devices as DevicesIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  DesktopWindows as DesktopWindowsIcon,
+  ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 
 import { getAllTargets } from '../../services/targetService';
@@ -37,6 +31,7 @@ import SimpleNetworkDiscoveryModal from './SimpleNetworkDiscoveryModal';
 import discoveryService from '../../services/discoveryService';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import '../../styles/dashboard.css';
 
 const UniversalTargetDashboard = () => {
   const navigate = useNavigate();
@@ -182,24 +177,33 @@ const UniversalTargetDashboard = () => {
     // navigate('/discovery');
   };
 
-  // Calculate dashboard statistics - 6 key metrics that fit on one line
-  const stats = {
-    total: targets.length,
-    active: targets.filter(t => t.status === 'active').length,
-    linux: targets.filter(t => t.os_type === 'linux').length,
-    windows: targets.filter(t => t.os_type === 'windows').length,
-    healthy: targets.filter(t => t.health_status === 'healthy').length,
-    critical: targets.filter(t => t.health_status === 'critical').length,
-  };
+
 
   return (
-    <div className="dashboard-container">
+    <div className="dashboard-container" style={{ 
+      height: 'calc(100vh - 92px)', // Account for header (64px) + footer (28px)
+      minHeight: 'calc(100vh - 92px)', 
+      maxHeight: 'calc(100vh - 92px)', 
+      overflow: 'hidden', 
+      display: 'flex', 
+      flexDirection: 'column',
+      padding: '12px'
+    }}>
       {/* Compact Page Header */}
       <div className="page-header">
         <Typography className="page-title">
           Universal Targets
         </Typography>
         <div className="page-actions">
+          <Tooltip title="Back to Dashboard">
+            <IconButton 
+              className="btn-icon" 
+              onClick={() => navigate('/dashboard')}
+              size="small"
+            >
+              <ArrowBackIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Refresh targets">
             <span>
               <IconButton 
@@ -244,111 +248,27 @@ const UniversalTargetDashboard = () => {
         </div>
       </div>
 
-      {/* Compact Statistics Grid - 6 key metrics that fit on one line */}
-      <div className="stats-grid">
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon primary">
-              <DevicesIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{stats.total}</h3>
-              <p>Total Targets</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon success">
-              <CheckCircleIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{stats.active}</h3>
-              <p>Active</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon info">
-              <ComputerIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{stats.linux}</h3>
-              <p>Linux</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon info">
-              <DesktopWindowsIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{stats.windows}</h3>
-              <p>Windows</p>
-            </div>
-          </div>
-        </div>
 
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon success">
-              <CheckCircleIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{stats.healthy}</h3>
-              <p>Healthy</p>
-            </div>
+
+      {/* Direct Table Display */}
+      {loading ? (
+        <div className="table-content-area">
+          <div className="loading-container">
+            <CircularProgress size={24} />
+            <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
+              Loading targets...
+            </Typography>
           </div>
         </div>
-
-        <div className="stat-card fade-in">
-          <div className="stat-card-content">
-            <div className="stat-icon error">
-              <ErrorIcon fontSize="small" />
-            </div>
-            <div className="stat-details">
-              <h3>{stats.critical}</h3>
-              <p>Critical</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Card */}
-      <div className="main-content-card fade-in">
-        <div className="content-card-header">
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
-            TARGET MANAGEMENT
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-            {targets.length} targets configured
-          </Typography>
-        </div>
-        
-        <div className="content-card-body">
-          {loading ? (
-            <div className="loading-container">
-              <CircularProgress size={24} />
-              <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
-                Loading targets...
-              </Typography>
-            </div>
-          ) : (
-            <UniversalTargetList
-              targets={targets}
-              onEditTarget={handleEditTarget}
-              onViewTarget={handleViewTarget}
-              onDeleteTarget={handleTargetDeleted}
-              onRefresh={loadTargets}
-            />
-          )}
-        </div>
-      </div>
+      ) : (
+        <UniversalTargetList
+          targets={targets}
+          onEditTarget={handleEditTarget}
+          onViewTarget={handleViewTarget}
+          onDeleteTarget={handleTargetDeleted}
+          onRefresh={loadTargets}
+        />
+      )}
 
       {/* Modals */}
       <SimpleNetworkDiscoveryModal

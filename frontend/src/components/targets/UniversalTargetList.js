@@ -10,7 +10,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination,
   Box,
   IconButton,
   Tooltip,
@@ -18,7 +17,9 @@ import {
   TextField,
   FormControl,
   Select,
-  MenuItem
+  MenuItem,
+  Paper,
+  Pagination
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -34,6 +35,7 @@ import { useAlert } from '../layout/BottomStatusBar';
 import { ViewDetailsAction, EditAction, DeleteAction } from '../common/StandardActions';
 import { getStatusRowStyling, getHealthRowStyling, getTableCellStyle } from '../../utils/tableUtils';
 import { useTheme } from '@mui/material/styles';
+import '../../styles/dashboard.css';
 
 const UniversalTargetList = ({ 
   targets, 
@@ -44,12 +46,11 @@ const UniversalTargetList = ({
 }) => {
   const theme = useTheme();
   const { addAlert } = useAlert();
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
   const [columnFilters, setColumnFilters] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Filter targets based on column filters and sort
   const filteredAndSortedTargets = useMemo(() => {
@@ -103,15 +104,6 @@ const UniversalTargetList = ({
     });
   }, [targets, columnFilters, sortField, sortDirection]);
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
   const handleSort = (field) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -145,11 +137,12 @@ const UniversalTargetList = ({
     }));
   };
 
-  // Paginated targets
-  const paginatedTargets = filteredAndSortedTargets.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  // Calculate pagination
+  const totalTargets = filteredAndSortedTargets.length;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedTargets = filteredAndSortedTargets.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(totalTargets / pageSize);
 
   // Sortable header component
   const SortableHeader = ({ field, children, ...props }) => (
@@ -174,34 +167,36 @@ const UniversalTargetList = ({
   );
 
   return (
-    <Box>
-
-      {/* Compact Targets Table */}
-      <TableContainer className="custom-scrollbar">
-        <Table className="compact-table">
+    <div className="table-content-area">
+      <TableContainer 
+        component={Paper} 
+        variant="outlined"
+        className="standard-table-container"
+      >
+        <Table size="small">
           <TableHead>
             {/* Column Headers Row */}
             <TableRow sx={{ backgroundColor: 'grey.100' }}>
-              <SortableHeader field="ip_address" sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+              <TableCell className="standard-table-header">
                 IP Address
-              </SortableHeader>
-              <SortableHeader field="name" sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+              </TableCell>
+              <TableCell className="standard-table-header">
                 Name
-              </SortableHeader>
-              <SortableHeader field="target_serial" sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+              </TableCell>
+              <TableCell className="standard-table-header">
                 Target Serial
-              </SortableHeader>
-              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>OS</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>Environment</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>Status</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>Health</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>Method</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>Actions</TableCell>
+              </TableCell>
+              <TableCell className="standard-table-header">OS</TableCell>
+              <TableCell className="standard-table-header">Environment</TableCell>
+              <TableCell className="standard-table-header">Status</TableCell>
+              <TableCell className="standard-table-header">Health</TableCell>
+              <TableCell className="standard-table-header">Method</TableCell>
+              <TableCell className="standard-table-header">Actions</TableCell>
             </TableRow>
             
             {/* Column Filters Row */}
             <TableRow sx={{ backgroundColor: 'grey.50' }}>
-              <TableCell sx={{ padding: '4px 8px' }}>
+              <TableCell className="standard-filter-cell">
                 <TextField
                   size="small"
                   placeholder="Filter IP..."
@@ -216,7 +211,7 @@ const UniversalTargetList = ({
                   }}
                 />
               </TableCell>
-              <TableCell sx={{ padding: '4px 8px' }}>
+              <TableCell className="standard-filter-cell">
                 <TextField
                   size="small"
                   placeholder="Filter name..."
@@ -231,7 +226,7 @@ const UniversalTargetList = ({
                   }}
                 />
               </TableCell>
-              <TableCell sx={{ padding: '4px 8px' }}>
+              <TableCell className="standard-filter-cell">
                 <TextField
                   size="small"
                   placeholder="Filter serial..."
@@ -246,7 +241,7 @@ const UniversalTargetList = ({
                   }}
                 />
               </TableCell>
-              <TableCell sx={{ padding: '4px 8px' }}>
+              <TableCell className="standard-filter-cell">
                 <FormControl size="small" fullWidth>
                   <Select
                     value={columnFilters.os_type || ''}
@@ -282,7 +277,7 @@ const UniversalTargetList = ({
                   </Select>
                 </FormControl>
               </TableCell>
-              <TableCell sx={{ padding: '4px 8px' }}>
+              <TableCell className="standard-filter-cell">
                 <FormControl size="small" fullWidth>
                   <Select
                     value={columnFilters.environment || ''}
@@ -318,7 +313,7 @@ const UniversalTargetList = ({
                   </Select>
                 </FormControl>
               </TableCell>
-              <TableCell sx={{ padding: '4px 8px' }}>
+              <TableCell className="standard-filter-cell">
                 <FormControl size="small" fullWidth>
                   <Select
                     value={columnFilters.status || ''}
@@ -353,7 +348,7 @@ const UniversalTargetList = ({
                   </Select>
                 </FormControl>
               </TableCell>
-              <TableCell sx={{ padding: '4px 8px' }}>
+              <TableCell className="standard-filter-cell">
                 <FormControl size="small" fullWidth>
                   <Select
                     value={columnFilters.health_status || ''}
@@ -388,7 +383,7 @@ const UniversalTargetList = ({
                   </Select>
                 </FormControl>
               </TableCell>
-              <TableCell sx={{ padding: '4px 8px' }}>
+              <TableCell className="standard-filter-cell">
                 <TextField
                   size="small"
                   placeholder="Filter method..."
@@ -403,7 +398,7 @@ const UniversalTargetList = ({
                   }}
                 />
               </TableCell>
-              <TableCell sx={{ padding: '4px 8px' }}>
+              <TableCell className="standard-filter-cell">
                 {/* No filter for Actions column */}
               </TableCell>
             </TableRow>
@@ -411,15 +406,15 @@ const UniversalTargetList = ({
           <TableBody>
             {paginatedTargets.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} align="center">
-                  <div className="empty-state">
-                    <ComputerIcon className="empty-state-icon" />
+                <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                    <ComputerIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
                     <Typography variant="body2" color="text.secondary">
                       {Object.values(columnFilters).some(filter => filter)
                         ? 'No targets match the current filters'
                         : 'No targets found. Create your first target to get started.'}
                     </Typography>
-                  </div>
+                  </Box>
                 </TableCell>
               </TableRow>
             ) : (
@@ -429,40 +424,40 @@ const UniversalTargetList = ({
                   hover
                   sx={getHealthRowStyling(target.health_status, theme)}
                 >
-                  <TableCell sx={getTableCellStyle(true)}>
+                  <TableCell className="standard-table-cell">
                     {target.ip_address || 'N/A'}
                   </TableCell>
                   
-                  <TableCell sx={getTableCellStyle()}>
+                  <TableCell className="standard-table-cell">
                     {target.name}
                     {target.description && ` - ${target.description}`}
                   </TableCell>
                   
-                  <TableCell sx={getTableCellStyle()}>
+                  <TableCell className="standard-table-cell">
                     {target.target_serial || `ID-${target.id}`}
                   </TableCell>
                   
-                  <TableCell sx={getTableCellStyle()}>
+                  <TableCell className="standard-table-cell">
                     {target.os_type?.toUpperCase() || 'N/A'}
                   </TableCell>
                   
-                  <TableCell sx={getTableCellStyle()}>
+                  <TableCell className="standard-table-cell">
                     {target.environment}
                   </TableCell>
                   
-                  <TableCell sx={getTableCellStyle()}>
+                  <TableCell className="standard-table-cell">
                     {target.status}
                   </TableCell>
                   
-                  <TableCell sx={getTableCellStyle()}>
+                  <TableCell className="standard-table-cell">
                     {target.health_status}
                   </TableCell>
                   
-                  <TableCell sx={getTableCellStyle()}>
+                  <TableCell className="standard-table-cell">
                     {target.primary_method || 'N/A'}
                   </TableCell>
                   
-                  <TableCell>
+                  <TableCell className="standard-table-cell">
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                       <ViewDetailsAction onClick={() => onViewTarget(target)} />
                       <EditAction onClick={() => onEditTarget(target)} />
@@ -475,32 +470,54 @@ const UniversalTargetList = ({
           </TableBody>
         </Table>
       </TableContainer>
+      
+      {/* Pagination Controls */}
+      <div className="standard-pagination-area">
+        {/* Page Size Selector */}
+        <div className="standard-page-size-selector">
+          <Typography variant="body2" className="standard-pagination-info">
+            Show:
+          </Typography>
+          <Select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            size="small"
+            className="standard-page-size-selector"
+          >
+            <MenuItem value={25}>25</MenuItem>
+            <MenuItem value={50}>50</MenuItem>
+            <MenuItem value={100}>100</MenuItem>
+            <MenuItem value={200}>200</MenuItem>
+          </Select>
+          <Typography variant="body2" className="standard-pagination-info">
+            per page
+          </Typography>
+        </div>
 
-      {/* Compact Pagination */}
-      {filteredAndSortedTargets.length > 0 && (
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25, 50]}
-          component="div"
-          count={filteredAndSortedTargets.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          sx={{
-            '& .MuiTablePagination-toolbar': {
-              minHeight: '40px',
-              padding: '0 8px',
-            },
-            '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-              fontSize: '0.75rem',
-            },
-            '& .MuiTablePagination-select': {
-              fontSize: '0.75rem',
-            }
-          }}
-        />
-      )}
-    </Box>
+        {/* Pagination */}
+        {totalTargets > pageSize && (
+          <Pagination
+            count={totalPages}
+            page={currentPage}
+            onChange={(event, page) => {
+              setCurrentPage(page);
+            }}
+            color="primary"
+            size="small"
+            variant="outlined"
+            className="standard-pagination"
+          />
+        )}
+        
+        {/* Show pagination info */}
+        <Typography variant="body2" className="standard-pagination-info">
+          Showing {startIndex + 1}-{Math.min(endIndex, totalTargets)} of {totalTargets} targets
+        </Typography>
+      </div>
+    </div>
   );
 };
 

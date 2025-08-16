@@ -23,6 +23,9 @@ import {
   Security as SecurityIcon,
   Computer as ComputerIcon,
   AccessTime as AccessTimeIcon,
+  Notifications as NotificationsIcon,
+  Email as EmailIcon,
+  Sms as SmsIcon,
 } from '@mui/icons-material';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAlert } from '../layout/BottomStatusBar';
@@ -45,6 +48,10 @@ const SystemSettings = () => {
   // Enhanced state for system monitoring
   const [systemStatus, setSystemStatus] = useState(null);
   const [systemHealth, setSystemHealth] = useState(null);
+  
+  // Notification configuration state
+  const [emailTargets, setEmailTargets] = useState([]);
+  const [selectedEmailTarget, setSelectedEmailTarget] = useState('');
   
   // Track if settings have been modified
   const [originalSettings, setOriginalSettings] = useState({});
@@ -87,7 +94,8 @@ const SystemSettings = () => {
         loadTimezones(),
         loadCurrentTime(),
         loadSystemStatus(),
-        loadSystemHealth()
+        loadSystemHealth(),
+        loadEmailTargets()
       ]);
     } catch (error) {
       console.error('Failed to load system data:', error);
@@ -213,6 +221,30 @@ const SystemSettings = () => {
       setSystemHealth({
         overall_health: 'healthy'
       });
+    }
+  };
+
+  const loadEmailTargets = async () => {
+    try {
+      console.log('🔥 LOADING EMAIL TARGETS - FUNCTION CALLED');
+      // Use the universal targets API and filter for SMTP targets
+      const response = await api.get('/api/targets/');
+      console.log('🔥 API RESPONSE:', response);
+      const allTargets = response.data;
+      
+      // Filter for targets that have SMTP communication methods
+      const emailTargets = allTargets.filter(target => 
+        target.communication_methods && 
+        target.communication_methods.some(method => 
+          method.method_type === 'smtp' && method.is_active
+        )
+      );
+      
+      setEmailTargets(emailTargets);
+    } catch (err) {
+      console.error('Failed to load email targets:', err);
+      // Set empty array on error
+      setEmailTargets([]);
     }
   };
 
@@ -822,6 +854,121 @@ const SystemSettings = () => {
             </div>
           </div>
         </div>
+        </div>
+      </div>
+
+      {/* Notification Configuration - 3 Column Wide Section */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 3fr', gap: '16px', marginBottom: '16px' }}>
+        <div className="main-content-card fade-in">
+          <div className="content-card-header">
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+              <NotificationsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+              NOTIFICATION CONFIGURATION
+            </Typography>
+          </div>
+          
+          <div className="content-card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+            
+              {/* Email Server Configuration */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <EmailIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Email Server
+                </Typography>
+                <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                  <InputLabel sx={{ fontSize: '0.8rem' }}>Email Server</InputLabel>
+                  <Select
+                    value={selectedEmailTarget}
+                    label="Email Server"
+                    onChange={(e) => setSelectedEmailTarget(e.target.value)}
+                    sx={{ 
+                      fontSize: '0.8rem',
+                      '& .MuiSelect-select': { fontSize: '0.8rem' }
+                    }}
+                  >
+                    <MenuItem value="" sx={{ fontSize: '0.8rem' }}>Select Email Server</MenuItem>
+                    {emailTargets.map((target) => {
+                      // Find the SMTP communication method to get host/port info
+                      const smtpMethod = target.communication_methods?.find(method => 
+                        method.method_type === 'smtp' && method.is_active
+                      );
+                      const config = smtpMethod?.config || {};
+                      const host = config.host || target.ip_address || 'Unknown';
+                      const port = config.port || '587';
+                      
+                      return (
+                        <MenuItem key={target.id} value={target.id.toString()} sx={{ fontSize: '0.8rem' }}>
+                          {target.name} ({host}:{port})
+                        </MenuItem>
+                      );
+                    })}
+                  </Select>
+                </FormControl>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<EmailIcon fontSize="small" />}
+                  size="small"
+                  sx={{ height: '32px', fontSize: '0.75rem' }}
+                  onClick={() => addAlert('Test email functionality coming soon', 'info', 3000)}
+                >
+                  Test Email
+                </Button>
+              </div>
+
+              {/* SMS Configuration */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <SmsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  SMS Configuration
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="SMS Provider"
+                  defaultValue="Twilio"
+                  sx={{ 
+                    mb: 1,
+                    '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+                    '& .MuiInputBase-input': { fontSize: '0.8rem' }
+                  }}
+                  disabled
+                />
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<SmsIcon fontSize="small" />}
+                  size="small"
+                  sx={{ height: '32px', fontSize: '0.75rem' }}
+                  onClick={() => addAlert('SMS test functionality coming soon', 'info', 3000)}
+                >
+                  Test SMS
+                </Button>
+              </div>
+
+              {/* Notification Rules */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <NotificationsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Notification Rules
+                </Typography>
+                <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 1 }}>
+                  Active Rules: 5
+                </Typography>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<SettingsIcon fontSize="small" />}
+                  size="small"
+                  sx={{ height: '32px', fontSize: '0.75rem' }}
+                  onClick={() => addAlert('Notification rules management coming soon', 'info', 3000)}
+                >
+                  Manage Rules
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

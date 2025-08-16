@@ -218,7 +218,13 @@ const AdvancedJobView = ({ jobs, onRefresh, stats, celeryStats }) => {
   };
 
   const renderTableView = () => (
-    <TableContainer component={Paper}>
+    <TableContainer 
+      component={Paper}
+      sx={{ 
+        maxHeight: '100%', // Dynamic height - stops 70px above footer
+        overflow: 'auto'
+      }}
+    >
       <Table size="small">
         <TableHead>
           <TableRow>
