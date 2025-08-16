@@ -10,7 +10,13 @@ import {
   FormControl,
   Box,
   Typography,
-  IconButton
+  IconButton,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  Paper
 } from '@mui/material';
 import {
   ArrowUpward as ArrowUpIcon,
@@ -26,6 +32,12 @@ const ColumnFilters = ({
   sortDirection, 
   onSortChange 
 }) => {
+  // Calculate column width percentages based on column.width values
+  const getColumnWidthPercent = (column) => {
+    const totalWidth = columns.reduce((sum, col) => sum + (col.width || 1), 0);
+    return `${((column.width || 1) / totalWidth) * 100}%`;
+  };
+
   const handleFilterChange = (columnKey, value) => {
     onFilterChange(columnKey, value);
   };
@@ -53,83 +65,76 @@ const ColumnFilters = ({
   };
 
   return (
-    <Box sx={{ width: '100%' }}>
-      {/* Column Headers Row */}
-      <Box sx={{ 
-        display: 'flex', 
-        width: '100%',
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        backgroundColor: 'grey.100'
-      }}>
-        {columns.map((column, index) => (
-          <Box
-            key={`header-${column.key}`}
-            sx={{
-              flex: column.width || 1,
-              minWidth: 0, // Allow flex items to shrink below content size
-              maxWidth: `${((column.width || 1) / columns.reduce((sum, col) => sum + (col.width || 1), 0)) * 100}%`,
-              padding: '8px',
-              borderRight: index < columns.length - 1 ? '1px solid' : 'none',
-              borderColor: 'divider',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              minHeight: '40px',
-              overflow: 'hidden'
-            }}
-          >
-            <Typography 
-              variant="body2" 
-              sx={{ 
-                fontWeight: 'bold',
-                fontSize: '0.75rem',
-                textAlign: 'left',
-                flex: 1
-              }}
-            >
-              {column.label}
-            </Typography>
-            {column.sortable && (
-              <IconButton
-                size="small"
-                onClick={() => handleSortClick(column.key)}
-                sx={{ 
-                  padding: '2px',
-                  marginLeft: '4px'
+    <Paper variant="outlined" sx={{ 
+      border: '1px solid', 
+      borderColor: 'divider',
+      borderRadius: 1,
+      borderBottomLeftRadius: 0,
+      borderBottomRightRadius: 0,
+      borderBottom: 'none'
+    }}>
+      <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+        <TableHead>
+          {/* Column Headers Row */}
+          <TableRow sx={{ backgroundColor: 'grey.100' }}>
+            {columns.map((column) => (
+              <TableCell
+                key={`header-${column.key}`}
+                sx={{
+                  fontWeight: 'bold',
+                  fontSize: '0.75rem',
+                  padding: '8px',
+                  borderRight: '1px solid',
+                  borderColor: 'divider',
+                  width: getColumnWidthPercent(column),
+                  minWidth: getColumnWidthPercent(column),
+                  maxWidth: getColumnWidthPercent(column),
+                  '&:last-child': {
+                    borderRight: 'none'
+                  }
                 }}
               >
-                {getSortIcon(column.key)}
-              </IconButton>
-            )}
-          </Box>
-        ))}
-      </Box>
-
-      {/* Filters Row */}
-      <Box sx={{ 
-        display: 'flex', 
-        width: '100%',
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        backgroundColor: 'grey.50'
-      }}>
-        {columns.map((column, index) => (
-          <Box
-            key={`filter-${column.key}`}
-            sx={{
-              flex: column.width || 1,
-              minWidth: 0, // Allow flex items to shrink below content size
-              maxWidth: `${((column.width || 1) / columns.reduce((sum, col) => sum + (col.width || 1), 0)) * 100}%`,
-              padding: '4px 8px',
-              borderRight: index < columns.length - 1 ? '1px solid' : 'none',
-              borderColor: 'divider',
-              minHeight: '50px',
-              display: 'flex',
-              alignItems: 'center',
-              overflow: 'hidden'
-            }}
-          >
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between' 
+                }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                    {column.label}
+                  </Typography>
+                  {column.sortable && (
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSortClick(column.key)}
+                      sx={{ padding: '2px', marginLeft: '4px' }}
+                    >
+                      {getSortIcon(column.key)}
+                    </IconButton>
+                  )}
+                </Box>
+              </TableCell>
+            ))}
+          </TableRow>
+          
+          {/* Filters Row */}
+          <TableRow sx={{ backgroundColor: 'grey.50' }}>
+            {columns.map((column) => (
+              <TableCell
+                key={`filter-${column.key}`}
+                sx={{
+                  padding: '4px 8px',
+                  borderRight: '1px solid',
+                  borderColor: 'divider',
+                  minHeight: '50px',
+                  verticalAlign: 'middle',
+                  width: getColumnWidthPercent(column),
+                  minWidth: getColumnWidthPercent(column),
+                  maxWidth: getColumnWidthPercent(column),
+                  '&:last-child': {
+                    borderRight: 'none'
+                  }
+                }}
+              >
             {column.filterable && (
               <>
                 {column.key === 'timestamp' ? (
@@ -248,10 +253,12 @@ const ColumnFilters = ({
                 )}
               </>
             )}
-          </Box>
-        ))}
-      </Box>
-    </Box>
+              </TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+      </Table>
+    </Paper>
   );
 };
 

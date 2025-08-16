@@ -228,9 +228,9 @@ const TargetSelectionModal = ({ open, onClose, selectedTargetIds = [], onSelecti
                   onChange={(e) => setStatusFilter(e.target.value)}
                 >
                   <MenuItem value="all">All Status</MenuItem>
-                  <MenuItem value="active">Active</MenuItem>
-                  <MenuItem value="inactive">Inactive</MenuItem>
-                  <MenuItem value="maintenance">Maintenance</MenuItem>
+                  <MenuItem value="active">active</MenuItem>
+                  <MenuItem value="inactive">inactive</MenuItem>
+                  <MenuItem value="maintenance">maintenance</MenuItem>
                 </Select>
               </FormControl>
               

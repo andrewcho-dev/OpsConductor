@@ -314,7 +314,7 @@ const NotificationTemplates = () => {
                   </td>
                   <td>
                     <span className={`badge ${template.is_active ? 'badge-success' : 'badge-error'}`}>
-                      {template.is_active ? 'Active' : 'Inactive'}
+                      {template.is_active ? 'active' : 'inactive'}
                     </span>
                   </td>
                   <td>

@@ -35,7 +35,7 @@ import {
   PersonAdd as PersonAddIcon,
 } from '@mui/icons-material';
 import { RefreshAction, EditAction, DeleteAction } from '../../../components/common/StandardActions';
-import ColumnFilters from '../../../components/common/ColumnFilters';
+
 import { getStatusRowStyling, getTableCellStyle } from '../../../utils/tableUtils';
 import { useTheme } from '@mui/material/styles';
 
@@ -55,6 +55,7 @@ import {
 
 // API hooks (we'll create these)
 import { useGetUsersQuery } from '../../../store/api/usersApi';
+import '../../../styles/dashboard.css';
 
 const UserList = () => {
   const theme = useTheme();
@@ -151,66 +152,7 @@ const UserList = () => {
     }));
   };
 
-  // Column configuration for filters
-  const userColumns = [
-    {
-      key: 'username',
-      label: 'Username',
-      width: 1.5,
-      filterable: true,
-      filterType: 'text'
-    },
-    {
-      key: 'email',
-      label: 'Email',
-      width: 2,
-      filterable: true,
-      filterType: 'text'
-    },
-    {
-      key: 'role',
-      label: 'Role',
-      width: 1,
-      filterable: true,
-      filterType: 'select',
-      options: [
-        { value: 'administrator', label: 'Administrator' },
-        { value: 'operator', label: 'Operator' },
-        { value: 'viewer', label: 'Viewer' }
-      ]
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      width: 1,
-      filterable: true,
-      filterType: 'select',
-      options: [
-        { value: 'active', label: 'Active' },
-        { value: 'inactive', label: 'Inactive' }
-      ]
-    },
-    {
-      key: 'last_login',
-      label: 'Last Login',
-      width: 1.5,
-      filterable: true,
-      filterType: 'text'
-    },
-    {
-      key: 'created_at',
-      label: 'Created',
-      width: 1.5,
-      filterable: true,
-      filterType: 'text'
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      width: 1,
-      filterable: false
-    }
-  ];
+
 
   const handleColumnFilterChange = (columnKey, value) => {
     setColumnFilters(prev => ({
@@ -281,49 +223,187 @@ const UserList = () => {
   const totalCount = usersData?.pagination?.total_count || 0;
 
   return (
-    <Box>
-      {/* Toolbar */}
-      <Toolbar sx={{ pl: 0, pr: 0 }}>
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+    <Box sx={{ 
+      height: '100vh', 
+      display: 'flex', 
+      flexDirection: 'column',
+      backgroundColor: 'background.default',
+      padding: 2
+    }}>
+      {/* Page Header */}
+      <div className="page-header">
+        <Typography className="page-title">
           User Management
         </Typography>
-        
-        {currentUser?.role === 'administrator' && (
-          <Button
-            variant="contained"
-            startIcon={<PersonAddIcon />}
-            onClick={handleCreateUser}
-            sx={{ ml: 2 }}
-          >
-            Add User
-          </Button>
-        )}
-        
-        <RefreshAction onClick={refetch} sx={{ ml: 1 }} />
-      </Toolbar>
-
-
-
-      {/* Table */}
-      <Paper>
-        <TableContainer>
-          {/* Column Filters */}
-          <ColumnFilters
-            columns={userColumns}
-            filters={columnFilters}
-            onFilterChange={handleColumnFilterChange}
-          />
+        <div className="page-actions">
+          {currentUser?.role === 'administrator' && (
+            <Button
+              variant="contained"
+              startIcon={<PersonAddIcon />}
+              onClick={handleCreateUser}
+              size="small"
+              sx={{ marginRight: 1 }}
+            >
+              Add User
+            </Button>
+          )}
           
-          <Table>
+          <RefreshAction onClick={refetch} disabled={isLoading} />
+        </div>
+      </div>
+
+      {/* User Accounts Table */}
+      <Box sx={{ 
+        mt: 2, 
+        flex: 1, 
+        display: 'flex', 
+        flexDirection: 'column',
+        minHeight: 0 // Important for flex child to shrink
+      }}>
+
+        <TableContainer 
+          component={Paper} 
+          variant="outlined"
+          sx={{ 
+            flex: 1, // Take up remaining space in flex container
+            minHeight: '400px',
+            overflow: 'auto', // Only the table scrolls, not the page
+            border: '1px solid', 
+            borderColor: 'divider',
+            borderRadius: 1
+          }}
+        >
+          <Table size="small">
             <TableHead>
-              <TableRow>
-                <TableCell>Username</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Role</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Last Login</TableCell>
-                <TableCell>Created</TableCell>
-                <TableCell align="right">Actions</TableCell>
+              {/* Column Headers */}
+              <TableRow sx={{ backgroundColor: 'grey.100' }}>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                  Username
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                  Email
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                  Role
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                  Status
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                  Last Login
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                  Created
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '0.75rem', padding: '8px' }}>
+                  Actions
+                </TableCell>
+              </TableRow>
+              
+              {/* Filter Row */}
+              <TableRow sx={{ backgroundColor: 'grey.50' }}>
+                <TableCell sx={{ padding: '4px 8px' }}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder="Filter username..."
+                    value={columnFilters.username || ''}
+                    onChange={(e) => handleColumnFilterChange('username', e.target.value)}
+                    sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px', fontFamily: 'monospace' } }}
+                  />
+                </TableCell>
+                <TableCell sx={{ padding: '4px 8px' }}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder="Filter email..."
+                    value={columnFilters.email || ''}
+                    onChange={(e) => handleColumnFilterChange('email', e.target.value)}
+                    sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px', fontFamily: 'monospace' } }}
+                  />
+                </TableCell>
+                <TableCell sx={{ padding: '4px 8px' }}>
+                  <Select
+                    size="small"
+                    fullWidth
+                    value={columnFilters.role || ''}
+                    onChange={(e) => handleColumnFilterChange('role', e.target.value)}
+                    sx={{ 
+                      '& .MuiSelect-select': { 
+                        fontSize: '0.75rem', 
+                        padding: '2px 4px',
+                        fontFamily: 'monospace'
+                      }
+                    }}
+                    MenuProps={{
+                      PaperProps: {
+                        sx: {
+                          '& .MuiMenuItem-root': {
+                            fontFamily: 'monospace',
+                            fontSize: '0.75rem'
+                          }
+                        }
+                      }
+                    }}
+                  >
+                    <MenuItem value="">All Roles</MenuItem>
+                    <MenuItem value="administrator">Administrator</MenuItem>
+                    <MenuItem value="operator">Operator</MenuItem>
+                    <MenuItem value="viewer">Viewer</MenuItem>
+                  </Select>
+                </TableCell>
+                <TableCell sx={{ padding: '4px 8px' }}>
+                  <Select
+                    size="small"
+                    fullWidth
+                    value={columnFilters.status || ''}
+                    onChange={(e) => handleColumnFilterChange('status', e.target.value)}
+                    sx={{ 
+                      '& .MuiSelect-select': { 
+                        fontSize: '0.75rem', 
+                        padding: '2px 4px',
+                        fontFamily: 'monospace'
+                      }
+                    }}
+                    MenuProps={{
+                      PaperProps: {
+                        sx: {
+                          '& .MuiMenuItem-root': {
+                            fontFamily: 'monospace',
+                            fontSize: '0.75rem'
+                          }
+                        }
+                      }
+                    }}
+                  >
+                    <MenuItem value="">All Status</MenuItem>
+                    <MenuItem value="active">Active</MenuItem>
+                    <MenuItem value="inactive">Inactive</MenuItem>
+                  </Select>
+                </TableCell>
+                <TableCell sx={{ padding: '4px 8px' }}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder="Filter last login..."
+                    value={columnFilters.last_login || ''}
+                    onChange={(e) => handleColumnFilterChange('last_login', e.target.value)}
+                    sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px', fontFamily: 'monospace' } }}
+                  />
+                </TableCell>
+                <TableCell sx={{ padding: '4px 8px' }}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder="Filter created..."
+                    value={columnFilters.created_at || ''}
+                    onChange={(e) => handleColumnFilterChange('created_at', e.target.value)}
+                    sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem', padding: '2px 4px', fontFamily: 'monospace' } }}
+                  />
+                </TableCell>
+                <TableCell sx={{ padding: '4px 8px' }}>
+                  {/* Empty cell for actions column */}
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -388,6 +468,7 @@ const UserList = () => {
           </Table>
         </TableContainer>
         
+        {/* Pagination */}
         <TablePagination
           component="div"
           count={totalCount}
@@ -396,8 +477,13 @@ const UserList = () => {
           rowsPerPage={pagination.users.pageSize}
           onRowsPerPageChange={handlePageSizeChange}
           rowsPerPageOptions={[10, 25, 50, 100]}
+          sx={{ 
+            borderTop: '1px solid', 
+            borderColor: 'divider',
+            backgroundColor: 'background.paper'
+          }}
         />
-      </Paper>
+      </Box>
     </Box>
   );
 };

@@ -24,61 +24,69 @@ import {
 
 // Standard Refresh Action
 export const RefreshAction = ({ onClick, disabled = false, size = "medium", ...props }) => (
-  <Tooltip title="Refresh">
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      {...props}
-    >
-      <RefreshIcon />
-    </IconButton>
+  <Tooltip title={disabled ? "" : "Refresh"}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        {...props}
+      >
+        <RefreshIcon />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
 // Standard View Details Action
 export const ViewDetailsAction = ({ onClick, disabled = false, size = "small", ...props }) => (
-  <Tooltip title="View Details">
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      sx={{ padding: '2px', ...props.sx }}
-      {...props}
-    >
-      <VisibilityIcon fontSize="small" />
-    </IconButton>
+  <Tooltip title={disabled ? "" : "View Details"}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        sx={{ padding: '2px', ...props.sx }}
+        {...props}
+      >
+        <VisibilityIcon fontSize="small" />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
 // Standard Edit Action
 export const EditAction = ({ onClick, disabled = false, size = "small", ...props }) => (
-  <Tooltip title="Edit">
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      sx={{ padding: '2px', ...props.sx }}
-      {...props}
-    >
-      <EditIcon fontSize="small" />
-    </IconButton>
+  <Tooltip title={disabled ? "" : "Edit"}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        sx={{ padding: '2px', ...props.sx }}
+        {...props}
+      >
+        <EditIcon fontSize="small" />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
 // Standard Delete Action
 export const DeleteAction = ({ onClick, disabled = false, size = "small", ...props }) => (
-  <Tooltip title="Delete">
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      color="error"
-      sx={{ padding: '2px', ...props.sx }}
-      {...props}
-    >
-      <DeleteIcon fontSize="small" />
-    </IconButton>
+  <Tooltip title={disabled ? "" : "Delete"}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        color="error"
+        sx={{ padding: '2px', ...props.sx }}
+        {...props}
+      >
+        <DeleteIcon fontSize="small" />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
@@ -103,104 +111,118 @@ export const CloseAction = ({ onClick, disabled = false, size = "small", sx = {}
 
 // Standard Add Action
 export const AddAction = ({ onClick, disabled = false, size = "medium", ...props }) => (
-  <Tooltip title="Add">
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      color="primary"
-      {...props}
-    >
-      <AddIcon />
-    </IconButton>
+  <Tooltip title={disabled ? "" : "Add"}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        color="primary"
+        {...props}
+      >
+        <AddIcon />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
 // Standard Download Action
 export const DownloadAction = ({ onClick, disabled = false, size = "small", title = "Download", ...props }) => (
-  <Tooltip title={title}>
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      {...props}
-    >
-      <DownloadIcon />
-    </IconButton>
+  <Tooltip title={disabled ? "" : title}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        {...props}
+      >
+        <DownloadIcon />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
 // Standard Upload Action
 export const UploadAction = ({ onClick, disabled = false, size = "small", ...props }) => (
-  <Tooltip title="Upload">
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      {...props}
-    >
-      <UploadIcon />
-    </IconButton>
+  <Tooltip title={disabled ? "" : "Upload"}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        {...props}
+      >
+        <UploadIcon />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
 // Standard Settings Action
 export const SettingsAction = ({ onClick, disabled = false, size = "small", ...props }) => (
-  <Tooltip title="Settings">
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      {...props}
-    >
-      <SettingsIcon />
-    </IconButton>
+  <Tooltip title={disabled ? "" : "Settings"}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        {...props}
+      >
+        <SettingsIcon />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
 // Standard Play Action
 export const PlayAction = ({ onClick, disabled = false, size = "small", ...props }) => (
-  <Tooltip title="Run">
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      color="success"
-      sx={{ padding: '2px', ...props.sx }}
-      {...props}
-    >
-      <PlayIcon fontSize="small" />
-    </IconButton>
+  <Tooltip title={disabled ? "" : "Run"}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        color="success"
+        sx={{ padding: '2px', ...props.sx }}
+        {...props}
+      >
+        <PlayIcon fontSize="small" />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
 // Standard Stop Action
 export const StopAction = ({ onClick, disabled = false, size = "small", ...props }) => (
-  <Tooltip title="Stop">
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      color="error"
-      sx={{ padding: '2px', ...props.sx }}
-      {...props}
-    >
-      <StopIcon fontSize="small" />
-    </IconButton>
+  <Tooltip title={disabled ? "" : "Stop"}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        color="error"
+        sx={{ padding: '2px', ...props.sx }}
+        {...props}
+      >
+        <StopIcon fontSize="small" />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
 // Standard Pause Action
 export const PauseAction = ({ onClick, disabled = false, size = "small", ...props }) => (
-  <Tooltip title="Pause">
-    <IconButton 
-      onClick={onClick} 
-      disabled={disabled}
-      size={size}
-      color="warning"
-      {...props}
-    >
-      <PauseIcon />
-    </IconButton>
+  <Tooltip title={disabled ? "" : "Pause"}>
+    <span>
+      <IconButton 
+        onClick={onClick} 
+        disabled={disabled}
+        size={size}
+        color="warning"
+        {...props}
+      >
+        <PauseIcon />
+      </IconButton>
+    </span>
   </Tooltip>
 );

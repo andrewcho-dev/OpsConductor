@@ -17,7 +17,7 @@ from typing import List
 from app.shared.middleware.error_handler import ErrorHandlingMiddleware, RequestLoggingMiddleware
 
 from app.database.database import engine, Base
-from app.routers import users, auth, universal_targets
+from app.routers import users, auth, universal_targets, audit
 # Legacy routers removed - consolidated into V2 APIs
 # Legacy system_health and system_management removed - consolidated into V2 APIs
 from app.core.config import settings
@@ -124,6 +124,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(universal_targets.router, tags=["Universal Targets"])
+app.include_router(audit.router, tags=["Audit v1"])
 # Legacy routers removed - consolidated into V2 APIs
 # system.router -> /api/v2/system/*
 # notifications.router -> /api/v2/notifications/*  
