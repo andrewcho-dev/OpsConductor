@@ -549,7 +549,7 @@ async def get_jobs(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=1000, description="Jobs per page"),
     job_type: Optional[str] = Query(None, description="Filter by job type"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    job_status: Optional[str] = Query(None, description="Filter by status"),
     user_id: Optional[int] = Query(None, description="Filter by user ID"),
     current_user = Depends(require_job_permissions),
     db: Session = Depends(get_db)
@@ -569,7 +569,7 @@ async def get_jobs(
             limit=limit,
             user_id=user_id,
             job_type=job_type,
-            status=status,
+            status=job_status,
             current_user_id=current_user.id,
             current_username=current_user.username
         )
@@ -596,7 +596,7 @@ async def get_jobs(
             extra={
                 "total_jobs": jobs_result["total"],
                 "returned_jobs": len(job_responses),
-                "filters_applied": bool(job_type or status or user_id),
+                "filters_applied": bool(job_type or job_status or user_id),
                 "requested_by": current_user.username
             }
         )
