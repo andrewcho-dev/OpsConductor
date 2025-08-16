@@ -1932,3 +1932,358 @@ async def reload_service(
         )
         
         return response
+
+
+# Email Target Configuration Endpoints
+
+class EmailTargetResponse(BaseModel):
+    """Response model for email target configuration"""
+    target_id: Optional[int] = Field(None, description="Email target ID")
+    target_name: Optional[str] = Field(None, description="Email target name")
+    host: Optional[str] = Field(None, description="SMTP host")
+    port: Optional[int] = Field(None, description="SMTP port")
+    encryption: Optional[str] = Field(None, description="SMTP encryption")
+    health_status: Optional[str] = Field(None, description="Target health status")
+    is_configured: bool = Field(..., description="Whether email target is configured")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "target_id": 123,
+                "target_name": "Mail Server",
+                "host": "mail.example.com",
+                "port": 587,
+                "encryption": "starttls",
+                "health_status": "healthy",
+                "is_configured": True
+            }
+        }
+
+
+class EmailTargetListResponse(BaseModel):
+    """Response model for eligible email targets list"""
+    targets: List[Dict[str, Any]] = Field(..., description="List of eligible email targets")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "targets": [
+                    {
+                        "id": 123,
+                        "name": "Mail Server",
+                        "host": "mail.example.com",
+                        "port": 587,
+                        "encryption": "starttls",
+                        "health_status": "healthy",
+                        "username": "admin@example.com"
+                    }
+                ]
+            }
+        }
+
+
+class EmailTargetSetRequest(BaseModel):
+    """Request model for setting email target"""
+    target_id: Optional[int] = Field(None, description="Email target ID (null to clear)")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "target_id": 123
+            }
+        }
+
+
+@router.get(
+    "/email-targets/eligible",
+    response_model=EmailTargetListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Eligible Email Targets",
+    description="""
+    Get list of Universal Targets that can function as email servers.
+    
+    **Requirements for Email Targets:**
+    - Must have active SMTP communication method
+    - Must have valid SMTP credentials
+    - Must be in active status
+    """,
+    responses={
+        200: {"description": "Eligible email targets retrieved successfully"}
+    }
+)
+async def get_eligible_email_targets(
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> EmailTargetListResponse:
+    """Get eligible email targets for system notifications"""
+    
+    request_logger = RequestLogger(logger, "get_eligible_email_targets")
+    request_logger.log_request_start("GET", "/api/v2/system/email-targets/eligible", current_user.username)
+    
+    try:
+        from app.services.notification_service import NotificationService
+        
+        notification_service = NotificationService(db)
+        eligible_targets = notification_service.get_eligible_email_targets()
+        
+        response = EmailTargetListResponse(targets=eligible_targets)
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Eligible email targets retrieved successfully",
+            extra={
+                "target_count": len(eligible_targets),
+                "requested_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Failed to get eligible email targets",
+            extra={
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "email_targets_error",
+                "message": "Failed to retrieve eligible email targets",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.get(
+    "/email-target/config",
+    response_model=EmailTargetResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Email Target Configuration",
+    description="""
+    Get current email target configuration for system notifications.
+    """,
+    responses={
+        200: {"description": "Email target configuration retrieved successfully"}
+    }
+)
+async def get_email_target_config(
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> EmailTargetResponse:
+    """Get current email target configuration"""
+    
+    request_logger = RequestLogger(logger, "get_email_target_config")
+    request_logger.log_request_start("GET", "/api/v2/system/email-target/config", current_user.username)
+    
+    try:
+        from app.services.notification_service import NotificationService
+        
+        notification_service = NotificationService(db)
+        config = notification_service.get_email_target_config()
+        
+        response = EmailTargetResponse(**config)
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Email target configuration retrieved successfully",
+            extra={
+                "is_configured": config.get("is_configured", False),
+                "target_id": config.get("target_id"),
+                "requested_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Failed to get email target configuration",
+            extra={
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "email_config_error",
+                "message": "Failed to retrieve email target configuration",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.put(
+    "/email-target/config",
+    response_model=EmailTargetResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Set Email Target Configuration",
+    description="""
+    Set the Universal Target to use as the system email server.
+    
+    **Requirements:**
+    - Target must have active SMTP communication method
+    - Target must have valid SMTP credentials
+    - Pass null target_id to clear email target configuration
+    """,
+    responses={
+        200: {"description": "Email target configuration updated successfully"}
+    }
+)
+async def set_email_target_config(
+    request_data: EmailTargetSetRequest,
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> EmailTargetResponse:
+    """Set email target configuration"""
+    
+    request_logger = RequestLogger(logger, "set_email_target_config")
+    request_logger.log_request_start("PUT", "/api/v2/system/email-target/config", current_user.username)
+    
+    try:
+        from app.services.notification_service import NotificationService
+        
+        notification_service = NotificationService(db)
+        config = notification_service.set_email_target(request_data.target_id)
+        
+        response = EmailTargetResponse(**config)
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Email target configuration updated successfully",
+            extra={
+                "target_id": request_data.target_id,
+                "is_configured": config.get("is_configured", False),
+                "requested_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except ValueError as e:
+        request_logger.log_request_end(status.HTTP_400_BAD_REQUEST, 0)
+        
+        logger.warning(
+            "Invalid email target configuration request",
+            extra={
+                "target_id": request_data.target_id,
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "invalid_email_target",
+                "message": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Failed to set email target configuration",
+            extra={
+                "target_id": request_data.target_id,
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "email_config_error",
+                "message": "Failed to set email target configuration",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.post(
+    "/email-target/test",
+    status_code=status.HTTP_200_OK,
+    summary="Test Email Target",
+    description="""
+    Send a test email using the configured email target.
+    """,
+    responses={
+        200: {"description": "Test email sent successfully"}
+    }
+)
+async def test_email_target(
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Test email target by sending a test email"""
+    
+    request_logger = RequestLogger(logger, "test_email_target")
+    request_logger.log_request_start("POST", "/api/v2/system/email-target/test", current_user.username)
+    
+    try:
+        from app.services.notification_service import NotificationService
+        
+        notification_service = NotificationService(db)
+        
+        # Send test email to the current user (assuming they have an email)
+        test_email = f"{current_user.username}@example.com"  # You might want to get this from user profile
+        
+        result = notification_service.send_email(
+            to_emails=[test_email],
+            subject="OpsConductor Email Test",
+            body=f"This is a test email from OpsConductor.\n\nSent by: {current_user.username}\nTime: {datetime.utcnow().isoformat()}\n\nIf you received this email, your email target configuration is working correctly!",
+            template_name="email_test"
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(result)))
+        
+        logger.info(
+            "Email test completed",
+            extra={
+                "success": result.get("success", False),
+                "test_email": test_email,
+                "requested_by": current_user.username
+            }
+        )
+        
+        return {
+            "success": result.get("success", False),
+            "message": "Test email sent successfully" if result.get("success") else f"Test email failed: {result.get('error', 'Unknown error')}",
+            "details": result,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Failed to test email target",
+            extra={
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "email_test_error",
+                "message": "Failed to test email target",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
