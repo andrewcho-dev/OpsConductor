@@ -921,10 +921,10 @@ const SystemSettings = () => {
           </div>
           
           <div className="content-card-body">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', minWidth: 0 }}>
             
               {/* Email Server Configuration */}
-              <div>
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
                 <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
                   <EmailIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
                   Email Server
@@ -937,7 +937,12 @@ const SystemSettings = () => {
                     onChange={(e) => setSelectedEmailTarget(e.target.value)}
                     sx={{ 
                       fontSize: '0.8rem',
-                      '& .MuiSelect-select': { fontSize: '0.8rem' }
+                      '& .MuiSelect-select': { 
+                        fontSize: '0.8rem',
+                        textOverflow: 'ellipsis',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap'
+                      }
                     }}
                   >
                     <MenuItem value="" sx={{ fontSize: '0.8rem' }}>Select Email Server</MenuItem>
@@ -948,9 +953,23 @@ const SystemSettings = () => {
                       const healthIcon = target.health_status === 'healthy' ? '🟢' : 
                                        target.health_status === 'warning' ? '🟡' : '🔴';
                       
+                      // Truncate long names to prevent column expansion
+                      const displayName = target.name.length > 15 ? target.name.substring(0, 15) + '...' : target.name;
+                      
                       return (
-                        <MenuItem key={target.id} value={target.id.toString()} sx={{ fontSize: '0.8rem' }}>
-                          {healthIcon} {target.name} ({host}:{port})
+                        <MenuItem 
+                          key={target.id} 
+                          value={target.id.toString()} 
+                          sx={{ 
+                            fontSize: '0.8rem',
+                            maxWidth: '100%',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title={`${target.name} (${host}:${port})`} // Show full info on hover
+                        >
+                          {healthIcon} {displayName}
                         </MenuItem>
                       );
                     })}
@@ -970,7 +989,7 @@ const SystemSettings = () => {
               </div>
 
               {/* SMS Configuration */}
-              <div>
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
                 <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
                   <SmsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
                   SMS Configuration
@@ -983,7 +1002,12 @@ const SystemSettings = () => {
                   sx={{ 
                     mb: 1,
                     '& .MuiInputLabel-root': { fontSize: '0.8rem' },
-                    '& .MuiInputBase-input': { fontSize: '0.8rem' }
+                    '& .MuiInputBase-input': { 
+                      fontSize: '0.8rem',
+                      textOverflow: 'ellipsis',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap'
+                    }
                   }}
                   disabled
                 />
@@ -1000,7 +1024,7 @@ const SystemSettings = () => {
               </div>
 
               {/* Notification Rules */}
-              <div>
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
                 <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
                   <NotificationsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
                   Notification Rules
