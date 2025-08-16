@@ -7,7 +7,7 @@ import apiService from './apiService';
 
 class DiscoveryService {
   constructor() {
-    this.baseUrl = '/api/discovery';
+    this.baseUrl = '/api/v2/discovery';
   }
 
   // Discovery Jobs

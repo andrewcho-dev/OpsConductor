@@ -20,7 +20,7 @@ from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, EmailStr
 
 # Import service layer
 from app.services.system_management_service import SystemManagementService, SystemManagementError
@@ -1994,6 +1994,18 @@ class EmailTargetSetRequest(BaseModel):
         }
 
 
+class EmailTestRequest(BaseModel):
+    """Request model for testing email target"""
+    test_email: EmailStr = Field(..., description="Email address to send test email to")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "test_email": "admin@example.com"
+            }
+        }
+
+
 @router.get(
     "/email-targets/eligible",
     response_model=EmailTargetListResponse,
@@ -2220,13 +2232,14 @@ async def set_email_target_config(
     status_code=status.HTTP_200_OK,
     summary="Test Email Target",
     description="""
-    Send a test email using the configured email target.
+    Send a test email using the configured email target to a specified email address.
     """,
     responses={
         200: {"description": "Test email sent successfully"}
     }
 )
 async def test_email_target(
+    request_data: EmailTestRequest,
     current_user = Depends(require_admin_permissions),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
@@ -2240,13 +2253,13 @@ async def test_email_target(
         
         notification_service = NotificationService(db)
         
-        # Send test email to the current user (assuming they have an email)
-        test_email = f"{current_user.username}@example.com"  # You might want to get this from user profile
+        # Use the provided email address
+        test_email = request_data.test_email
         
         result = notification_service.send_email(
             to_emails=[test_email],
             subject="OpsConductor Email Test",
-            body=f"This is a test email from OpsConductor.\n\nSent by: {current_user.username}\nTime: {datetime.utcnow().isoformat()}\n\nIf you received this email, your email target configuration is working correctly!",
+            body=f"This is a test email from OpsConductor.\n\nSent by: {current_user.username}\nTime: {datetime.utcnow().isoformat()}\nTest email sent to: {test_email}\n\nIf you received this email, your email target configuration is working correctly!",
             template_name="email_test"
         )
         

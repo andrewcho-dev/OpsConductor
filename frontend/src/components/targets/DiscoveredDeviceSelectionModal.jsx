@@ -262,71 +262,114 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
               </Typography>
             </Box>
 
-            {/* Device List */}
-            <Box>
-              {devices && devices.map((device, index) => (
-                <Accordion 
-                  key={`device-${device.id}-${device.ip_address}`}
-                  expanded={expandedDevices.has(device.id)}
-                  onChange={(e, expanded) => handleAccordionToggle(device.id, expanded)}
-                  sx={{
-                    backgroundColor: selectedDevices.has(device.id) ? 'action.selected' : 'background.paper',
-                    '&:hover': {
-                      backgroundColor: selectedDevices.has(device.id) ? 'action.selected' : 'action.hover'
-                    }
-                  }}
-                >
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Box display="flex" alignItems="center" width="100%">
+            {/* Device List - Table Format */}
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">
                       <Checkbox
-                        checked={selectedDevices.has(device.id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleDeviceSelect(device.id, e.target.checked);
-                        }}
+                        indeterminate={selectedDevices.size > 0 && selectedDevices.size < devices.length}
+                        checked={devices.length > 0 && selectedDevices.size === devices.length}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
                         disabled={importing}
                       />
-                      <Box display="flex" alignItems="center" ml={1} flex={1}>
-                        {getDeviceIcon(device.device_type)}
-                        <Box ml={2}>
-                          <Typography 
-                            variant="subtitle1"
-                            sx={{
-                              fontWeight: selectedDevices.has(device.id) ? 'bold' : 'normal',
-                              color: selectedDevices.has(device.id) ? 'primary.main' : 'text.primary'
-                            }}
-                          >
-                            {selectedDevices.has(device.id) && '✓ '}
-                            {device.hostname || device.ip_address}
-                          </Typography>
-                          <Box display="flex" gap={1} mt={0.5}>
-                            <Chip 
-                              label={device.ip_address} 
-                              size="small" 
-                              variant="outlined" 
-                            />
-                            {device.device_type && (
-                              <Chip 
-                                label={device.device_type} 
-                                size="small" 
-                                color="primary" 
-                                variant="outlined" 
-                              />
-                            )}
-                            {device.suggested_communication_methods?.map(method => (
-                              <Chip
-                                key={method}
-                                label={method.toUpperCase()}
-                                size="small"
-                                color={getMethodColor(method)}
-                                variant="outlined"
-                              />
-                            ))}
+                    </TableCell>
+                    <TableCell>IP Address</TableCell>
+                    <TableCell>Hostname</TableCell>
+                    <TableCell>Device Type</TableCell>
+                    <TableCell>Network Range</TableCell>
+                    <TableCell>Open Ports</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Discovered At</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {devices && devices.map((device, index) => {
+                    const deviceId = device.id || device.ip_address;
+                    const isSelected = selectedDevices.has(deviceId);
+                    
+                    return (
+                      <TableRow 
+                        key={`device-${deviceId}`}
+                        hover
+                        selected={isSelected}
+                        sx={{
+                          backgroundColor: isSelected ? 'action.selected' : 'inherit',
+                          '&:hover': {
+                            backgroundColor: isSelected ? 'action.selected' : 'action.hover'
+                          }
+                        }}
+                      >
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={isSelected}
+                            onChange={(e) => handleDeviceSelect(deviceId, e.target.checked)}
+                            disabled={importing}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" alignItems="center">
+                            {getDeviceIcon(device.device_type)}
+                            <Typography variant="body2" sx={{ ml: 1, fontWeight: isSelected ? 'bold' : 'normal' }}>
+                              {device.ip_address}
+                            </Typography>
                           </Box>
-                        </Box>
-                      </Box>
-                    </Box>
-                  </AccordionSummary>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {device.hostname || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={device.device_type || 'unknown'} 
+                            size="small" 
+                            color="primary" 
+                            variant="outlined" 
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="textSecondary">
+                            {device.network_range || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" gap={0.5} flexWrap="wrap">
+                            {device.ports && device.ports.length > 0 ? (
+                              device.ports.map(port => (
+                                <Chip
+                                  key={port}
+                                  label={port}
+                                  size="small"
+                                  variant="outlined"
+                                  color="secondary"
+                                />
+                              ))
+                            ) : (
+                              <Typography variant="body2" color="textSecondary">-</Typography>
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={device.status || 'discovered'} 
+                            size="small" 
+                            color="success" 
+                            variant="outlined" 
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="textSecondary">
+                            {device.discovered_at ? new Date(device.discovered_at).toLocaleString() : '-'}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
                   
                   {selectedDevices.has(device.id) && (
                     <AccordionDetails>

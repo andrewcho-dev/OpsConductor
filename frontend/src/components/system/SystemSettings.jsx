@@ -52,6 +52,7 @@ const SystemSettings = () => {
   // Notification configuration state
   const [emailTargets, setEmailTargets] = useState([]);
   const [selectedEmailTarget, setSelectedEmailTarget] = useState('');
+  const [testEmailAddress, setTestEmailAddress] = useState('');
   
   // Track if settings have been modified
   const [originalSettings, setOriginalSettings] = useState({});
@@ -272,14 +273,28 @@ const SystemSettings = () => {
   };
 
   const testEmailTarget = async () => {
+    if (!testEmailAddress.trim()) {
+      addAlert('Please enter an email address to send the test email to', 'warning', 3000);
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(testEmailAddress.trim())) {
+      addAlert('Please enter a valid email address', 'warning', 3000);
+      return;
+    }
+
     try {
-      console.log('Testing email target...');
-      const response = await api.post('/v2/system/email-target/test');
+      console.log('Testing email target...', testEmailAddress);
+      const response = await api.post('/v2/system/email-target/test', {
+        test_email: testEmailAddress.trim()
+      });
       
       console.log('Email test result:', response.data);
       
       if (response.data.success) {
-        addAlert('Test email sent successfully! Check your inbox.', 'success', 5000);
+        addAlert(`Test email sent successfully to ${testEmailAddress}! Check your inbox.`, 'success', 5000);
       } else {
         addAlert(`Test email failed: ${response.data.message}`, 'error', 8000);
       }
@@ -975,6 +990,24 @@ const SystemSettings = () => {
                     })}
                   </Select>
                 </FormControl>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Test Email Address"
+                  placeholder="Enter email to test..."
+                  value={testEmailAddress}
+                  onChange={(e) => setTestEmailAddress(e.target.value)}
+                  sx={{ 
+                    mb: 1,
+                    '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+                    '& .MuiInputBase-input': { 
+                      fontSize: '0.8rem',
+                      textOverflow: 'ellipsis',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap'
+                    }
+                  }}
+                />
                 <Button
                   fullWidth
                   variant="outlined"
@@ -982,7 +1015,7 @@ const SystemSettings = () => {
                   size="small"
                   sx={{ height: '32px', fontSize: '0.75rem' }}
                   onClick={testEmailTarget}
-                  disabled={!selectedEmailTarget}
+                  disabled={!selectedEmailTarget || !testEmailAddress.trim()}
                 >
                   Test Email
                 </Button>

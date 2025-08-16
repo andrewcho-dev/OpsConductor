@@ -602,6 +602,204 @@ async def start_network_discovery(
         )
 
 
+@router.post(
+    "/discover-memory",
+    response_model=dict,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start In-Memory Discovery",
+    description="""
+    Start an in-memory network discovery scan that doesn't persist to database.
+    Returns a task_id for polling results.
+    
+    **Features:**
+    - ✅ In-memory discovery without database persistence
+    - ✅ Celery task-based execution
+    - ✅ Real-time progress tracking via polling
+    - ✅ Temporary results storage
+    """,
+    responses={
+        202: {"description": "In-memory discovery task started successfully"}
+    }
+)
+async def start_in_memory_discovery(
+    discovery_config: dict,
+    request: Request,
+    current_user = Depends(require_discovery_permissions),
+    db: Session = Depends(get_db)
+) -> dict:
+    """Start in-memory discovery task for frontend compatibility"""
+    
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    request_logger = RequestLogger(logger, "start_in_memory_discovery")
+    request_logger.log_request_start("POST", "/api/v2/discovery/discover-memory", current_user.username)
+    
+    try:
+        # Initialize service layer
+        discovery_mgmt_service = DiscoveryManagementService(db)
+        
+        # Start in-memory discovery through service layer
+        task_result = await discovery_mgmt_service.start_in_memory_discovery(
+            discovery_config=discovery_config,
+            current_user_id=current_user.id,
+            current_username=current_user.username,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        
+        response = {"task_id": task_result["task_id"]}
+        
+        request_logger.log_request_end(status.HTTP_202_ACCEPTED, len(str(response)))
+        
+        logger.info(
+            "In-memory discovery started successfully",
+            extra={
+                "task_id": task_result["task_id"],
+                "initiated_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except DiscoveryManagementError as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.warning(
+            "In-memory discovery start failed",
+            extra={
+                "error_code": e.error_code,
+                "error_message": e.message,
+                "initiated_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": e.error_code,
+                "message": e.message,
+                "details": e.details,
+                "timestamp": e.timestamp.isoformat()
+            }
+        )
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "In-memory discovery start error",
+            extra={
+                "error": str(e),
+                "initiated_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while starting in-memory discovery",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.get(
+    "/discover-memory/{task_id}",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Get In-Memory Discovery Status",
+    description="""
+    Get the status and results of an in-memory discovery task.
+    
+    **Features:**
+    - ✅ Real-time task status and progress
+    - ✅ Temporary results retrieval
+    - ✅ Task completion detection
+    """,
+    responses={
+        200: {"description": "In-memory discovery status retrieved successfully"}
+    }
+)
+async def get_in_memory_discovery_status(
+    task_id: str,
+    current_user = Depends(require_discovery_permissions),
+    db: Session = Depends(get_db)
+) -> dict:
+    """Get in-memory discovery task status for frontend compatibility"""
+    
+    request_logger = RequestLogger(logger, f"get_in_memory_discovery_{task_id}")
+    request_logger.log_request_start("GET", f"/api/v2/discovery/discover-memory/{task_id}", current_user.username)
+    
+    try:
+        # Initialize service layer
+        discovery_mgmt_service = DiscoveryManagementService(db)
+        
+        # Get in-memory discovery status through service layer
+        status_result = await discovery_mgmt_service.get_in_memory_discovery_status(
+            task_id=task_id,
+            current_user_id=current_user.id,
+            current_username=current_user.username
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(status_result)))
+        
+        logger.info(
+            "In-memory discovery status retrieved successfully",
+            extra={
+                "task_id": task_id,
+                "status": status_result.get("status"),
+                "requested_by": current_user.username
+            }
+        )
+        
+        return status_result
+        
+    except DiscoveryManagementError as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.warning(
+            "In-memory discovery status retrieval failed",
+            extra={
+                "task_id": task_id,
+                "error_code": e.error_code,
+                "error_message": e.message,
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": e.error_code,
+                "message": e.message,
+                "details": e.details,
+                "timestamp": e.timestamp.isoformat()
+            }
+        )
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "In-memory discovery status retrieval error",
+            extra={
+                "task_id": task_id,
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while retrieving in-memory discovery status",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
 @router.get(
     "/jobs/{job_id}/status",
     response_model=DiscoveryJobStatusResponse,

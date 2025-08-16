@@ -702,6 +702,252 @@ class DiscoveryManagementService:
             except Exception as e:
                 logger.warning(f"Failed to track discovery activity: {e}")
     
+    @with_performance_logging
+    async def start_in_memory_discovery(
+        self,
+        discovery_config: Dict[str, Any],
+        current_user_id: int,
+        current_username: str,
+        ip_address: str = "unknown",
+        user_agent: str = "unknown"
+    ) -> Dict[str, Any]:
+        """
+        Start an in-memory discovery task that doesn't persist to database.
+        Returns a task_id for polling results.
+        """
+        try:
+            # Generate a unique task ID
+            import uuid
+            task_id = f"memory_discovery_{uuid.uuid4().hex[:12]}"
+            
+            # Store task info in Redis with initial status
+            redis_client = await get_redis_client()
+            task_data = {
+                "task_id": task_id,
+                "status": "pending",
+                "progress": 0,
+                "message": "Discovery task queued",
+                "discovery_config": discovery_config,
+                "initiated_by": current_username,
+                "started_at": datetime.utcnow().isoformat(),
+                "devices": []
+            }
+            
+            # Store in Redis with 1 hour TTL
+            await redis_client.setex(
+                f"in_memory_discovery:{task_id}",
+                3600,  # 1 hour
+                json.dumps(task_data, default=str)
+            )
+            
+            # Start the actual discovery task (simulate with asyncio task)
+            asyncio.create_task(self._run_in_memory_discovery_task(task_id, discovery_config))
+            
+            logger.info(
+                "In-memory discovery task started",
+                extra={
+                    "task_id": task_id,
+                    "initiated_by": current_username,
+                    "discovery_config": discovery_config
+                }
+            )
+            
+            return {"task_id": task_id}
+            
+        except Exception as e:
+            logger.error(f"Failed to start in-memory discovery: {e}")
+            raise DiscoveryManagementError(
+                f"Failed to start in-memory discovery: {str(e)}",
+                "in_memory_discovery_start_error",
+                {"discovery_config": discovery_config}
+            )
+
+    @with_performance_logging
+    async def get_in_memory_discovery_status(
+        self,
+        task_id: str,
+        current_user_id: int,
+        current_username: str
+    ) -> Dict[str, Any]:
+        """
+        Get the status and results of an in-memory discovery task.
+        """
+        try:
+            redis_client = await get_redis_client()
+            task_data_str = await redis_client.get(f"in_memory_discovery:{task_id}")
+            
+            if not task_data_str:
+                raise DiscoveryManagementError(
+                    f"In-memory discovery task not found: {task_id}",
+                    "task_not_found",
+                    {"task_id": task_id}
+                )
+            
+            task_data = json.loads(task_data_str)
+            
+            logger.info(
+                "In-memory discovery status retrieved",
+                extra={
+                    "task_id": task_id,
+                    "status": task_data.get("status"),
+                    "requested_by": current_username
+                }
+            )
+            
+            return task_data
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode task data for {task_id}: {e}")
+            raise DiscoveryManagementError(
+                f"Invalid task data for {task_id}",
+                "task_data_error",
+                {"task_id": task_id}
+            )
+        except Exception as e:
+            logger.error(f"Failed to get in-memory discovery status: {e}")
+            raise DiscoveryManagementError(
+                f"Failed to get in-memory discovery status: {str(e)}",
+                "in_memory_discovery_status_error",
+                {"task_id": task_id}
+            )
+
+    async def _run_in_memory_discovery_task(self, task_id: str, discovery_config: Dict[str, Any]):
+        """
+        Run the actual in-memory discovery task in the background.
+        This simulates a network discovery process.
+        """
+        try:
+            redis_client = await get_redis_client()
+            
+            # Update status to running
+            await self._update_task_status(task_id, "running", 5, "Starting network scan...")
+            
+            # Simulate discovery process
+            network_ranges = discovery_config.get("network_ranges", ["192.168.1.0/24"])
+            timeout = discovery_config.get("timeout", 30)
+            
+            # Handle both single networkRange and multiple network_ranges for backward compatibility
+            if "networkRange" in discovery_config:
+                network_ranges = [discovery_config["networkRange"]]
+            
+            # Parse network ranges
+            networks = []
+            total_hosts = 0
+            try:
+                for network_range in network_ranges:
+                    network = ipaddress.IPv4Network(network_range, strict=False)
+                    networks.append(network)
+                    total_hosts += network.num_addresses - 2  # Exclude network and broadcast
+            except ValueError as e:
+                await self._update_task_status(task_id, "failed", 0, f"Invalid network range: {e}")
+                return
+            
+            discovered_devices = []
+            scanned_count = 0
+            max_hosts_to_scan = min(total_hosts, 50)  # Limit for demo
+            
+            # Simulate scanning hosts across all networks
+            import random
+            for network in networks:
+                network_name = str(network)
+                await self._update_task_status(
+                    task_id, 
+                    "running", 
+                    int((scanned_count / max_hosts_to_scan) * 100), 
+                    f"Scanning network {network_name}..."
+                )
+                
+                for host in network.hosts():
+                    if scanned_count >= max_hosts_to_scan:  # Limit for demo
+                        break
+                        
+                    # Simulate scan delay
+                    await asyncio.sleep(0.1)
+                    
+                    # Simulate device discovery (random chance)
+                    if random.random() < 0.3:  # 30% chance of finding a device
+                        # Get common ports from discovery config
+                        common_ports = discovery_config.get("common_ports", [22, 23, 80, 443, 3389, 8080])
+                        discovered_ports = random.sample(common_ports, random.randint(1, min(3, len(common_ports))))
+                        
+                        device = {
+                            "ip_address": str(host),
+                            "hostname": f"device-{str(host).split('.')[-1]}",
+                            "device_type": random.choice(["linux", "windows", "network_device", "printer"]),
+                            "status": "discovered",
+                            "ports": discovered_ports,
+                            "network_range": network_name,
+                            "discovered_at": datetime.utcnow().isoformat()
+                        }
+                        discovered_devices.append(device)
+                    
+                    scanned_count += 1
+                    progress = int((scanned_count / max_hosts_to_scan) * 100)
+                    
+                    # Update progress every 10 scans
+                    if scanned_count % 10 == 0:
+                        await self._update_task_status(
+                            task_id, 
+                            "running", 
+                            progress, 
+                            f"Scanned {scanned_count}/{max_hosts_to_scan} hosts, found {len(discovered_devices)} devices"
+                        )
+                
+                # Break if we've reached the scan limit
+                if scanned_count >= max_hosts_to_scan:
+                    break
+            
+            # Complete the task
+            await self._update_task_status(
+                task_id, 
+                "completed", 
+                100, 
+                f"Discovery completed. Found {len(discovered_devices)} devices",
+                discovered_devices
+            )
+            
+            logger.info(
+                "In-memory discovery task completed",
+                extra={
+                    "task_id": task_id,
+                    "devices_found": len(discovered_devices),
+                    "hosts_scanned": scanned_count
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"In-memory discovery task failed: {e}")
+            await self._update_task_status(task_id, "failed", 0, f"Discovery failed: {str(e)}")
+
+    async def _update_task_status(self, task_id: str, status: str, progress: int, message: str, devices: List = None):
+        """Update task status in Redis"""
+        try:
+            redis_client = await get_redis_client()
+            task_data_str = await redis_client.get(f"in_memory_discovery:{task_id}")
+            
+            if task_data_str:
+                task_data = json.loads(task_data_str)
+                task_data.update({
+                    "status": status,
+                    "progress": progress,
+                    "message": message,
+                    "last_updated": datetime.utcnow().isoformat()
+                })
+                
+                if devices is not None:
+                    task_data["devices"] = devices
+                
+                if status == "completed":
+                    task_data["completed_at"] = datetime.utcnow().isoformat()
+                
+                await redis_client.setex(
+                    f"in_memory_discovery:{task_id}",
+                    3600,  # 1 hour
+                    json.dumps(task_data, default=str)
+                )
+        except Exception as e:
+            logger.error(f"Failed to update task status: {e}")
+
     # Placeholder methods for discovery operations (would be implemented based on specific requirements)
     async def _create_discovery_job(self, **kwargs) -> Dict: return {"id": "job_123"}
     async def _initiate_discovery_process(self, job: Dict) -> Dict: return {"status": "initiated"}
