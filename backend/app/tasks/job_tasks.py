@@ -66,22 +66,25 @@ def execute_job_task(self, execution_id: int, target_ids: List[int]):
         
         logger.info(f"✅ Job execution completed: {result}")
         
-        # Record successful task completion
+        # Record successful task completion (non-fatal if it fails)
         task_end_time = datetime.now(timezone.utc)
         duration = (task_end_time - task_start_time).total_seconds()
         
-        monitoring_service.record_task_completion(
-            task_id=self.request.id,
-            task_name=self.name,
-            status='SUCCESS',
-            started_at=task_start_time,
-            completed_at=task_end_time,
-            duration=duration,
-            worker_name=self.request.hostname,
-            queue_name='job_execution',
-            result=json.dumps({"execution_id": execution_id, "targets_processed": len(target_ids)}),
-            args=json.dumps([execution_id, target_ids])
-        )
+        try:
+            monitoring_service.record_task_completion(
+                task_id=self.request.id,
+                task_name=self.name,
+                status='success',
+                started_at=task_start_time,
+                completed_at=task_end_time,
+                duration=duration,
+                worker_name=self.request.hostname,
+                queue_name='job_execution',
+                result=json.dumps({"execution_id": execution_id, "targets_processed": len(target_ids)}),
+                args=json.dumps([execution_id, target_ids])
+            )
+        except Exception as monitor_e:
+            logger.warning(f"⚠️ Failed to record task completion (non-fatal): {monitor_e}")
         
         # Return result for Celery
         return {
@@ -104,7 +107,7 @@ def execute_job_task(self, execution_id: int, target_ids: List[int]):
             monitoring_service.record_task_completion(
                 task_id=self.request.id,
                 task_name=self.name,
-                status='FAILURE',
+                status='failure',
                 started_at=task_start_time,
                 completed_at=task_end_time,
                 duration=duration,

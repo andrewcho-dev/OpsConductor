@@ -152,7 +152,45 @@ class AuditService:
         # Log as JSON
         audit_logger.info(json.dumps(entry, separators=(',', ':')))
     
-    @cached(ttl=300, key_prefix="audit_recent")
+    async def _read_audit_log_file(
+        self, 
+        event_type: Optional[AuditEventType] = None,
+        user_id: Optional[int] = None,
+        severity: Optional[AuditSeverity] = None
+    ) -> List[Dict[str, Any]]:
+        """Read audit events from the log file."""
+        import os
+        
+        events = []
+        log_file_path = '/app/logs/audit.log'
+        
+        try:
+            if os.path.exists(log_file_path):
+                with open(log_file_path, 'r') as f:
+                    for line in f:
+                        try:
+                            event = json.loads(line.strip())
+                            
+                            # Apply filters
+                            if event_type and event.get("event_type") != event_type.value:
+                                continue
+                            if user_id and event.get("user_id") != user_id:
+                                continue
+                            if severity and event.get("severity") != severity.value:
+                                continue
+                            
+                            events.append(event)
+                        except json.JSONDecodeError:
+                            continue
+                            
+            # Sort by timestamp (newest first)
+            events.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+            
+        except Exception as e:
+            print(f"Error reading audit log file: {e}")
+            
+        return events
+    
     async def get_recent_events(
         self, 
         page: int = 1,
@@ -183,34 +221,9 @@ class AuditService:
                     
                     filtered_events.append(entry)
             
-            # If no events in cache, generate mock data for testing
+            # If no events in cache, read from audit log file
             if not filtered_events:
-                total_mock_events = 247  # Mock total for pagination testing
-                filtered_events = []
-                for i in range(total_mock_events):
-                    event = {
-                        "id": i + 1,
-                        "event_type": "user_login" if i % 3 == 0 else "target_created" if i % 3 == 1 else "job_executed",
-                        "user_id": 1,
-                        "resource_type": "user" if i % 3 == 0 else "target" if i % 3 == 1 else "job",
-                        "resource_id": str(i + 1),
-                        "action": "login" if i % 3 == 0 else "create" if i % 3 == 1 else "execute",
-                        "severity": "low" if i % 4 == 0 else "medium" if i % 4 == 1 else "high" if i % 4 == 2 else "critical",
-                        "timestamp": (datetime.now(timezone.utc) - timedelta(hours=i)).isoformat(),
-                        "ip_address": "192.168.1.100",
-                        "user_agent": "Mozilla/5.0",
-                        "details": {"mock": True, "event_index": i}
-                    }
-                    
-                    # Apply filters to mock data
-                    if event_type and event["event_type"] != event_type.value:
-                        continue
-                    if user_id and event["user_id"] != user_id:
-                        continue
-                    if severity and event["severity"] != severity.value:
-                        continue
-                    
-                    filtered_events.append(event)
+                filtered_events = await self._read_audit_log_file(event_type, user_id, severity)
             
             # Calculate pagination
             total = len(filtered_events)
@@ -442,58 +455,40 @@ class AuditService:
     async def get_audit_events(self, skip: int = 0, limit: int = 100, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Get audit events with filtering and pagination."""
         try:
-            # This is a simplified implementation - in a real system, you'd query a database
-            # For now, return mock data that matches the expected structure
-            events = []
-            # Return the requested number of events, up to a reasonable maximum of 10,000
-            max_events = min(limit, 10000)
-            for i in range(max_events):
-                event = {
-                    "id": i + skip + 1,
-                    "event_type": "user_login" if i % 3 == 0 else "target_created" if i % 3 == 1 else "job_executed",
-                    "user_id": 1,
-                    "resource_type": "user" if i % 3 == 0 else "target" if i % 3 == 1 else "job",
-                    "resource_id": str(i + 1),
-                    "action": "login" if i % 3 == 0 else "create" if i % 3 == 1 else "execute",
-                    "severity": "low" if i % 4 == 0 else "medium" if i % 4 == 1 else "high" if i % 4 == 2 else "critical",
-                    "timestamp": (datetime.now(timezone.utc) - timedelta(hours=i)).isoformat(),
-                    "ip_address": "192.168.1.100",
-                    "user_agent": "Mozilla/5.0",
-                    "details": {"mock": True, "event_index": i}
-                }
-                
-                # Apply filters if provided
-                if filters:
-                    if filters.get('event_type') and event['event_type'] != filters['event_type']:
-                        continue
-                    if filters.get('severity') and event['severity'] != filters['severity']:
-                        continue
-                    if filters.get('user_id') and event['user_id'] != filters['user_id']:
-                        continue
-                
-                events.append(event)
+            # Read from actual audit log file
+            all_events = await self._read_audit_log_file()
             
-            return events
+            # Apply filters if provided
+            filtered_events = []
+            for event in all_events:
+                if filters:
+                    if filters.get('event_type') and event.get('event_type') != filters['event_type']:
+                        continue
+                    if filters.get('severity') and event.get('severity') != filters['severity']:
+                        continue
+                    if filters.get('user_id') and event.get('user_id') != filters['user_id']:
+                        continue
+                
+                filtered_events.append(event)
+            
+            # Apply pagination
+            return filtered_events[skip:skip + limit]
+            
         except Exception as e:
             return []
 
-    async def get_audit_event(self, event_id: int) -> Optional[Dict[str, Any]]:
+    async def get_audit_event(self, event_id: str) -> Optional[Dict[str, Any]]:
         """Get a specific audit event by ID."""
         try:
-            # Mock implementation - return a single event
-            return {
-                "id": event_id,
-                "event_type": "user_login",
-                "user_id": 1,
-                "resource_type": "user",
-                "resource_id": "1",
-                "action": "login",
-                "severity": "low",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "ip_address": "192.168.1.100",
-                "user_agent": "Mozilla/5.0",
-                "details": {"mock": True, "event_id": event_id}
-            }
+            # Read from actual audit log file
+            all_events = await self._read_audit_log_file()
+            
+            # Find event by ID
+            for event in all_events:
+                if event.get('id') == event_id:
+                    return event
+                    
+            return None
         except Exception:
             return None
 
@@ -501,25 +496,29 @@ class AuditService:
                                    skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
         """Get audit events for a specific user."""
         try:
-            events = []
-            # Return the requested number of events, up to a reasonable maximum of 5,000
-            max_events = min(limit, 5000)
-            for i in range(max_events):
-                event = {
-                    "id": i + skip + 1,
-                    "event_type": "user_login" if i % 2 == 0 else "target_created",
-                    "user_id": user_id,
-                    "resource_type": "user" if i % 2 == 0 else "target",
-                    "resource_id": str(i + 1),
-                    "action": "login" if i % 2 == 0 else "create",
-                    "severity": "low" if i % 2 == 0 else "medium",
-                    "timestamp": (start_date + timedelta(hours=i)).isoformat(),
-                    "ip_address": "192.168.1.100",
-                    "user_agent": "Mozilla/5.0",
-                    "details": {"mock": True, "user_specific": True}
-                }
-                events.append(event)
-            return events
+            # Read from actual audit log file
+            all_events = await self._read_audit_log_file()
+            
+            # Filter by user_id and date range
+            filtered_events = []
+            for event in all_events:
+                if event.get('user_id') != user_id:
+                    continue
+                    
+                event_timestamp = event.get('timestamp')
+                if event_timestamp:
+                    try:
+                        event_date = datetime.fromisoformat(event_timestamp.replace('Z', '+00:00'))
+                        if not (start_date <= event_date <= end_date):
+                            continue
+                    except:
+                        continue
+                
+                filtered_events.append(event)
+            
+            # Apply pagination
+            return filtered_events[skip:skip + limit]
+            
         except Exception:
             return []
 

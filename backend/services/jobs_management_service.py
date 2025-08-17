@@ -184,8 +184,11 @@ class JobsManagementService:
         )
         
         try:
+            # Transform v2 API data to JobService format
+            transformed_job_data = self._transform_v2_job_data(job_data)
+            
             # Create job through existing service
-            job = self.job_service.create_job(self.db, job_data, current_user_id)
+            job = self.job_service.create_job(transformed_job_data, current_user_id)
             
             # Enhanced job data
             enhanced_job = await self._enhance_job_data(job)
@@ -687,6 +690,54 @@ class JobsManagementService:
     async def _get_total_job_executions(self) -> int: return 0
     async def _get_failed_job_executions(self) -> int: return 0
     async def _get_pending_job_executions(self) -> int: return 0
+    
+    def _transform_v2_job_data(self, v2_job_data: Dict[str, Any]) -> 'JobCreate':
+        """Transform v2 API job data to JobService-compatible format"""
+        from app.schemas.job_schemas import JobCreate, JobActionCreate
+        from app.models.job_models import JobType, ActionType
+        from datetime import datetime
+        
+        # Transform actions
+        actions = []
+        for action_data in v2_job_data.get('actions', []):
+            # Map action_type string to ActionType enum
+            action_type_str = action_data.get('action_type', 'COMMAND')
+            try:
+                action_type = ActionType(action_type_str)
+            except ValueError:
+                action_type = ActionType.COMMAND  # Default fallback
+            
+            action = JobActionCreate(
+                action_order=action_data.get('action_order'),
+                action_type=action_type,
+                action_name=action_data.get('action_name', 'Unnamed Action'),
+                action_parameters=action_data.get('action_parameters', {}),
+                action_config=action_data.get('action_config', {})
+            )
+            actions.append(action)
+        
+        # Parse scheduled_at if provided
+        scheduled_at = None
+        if v2_job_data.get('scheduled_at'):
+            try:
+                if isinstance(v2_job_data['scheduled_at'], str):
+                    scheduled_at = datetime.fromisoformat(v2_job_data['scheduled_at'].replace('Z', '+00:00'))
+                else:
+                    scheduled_at = v2_job_data['scheduled_at']
+            except (ValueError, TypeError):
+                scheduled_at = None
+        
+        # Create JobCreate object
+        job_create = JobCreate(
+            name=v2_job_data.get('name', 'Unnamed Job'),
+            description=v2_job_data.get('description'),
+            job_type=JobType.COMMAND,  # Default job type for v2 API
+            actions=actions,
+            target_ids=v2_job_data.get('target_ids', []),
+            scheduled_at=scheduled_at
+        )
+        
+        return job_create
 
 
 class JobsManagementError(Exception):

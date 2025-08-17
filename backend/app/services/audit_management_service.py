@@ -156,7 +156,6 @@ class AuditManagementService:
         self.audit_service = AuditService(db)
         logger.info("Audit Management Service initialized with enhanced features")
     
-    @with_caching(lambda self, page, limit, event_type, user_id, severity: f"audit_events_{page}_{limit}_{event_type or 'all'}_{user_id or 'all'}_{severity or 'all'}", ttl=300)
     @with_performance_logging
     async def get_audit_events(
         self, 

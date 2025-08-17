@@ -87,7 +87,8 @@ class JobService:
 
     def get_job(self, job_id: int) -> Optional[Job]:
         """Get a job by ID with all related data"""
-        return self.db.query(Job).filter(Job.id == job_id).first()
+        from sqlalchemy.orm import joinedload
+        return self.db.query(Job).options(joinedload(Job.actions)).filter(Job.id == job_id).first()
     
     def get_job_by_uuid(self, job_uuid: str) -> Optional[Job]:
         """Get a job by UUID (permanent identifier)"""
@@ -102,15 +103,32 @@ class JobService:
         skip: int = 0,
         limit: int = 100,
         status: Optional[JobStatus] = None,
-        created_by: Optional[int] = None
+        created_by: Optional[int] = None,
+        sort_by: Optional[str] = "created_at",
+        sort_order: Optional[str] = "desc"
     ) -> List[Job]:
-        """Get jobs with optional filtering"""
+        """Get jobs with optional filtering and sorting"""
         query = self.db.query(Job)
+        
+        # Always exclude soft-deleted jobs unless specifically requesting deleted jobs
+        if status != JobStatus.DELETED:
+            query = query.filter(Job.is_deleted.is_(False))
         
         if status:
             query = query.filter(Job.status == status)
         if created_by:
             query = query.filter(Job.created_by == created_by)
+        
+        # Add sorting
+        if sort_by and hasattr(Job, sort_by):
+            sort_column = getattr(Job, sort_by)
+            if sort_order and sort_order.lower() == "asc":
+                query = query.order_by(sort_column.asc())
+            else:
+                query = query.order_by(sort_column.desc())
+        else:
+            # Default sorting by created_at desc
+            query = query.order_by(Job.created_at.desc())
             
         return query.offset(skip).limit(limit).all()
 
@@ -143,6 +161,10 @@ class JobService:
             (latest_execution.job_id == Job.id) & 
             (latest_execution.execution_number == latest_execution_subq.c.max_execution_number)
         )
+        
+        # Always exclude soft-deleted jobs unless specifically requesting deleted jobs
+        if status != JobStatus.DELETED:
+            query = query.filter(Job.is_deleted.is_(False))
         
         if status:
             query = query.filter(Job.status == status)
@@ -336,13 +358,24 @@ class JobService:
         logger.info(f"Job '{job.name}' updated")
         return job
 
-    def delete_job(self, job_id: int) -> bool:
+    def delete_job(self, job_id: int, soft_delete: bool = False) -> bool:
         """Delete a job and all its associated data"""
         job = self.get_job(job_id)
         if not job:
             return False
 
         try:
+            if soft_delete:
+                # Soft delete - mark as deleted with proper fields
+                job.status = JobStatus.DELETED
+                job.is_deleted = True
+                job.deleted_at = datetime.now(timezone.utc)
+                job.updated_at = datetime.now(timezone.utc)
+                self.db.commit()
+                logger.info(f"Job '{job.name}' soft deleted")
+                return True
+            
+            # Hard delete - remove all associated data
             # Get all execution IDs for this job
             execution_ids = [ex.id for ex in self.db.query(JobExecution.id).filter(JobExecution.job_id == job_id).all()]
             
@@ -406,6 +439,52 @@ class JobService:
                 UniversalTarget.is_active.is_(True)
             ).all()
             return [target.id for target in targets]
+
+    def get_job_targets(self, job_id: int) -> List[Dict[str, Any]]:
+        """Get full target information associated with a job"""
+        from app.models.universal_target_models import UniversalTarget
+        
+        # Get targets associated with this job
+        job_targets = self.db.query(JobTarget).filter(
+            JobTarget.job_id == job_id
+        ).all()
+        
+        if job_targets:
+            # Get full target information
+            target_ids = [target.target_id for target in job_targets]
+            targets = self.db.query(UniversalTarget).filter(
+                UniversalTarget.id.in_(target_ids)
+            ).all()
+        else:
+            # Fallback to all active targets for backward compatibility
+            targets = self.db.query(UniversalTarget).filter(
+                UniversalTarget.is_active.is_(True)
+            ).all()
+        
+        # Convert to dictionary format
+        target_list = []
+        for target in targets:
+            target_dict = {
+                "id": target.id,
+                "target_uuid": str(target.target_uuid),
+                "target_serial": target.target_serial,
+                "name": target.name,
+                "target_type": target.target_type,
+                "description": target.description,
+                "os_type": target.os_type,
+                "environment": target.environment,
+                "location": target.location,
+                "data_center": target.data_center,
+                "region": target.region,
+                "is_active": target.is_active,
+                "status": target.status,
+                "health_status": target.health_status,
+                "created_at": target.created_at.isoformat() if target.created_at else None,
+                "updated_at": target.updated_at.isoformat() if target.updated_at else None
+            }
+            target_list.append(target_dict)
+        
+        return target_list
 
     def get_job_execution(self, execution_id: int) -> Optional[JobExecution]:
         """Get a job execution by ID with all branches"""
@@ -519,15 +598,20 @@ class JobService:
         if not latest_execution:
             return
 
+        logger.info(f"🔍 Updating job {job_id} status based on latest execution {latest_execution.id} with status {latest_execution.status}")
+
         if latest_execution.status == ExecutionStatus.COMPLETED:
             job.status = JobStatus.COMPLETED
             job.completed_at = datetime.now(timezone.utc)
+            logger.info(f"✅ Set job {job_id} status to COMPLETED")
         elif latest_execution.status == ExecutionStatus.FAILED:
             job.status = JobStatus.FAILED
             job.completed_at = datetime.now(timezone.utc)
+            logger.info(f"❌ Set job {job_id} status to FAILED")
         elif latest_execution.status == ExecutionStatus.CANCELLED:
             job.status = JobStatus.CANCELLED
             job.completed_at = datetime.now(timezone.utc)
+            logger.info(f"🚫 Set job {job_id} status to CANCELLED")
 
     def _log_job_event(
         self,
@@ -541,8 +625,13 @@ class JobService:
         details: Optional[Dict[str, Any]] = None
     ):
         """Log job-related events"""
+        # Skip logging if no execution_id (job creation logs are handled by enhanced service layer)
+        if execution_id is None:
+            logger.info(f"Skipping job event log (no execution): {message}")
+            return
+            
         log = JobExecutionLog(
-            job_execution_id=execution_id,  # Use None for job-level logs
+            job_execution_id=execution_id,
             branch_id=branch_id,
             log_phase=phase.value,
             log_level=level.value,

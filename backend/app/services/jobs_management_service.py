@@ -30,6 +30,8 @@ from app.services.job_service import JobService
 from app.services.user_service import UserService
 from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 from app.tasks.job_tasks import execute_job_task
+from app.schemas.job_schemas import JobCreate, JobActionCreate
+from app.models.job_models import JobType, ActionType, JobStatus
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
@@ -184,8 +186,36 @@ class JobsManagementService:
         )
         
         try:
+            # Convert v2 job data to JobCreate schema format
+            actions_data = []
+            for action in job_data.get("actions", []):
+                # Convert action_type string to ActionType enum
+                action_type_str = action.get("action_type", "COMMAND")
+                try:
+                    action_type = ActionType(action_type_str.lower())
+                except ValueError:
+                    action_type = ActionType.COMMAND  # Default fallback
+                
+                action_create = JobActionCreate(
+                    action_type=action_type,
+                    action_name=action.get("action_name"),
+                    action_parameters=action.get("action_parameters", {}),
+                    action_config=action.get("action_config", {})
+                )
+                actions_data.append(action_create)
+            
+            # Create JobCreate object with proper defaults
+            job_create_data = JobCreate(
+                name=job_data.get("name"),
+                description=job_data.get("description"),
+                job_type=JobType.COMMAND,  # Default job type for v2 API
+                actions=actions_data,
+                target_ids=job_data.get("target_ids", []),
+                scheduled_at=job_data.get("scheduled_at")
+            )
+            
             # Create job through existing service
-            job = self.job_service.create_job(self.db, job_data, current_user_id)
+            job = self.job_service.create_job(job_create_data, current_user_id)
             
             # Enhanced job data
             enhanced_job = await self._enhance_job_data(job)
@@ -199,21 +229,21 @@ class JobsManagementService:
                 {
                     "job_id": job.id,
                     "job_name": job.name,
-                    "job_type": job.job_type,
+                    "job_type": str(job.job_type),  # Convert enum to string
                     "created_by": current_username
                 }
             )
             
             # Log audit event
             await self.audit_service.log_event(
-                event_type=AuditEventType.RESOURCE_CREATED,
+                event_type=AuditEventType.JOB_CREATED,
                 user_id=current_user_id,
                 resource_type="job",
                 resource_id=str(job.id),
                 action="create_job",
                 details={
                     "job_name": job.name, 
-                    "job_type": job.job_type,
+                    "job_type": str(job.job_type),  # Convert enum to string
                     "created_by": current_username
                 },
                 severity=AuditSeverity.MEDIUM,
@@ -228,13 +258,17 @@ class JobsManagementService:
                     "username": current_username,
                     "job_id": job.id,
                     "job_name": job.name,
-                    "job_type": job.job_type
+                    "job_type": str(job.job_type)  # Convert enum to string
                 }
             )
             
             return enhanced_job
             
         except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            logger.error(f"Job creation failed: {str(e)}")
+            logger.error(f"Traceback: {tb}")
             logger.error(
                 "Job creation failed",
                 extra={
@@ -259,6 +293,8 @@ class JobsManagementService:
         user_id: Optional[int] = None,
         job_type: Optional[str] = None,
         status: Optional[str] = None,
+        sort_by: Optional[str] = "created_at",
+        sort_order: Optional[str] = "desc",
         current_user_id: int = None,
         current_username: str = None
     ) -> Dict[str, Any]:
@@ -281,12 +317,23 @@ class JobsManagementService:
             # Calculate skip for pagination
             skip = (page - 1) * limit
             
+            # Convert string status to JobStatus enum if provided
+            job_status_enum = None
+            if status:
+                try:
+                    job_status_enum = JobStatus(status.lower())
+                except ValueError:
+                    # If invalid status, ignore it
+                    job_status_enum = None
+            
             # Get jobs through existing service with filters
             jobs_list = self.job_service.get_jobs(
                 skip=skip, 
                 limit=limit,
                 created_by=user_id,
-                status=status
+                status=job_status_enum,
+                sort_by=sort_by,
+                sort_order=sort_order
             )
             
             # Get total count for pagination (simplified for now)
@@ -578,21 +625,482 @@ class JobsManagementService:
                 error_code="jobs_stats_error"
             )
     
+    @with_performance_logging
+    async def update_job(
+        self,
+        job_id: int,
+        job_update_data: Dict[str, Any],
+        current_user_id: int = None,
+        current_username: str = None
+    ) -> Dict[str, Any]:
+        """
+        Enhanced job update with comprehensive features
+        """
+        logger.info(
+            "Job update attempt",
+            extra={
+                "job_id": job_id,
+                "fields_to_update": list(job_update_data.keys()),
+                "updated_by": current_username
+            }
+        )
+        
+        try:
+            # Get existing job
+            existing_job = self.job_service.get_job(job_id)
+            if not existing_job:
+                raise JobsManagementError(
+                    "Job not found",
+                    error_code="job_not_found",
+                    details={"job_id": job_id}
+                )
+            
+            # Convert update data to proper format for JobService
+            # For now, we'll update fields directly since JobService.update_job expects JobCreate
+            # TODO: Refactor JobService.update_job to accept partial updates
+            
+            # Update job fields directly (skip relationships that need special handling)
+            for field, value in job_update_data.items():
+                if field == 'actions':
+                    # Handle actions separately - they need to be updated through the relationship
+                    continue
+                elif hasattr(existing_job, field):
+                    setattr(existing_job, field, value)
+            
+            # Handle actions separately if provided
+            if 'actions' in job_update_data:
+                actions_data = job_update_data['actions']
+                
+                # Update existing actions in place instead of clearing and recreating
+                # This avoids foreign key constraint violations with job_action_results
+                for i, action_data in enumerate(actions_data):
+                    if i < len(existing_job.actions):
+                        # Update existing action
+                        existing_action = existing_job.actions[i]
+                        existing_action.action_order = action_data.get('action_order', existing_action.action_order)
+                        existing_action.action_type = action_data.get('action_type', existing_action.action_type)
+                        existing_action.action_name = action_data.get('action_name', existing_action.action_name)
+                        existing_action.action_parameters = action_data.get('action_parameters', existing_action.action_parameters)
+                        existing_action.action_config = action_data.get('action_config', existing_action.action_config)
+                    else:
+                        # Add new action if we have more actions than before
+                        from app.models.job_models import JobAction
+                        action = JobAction(
+                            job_id=existing_job.id,
+                            action_order=action_data.get('action_order', i + 1),
+                            action_type=action_data.get('action_type', 'command'),
+                            action_name=action_data.get('action_name', 'Command'),
+                            action_parameters=action_data.get('action_parameters', {}),
+                            action_config=action_data.get('action_config', {})
+                        )
+                        existing_job.actions.append(action)
+                
+                # Note: We don't remove extra actions to avoid foreign key issues
+                # In a production system, you might want to mark them as inactive instead
+            
+            # Handle special cases
+            if 'scheduled_at' in job_update_data:
+                if job_update_data['scheduled_at']:
+                    existing_job.status = JobStatus.SCHEDULED
+                else:
+                    existing_job.status = JobStatus.DRAFT
+            
+            existing_job.updated_at = datetime.utcnow()
+            self.db.commit()
+            updated_job = existing_job
+            
+            # Log audit event
+            await self.audit_service.log_event(
+                event_type=AuditEventType.JOB_UPDATED,
+                user_id=current_user_id,
+                resource_type="job",
+                resource_id=str(job_id),
+                action="update_job",
+                details={
+                    "job_name": updated_job.name,
+                    "fields_updated": list(job_update_data.keys()),
+                    "updated_by": current_username
+                },
+                severity=AuditSeverity.MEDIUM
+            )
+            
+            # Enhance job data
+            enhanced_job = await self._enhance_job_data(updated_job)
+            
+            logger.info(
+                "Job update successful",
+                extra={
+                    "job_id": job_id,
+                    "updated_by": current_username,
+                    "fields_updated": list(job_update_data.keys())
+                }
+            )
+            
+            return enhanced_job
+            
+        except Exception as e:
+            logger.error(
+                "Job update failed",
+                extra={
+                    "job_id": job_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "updated_by": current_username,
+                    "update_data": job_update_data
+                }
+            )
+            # Also log the full traceback for debugging
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise JobsManagementError(
+                "Failed to update job",
+                error_code="job_update_error",
+                details={"job_id": job_id, "error": str(e)}
+            )
+    
+    @with_performance_logging
+    async def delete_job(
+        self,
+        job_id: int,
+        soft_delete: bool = False,
+        current_user_id: int = None,
+        current_username: str = None
+    ) -> Dict[str, Any]:
+        """
+        Enhanced job deletion with comprehensive features
+        """
+        logger.info(
+            "Job deletion attempt",
+            extra={
+                "job_id": job_id,
+                "soft_delete": soft_delete,
+                "deleted_by": current_username
+            }
+        )
+        
+        try:
+            # Get existing job for audit logging
+            existing_job = self.job_service.get_job(job_id)
+            if not existing_job:
+                raise JobsManagementError(
+                    "Job not found",
+                    error_code="job_not_found",
+                    details={"job_id": job_id}
+                )
+            
+            # Delete job through existing service
+            result = self.job_service.delete_job(job_id, soft_delete)
+            
+            # Log audit event
+            await self.audit_service.log_event(
+                event_type=AuditEventType.JOB_DELETED,
+                user_id=current_user_id,
+                resource_type="job",
+                resource_id=str(job_id),
+                action="delete_job",
+                details={
+                    "job_name": existing_job.name,
+                    "soft_delete": soft_delete,
+                    "deleted_by": current_username
+                },
+                severity=AuditSeverity.HIGH
+            )
+            
+            logger.info(
+                "Job deletion successful",
+                extra={
+                    "job_id": job_id,
+                    "soft_delete": soft_delete,
+                    "deleted_by": current_username
+                }
+            )
+            
+            return {
+                "success": True,
+                "job_id": job_id,
+                "soft_delete": soft_delete
+            }
+            
+        except Exception as e:
+            logger.error(
+                "Job deletion failed",
+                extra={
+                    "job_id": job_id,
+                    "error": str(e),
+                    "deleted_by": current_username
+                }
+            )
+            raise JobsManagementError(
+                "Failed to delete job",
+                error_code="job_deletion_error",
+                details={"job_id": job_id, "error": str(e)}
+            )
+    
+    @with_performance_logging
+    async def get_job_targets(
+        self,
+        job_id: int,
+        current_user_id: int = None,
+        current_username: str = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get targets associated with a job
+        """
+        logger.info(
+            "Job targets retrieval attempt",
+            extra={
+                "job_id": job_id,
+                "requested_by": current_username
+            }
+        )
+        
+        try:
+            # Get job to verify it exists
+            job = self.job_service.get_job(job_id)
+            if not job:
+                raise JobsManagementError(
+                    "Job not found",
+                    error_code="job_not_found",
+                    details={"job_id": job_id}
+                )
+            
+            # Get job targets through existing service
+            targets = self.job_service.get_job_targets(job_id)
+            
+            logger.info(
+                "Job targets retrieval successful",
+                extra={
+                    "job_id": job_id,
+                    "target_count": len(targets),
+                    "requested_by": current_username
+                }
+            )
+            
+            return targets
+            
+        except Exception as e:
+            logger.error(
+                "Job targets retrieval failed",
+                extra={
+                    "job_id": job_id,
+                    "error": str(e),
+                    "requested_by": current_username
+                }
+            )
+            raise JobsManagementError(
+                "Failed to retrieve job targets",
+                error_code="job_targets_error",
+                details={"job_id": job_id, "error": str(e)}
+            )
+
+    @with_performance_logging
+    async def get_job_executions(
+        self,
+        job_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        current_user_id: int = None,
+        current_username: str = None
+    ) -> Dict[str, Any]:
+        """
+        Get execution history for a job
+        """
+        logger.info(
+            "Job executions retrieval attempt",
+            extra={
+                "job_id": job_id,
+                "skip": skip,
+                "limit": limit,
+                "requested_by": current_username
+            }
+        )
+        
+        try:
+            # Check if job exists
+            job = self.job_service.get_job(job_id)
+            if not job:
+                raise JobsManagementError(
+                    f"Job with ID {job_id} not found",
+                    error_code="job_not_found",
+                    details={"job_id": job_id}
+                )
+            
+            # Get job executions through existing service
+            executions = self.job_service.get_job_executions(job_id)
+            
+            # Apply pagination
+            total_executions = len(executions)
+            paginated_executions = executions[skip:skip + limit]
+            
+            # Format execution data
+            execution_data = []
+            for execution in paginated_executions:
+                execution_info = {
+                    "id": execution.id,
+                    "execution_serial": execution.execution_serial,
+                    "execution_number": execution.execution_number,
+                    "status": execution.status.value if hasattr(execution.status, 'value') else str(execution.status),
+                    "started_at": execution.started_at.isoformat() if execution.started_at else None,
+                    "completed_at": execution.completed_at.isoformat() if execution.completed_at else None,
+                    "created_at": execution.created_at.isoformat() if execution.created_at else None,
+                    "duration": None
+                }
+                
+                # Calculate duration if both timestamps exist
+                if execution.started_at and execution.completed_at:
+                    duration = (execution.completed_at - execution.started_at).total_seconds()
+                    execution_info["duration"] = duration
+                
+                execution_data.append(execution_info)
+            
+            result = {
+                "job_id": job_id,
+                "job_serial": job.job_serial,
+                "executions": execution_data,
+                "pagination": {
+                    "skip": skip,
+                    "limit": limit,
+                    "total": total_executions,
+                    "returned": len(execution_data)
+                },
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+            logger.info(
+                "Job executions retrieval successful",
+                extra={
+                    "job_id": job_id,
+                    "execution_count": len(execution_data),
+                    "total_executions": total_executions,
+                    "requested_by": current_username
+                }
+            )
+            
+            return result
+            
+        except JobsManagementError:
+            raise
+        except Exception as e:
+            logger.error(
+                "Job executions retrieval failed",
+                extra={
+                    "job_id": job_id,
+                    "error": str(e),
+                    "requested_by": current_username
+                }
+            )
+            raise JobsManagementError(
+                "Failed to retrieve job executions",
+                error_code="job_executions_error",
+                details={"job_id": job_id, "error": str(e)}
+            )
+
+    @with_caching(lambda self, job_id, **kwargs: f"job_detail_{job_id}", ttl=300)
+    @with_performance_logging
+    async def get_job_by_id(
+        self,
+        job_id: int,
+        current_user_id: int = None,
+        current_username: str = None
+    ) -> Dict[str, Any]:
+        """
+        Enhanced job retrieval by ID with comprehensive features
+        """
+        logger.info(
+            "Job retrieval by ID attempt",
+            extra={
+                "job_id": job_id,
+                "requested_by": current_username
+            }
+        )
+        
+        try:
+            # Get job through existing service
+            job = self.job_service.get_job(job_id)
+            if not job:
+                raise JobsManagementError(
+                    "Job not found",
+                    error_code="job_not_found",
+                    details={"job_id": job_id}
+                )
+            
+            # Enhance job data
+            enhanced_job = await self._enhance_job_data(job)
+            
+            logger.info(
+                "Job retrieval by ID successful",
+                extra={
+                    "job_id": job_id,
+                    "job_name": enhanced_job.get("name", "unknown"),
+                    "requested_by": current_username
+                }
+            )
+            
+            return enhanced_job
+            
+        except Exception as e:
+            logger.error(
+                "Job retrieval by ID failed",
+                extra={
+                    "job_id": job_id,
+                    "error": str(e),
+                    "requested_by": current_username
+                }
+            )
+            raise JobsManagementError(
+                "Failed to retrieve job",
+                error_code="job_retrieval_error",
+                details={"job_id": job_id, "error": str(e)}
+            )
+
     # Private helper methods
     
     async def _enhance_job_data(self, job) -> Dict[str, Any]:
         """Enhance job data with additional information"""
+        # Helper function to convert datetime to ISO string
+        def datetime_to_iso(dt):
+            if dt is None:
+                return None
+            if isinstance(dt, datetime):
+                return dt.isoformat()
+            return dt
+        
+        # Get job actions manually from database using the job service
+        actions = []
+        try:
+            from app.models.job_models import JobAction
+            job_actions = self.db.query(JobAction).filter(JobAction.job_id == job.id).order_by(JobAction.action_order).all()
+            logger.info(f"Found {len(job_actions)} actions for job {job.id}")
+            for action in job_actions:
+                action_dict = {
+                    "id": action.id,
+                    "action_order": action.action_order,
+                    "action_type": action.action_type,
+                    "action_name": action.action_name,
+                    "action_parameters": action.action_parameters or {},
+                    "action_config": action.action_config or {}
+                }
+                actions.append(action_dict)
+                logger.info(f"Added action: {action.action_name} with params: {action.action_parameters}")
+        except Exception as e:
+            logger.error(f"Error loading actions for job {job.id}: {str(e)}")
+            actions = []
+        
+        
         enhanced_data = {
             "id": job.id,
+            "job_uuid": str(getattr(job, "job_uuid", None)) if getattr(job, "job_uuid", None) else None,
+            "job_serial": getattr(job, "job_serial", None),
             "name": job.name,
             "job_type": job.job_type,
             "description": getattr(job, "description", ""),
             "status": str(getattr(job, "status", "unknown")),
-            "created_at": job.created_at if hasattr(job, "created_at") and job.created_at else datetime.utcnow(),
-            "updated_at": job.updated_at if hasattr(job, "updated_at") else None,
+            "created_at": datetime_to_iso(job.created_at if hasattr(job, "created_at") and job.created_at else datetime.utcnow()),
+            "updated_at": datetime_to_iso(job.updated_at if hasattr(job, "updated_at") else None),
             "created_by": getattr(job, "created_by", 1),
             "parameters": getattr(job, "parameters", {}),
-            "schedule": getattr(job, "schedule", None),
+            "actions": actions,
+            "scheduled_at": datetime_to_iso(getattr(job, "scheduled_at", None)),
             "priority": getattr(job, "priority", 5),
             "timeout": getattr(job, "timeout", None),
             "retry_count": getattr(job, "retry_count", 0),
@@ -685,9 +1193,32 @@ class JobsManagementService:
         # For now, allow all authenticated users
         pass
     
-    # Placeholder methods for analytics (would be implemented based on specific requirements)
-    async def _get_job_execution_count(self, job_id: int) -> int: return 0
-    async def _get_last_job_execution(self, job_id: int) -> Optional[str]: return None
+    # Analytics methods for job execution data
+    async def _get_job_execution_count(self, job_id: int) -> int:
+        """Get the total number of executions for a job"""
+        try:
+            from app.models.job_models import JobExecution
+            count = self.db.query(JobExecution).filter(JobExecution.job_id == job_id).count()
+            return count
+        except Exception as e:
+            logger.warning(f"Failed to get execution count for job {job_id}: {e}")
+            return 0
+    
+    async def _get_last_job_execution(self, job_id: int) -> Optional[str]:
+        """Get the last execution serial for a job"""
+        try:
+            from app.models.job_models import JobExecution
+            last_execution = (self.db.query(JobExecution)
+                            .filter(JobExecution.job_id == job_id)
+                            .order_by(JobExecution.execution_number.desc())
+                            .first())
+            
+            if last_execution:
+                return last_execution.execution_serial
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to get last execution for job {job_id}: {e}")
+            return None
     async def _calculate_jobs_per_day(self) -> float: return 0.0
     async def _calculate_average_execution_time(self) -> float: return 0.0
     async def _calculate_job_success_rate(self) -> float: return 100.0

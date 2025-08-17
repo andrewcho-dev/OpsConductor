@@ -69,10 +69,9 @@
 /* Standardized Dashboard Container - 100% Consistent */
 .dashboard-container,
 .datatable-page-container {
-  height: calc(100vh - 92px) !important; /* Account for header (64px) + footer (28px) */
-  min-height: calc(100vh - 92px) !important;
-  max-height: calc(100vh - 92px) !important;
-  overflow: hidden !important;
+  min-height: calc(100vh - 92px) !important; /* Account for header (64px) + footer (28px) */
+  overflow-y: auto !important; /* Allow vertical scrolling */
+  overflow-x: hidden !important; /* Prevent horizontal scrolling */
   display: flex !important;
   flex-direction: column !important;
   padding: 12px !important; /* Fixed 12px padding on all sides */

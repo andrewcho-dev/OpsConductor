@@ -173,96 +173,12 @@ function AuditDashboard() {
     return new Date(timestamp).toLocaleString();
   };
 
-  // Generate 200 sample events for testing
-  const generateSampleEvents = () => {
-    const eventTypes = [
-      'user_login', 'user_logout', 'user_created', 'user_updated', 'user_deleted',
-      'target_created', 'target_updated', 'target_deleted', 'target_connection_test',
-      'job_created', 'job_updated', 'job_deleted', 'job_executed', 'bulk_operation'
-    ];
-    
-    const severities = ['low', 'medium', 'high', 'critical'];
-    
-    const users = [
-      'John Doe', 'Jane Smith', 'Admin User', 'Bob Johnson', 'Alice Brown',
-      'Charlie Wilson', 'Diana Prince', 'Edward Norton', 'Fiona Green', 'George Miller',
-      'Helen Davis', 'Ivan Petrov', 'Julia Roberts', 'Kevin Hart', 'Linda Johnson',
-      'Michael Scott', 'Nancy Drew', 'Oscar Wilde', 'Patricia Moore', 'Quincy Jones',
-      'Rachel Green', 'Steve Jobs', 'Tina Turner', 'Ulysses Grant', 'Victoria Beckham',
-      'William Shakespeare', 'Xena Warrior', 'Yoda Master', 'Zoe Saldana'
-    ];
-    
-    const resources = [
-      'Production Server', 'Development Environment', 'Database Cluster', 'Web Application',
-      'API Gateway', 'Load Balancer', 'File Server', 'Backup System', 'Monitoring Dashboard',
-      'User Account', 'Admin Panel', 'Configuration File', 'Security Policy', 'Network Device',
-      'Docker Container', 'Kubernetes Pod', 'CI/CD Pipeline', 'Test Environment', 'Staging Server',
-      'Mail Server', 'DNS Server', 'Firewall Rules', 'SSL Certificate', 'Authentication Service',
-      'Payment Gateway', 'Analytics Platform', 'Content Management', 'Mobile App', 'Desktop Client'
-    ];
-    
-    const actions = {
-      'user_login': ['login', 'authenticate', 'sign_in'],
-      'user_logout': ['logout', 'sign_out', 'session_end'],
-      'user_created': ['create', 'register', 'add_user'],
-      'user_updated': ['update', 'modify', 'edit_profile'],
-      'user_deleted': ['delete', 'remove', 'deactivate'],
-      'target_created': ['create', 'provision', 'deploy'],
-      'target_updated': ['update', 'configure', 'modify'],
-      'target_deleted': ['delete', 'destroy', 'remove'],
-      'target_connection_test': ['test', 'ping', 'verify_connection'],
-      'job_created': ['create', 'schedule', 'define'],
-      'job_updated': ['update', 'reschedule', 'modify'],
-      'job_deleted': ['delete', 'cancel', 'remove'],
-      'job_executed': ['execute', 'run', 'process'],
-      'bulk_operation': ['bulk_import', 'mass_update', 'batch_process']
-    };
-    
-    const events = [];
-    const now = Date.now();
-    
-    for (let i = 0; i < 200; i++) {
-      const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-      const severity = severities[Math.floor(Math.random() * severities.length)];
-      const user = users[Math.floor(Math.random() * users.length)];
-      const resource = resources[Math.floor(Math.random() * resources.length)];
-      const action = actions[eventType][Math.floor(Math.random() * actions[eventType].length)];
-      
-      // Generate timestamps spread over the last 30 days
-      const daysAgo = Math.floor(Math.random() * 30);
-      const hoursAgo = Math.floor(Math.random() * 24);
-      const minutesAgo = Math.floor(Math.random() * 60);
-      const timestamp = new Date(now - (daysAgo * 24 * 60 * 60 * 1000) - (hoursAgo * 60 * 60 * 1000) - (minutesAgo * 60 * 1000));
-      
-      events.push({
-        id: `sample-${i + 1}`,
-        timestamp: timestamp.toISOString(),
-        event_type: eventType,
-        action: action,
-        user_display_name: user,
-        resource_display_name: resource,
-        severity: severity,
-        details: {
-          ip_address: `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
-          user_agent: Math.random() > 0.5 ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-          session_id: `sess_${Math.random().toString(36).substr(2, 9)}`,
-          duration_ms: Math.floor(Math.random() * 5000) + 100
-        }
-      });
-    }
-    
-    // Sort by timestamp (newest first)
-    return events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  };
-
-  const sampleEvents = generateSampleEvents();
-
-  // Use sample data if no real data is available (for testing)
-  // TEMPORARY: Always use sample data for testing
-  const eventsToDisplay = sampleEvents;
+  // Use real API data only - NO MORE MOCK DATA
+  const eventsToDisplay = enrichedEvents.length > 0 ? enrichedEvents : events;
 
   // Debug: Log key information
-  console.log('Sample Events Generated:', sampleEvents.length);
+  console.log('Real Events from API:', events.length);
+  console.log('Enriched Events:', enrichedEvents.length);
   console.log('Events To Display:', eventsToDisplay.length);
 
   // Filter and sort events based on column filters

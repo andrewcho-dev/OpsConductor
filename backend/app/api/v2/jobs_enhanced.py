@@ -36,13 +36,24 @@ security = HTTPBearer()
 
 # PHASE 1: COMPREHENSIVE PYDANTIC MODELS
 
+class JobActionCreateV2(BaseModel):
+    """V2 Job action creation model"""
+    action_order: Optional[int] = None
+    action_type: str = Field(default="COMMAND", description="Action type")
+    action_name: str = Field(..., description="Action name", min_length=1, max_length=255)
+    action_parameters: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Action parameters")
+    action_config: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Action configuration")
+
+
 class JobCreateRequest(BaseModel):
-    """Enhanced request model for job creation"""
+    """V2 Enhanced request model for job creation - Frontend Compatible"""
     name: str = Field(..., description="Job name", min_length=1, max_length=255)
-    job_type: str = Field(..., description="Job type", min_length=1, max_length=100)
     description: Optional[str] = Field(None, description="Job description", max_length=1000)
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="Job parameters")
-    schedule: Optional[Dict[str, Any]] = Field(None, description="Job schedule configuration")
+    actions: List[JobActionCreateV2] = Field(..., description="Job actions", min_items=1)
+    target_ids: List[int] = Field(..., description="Target IDs", min_items=1)
+    scheduled_at: Optional[str] = Field(None, description="Scheduled execution time (ISO format)")
+    
+    # Optional v2 enhancements
     priority: int = Field(default=5, description="Job priority (1-10)", ge=1, le=10)
     timeout: Optional[int] = Field(None, description="Job timeout in seconds", ge=1)
     retry_count: int = Field(default=0, description="Number of retries", ge=0, le=10)
@@ -54,35 +65,37 @@ class JobCreateRequest(BaseModel):
             raise ValueError('Job name cannot be empty')
         return v.strip()
     
-    @validator('job_type')
-    def validate_job_type(cls, v):
-        """Validate job type"""
-        allowed_types = [
-            'discovery', 'monitoring', 'backup', 'maintenance', 
-            'security_scan', 'compliance_check', 'data_export',
-            'system_health', 'network_scan', 'custom'
-        ]
-        if v not in allowed_types:
-            raise ValueError(f'Job type must be one of: {", ".join(allowed_types)}')
-        return v
+    @validator('scheduled_at')
+    def validate_scheduled_at(cls, v):
+        """Validate and convert scheduled_at to datetime"""
+        if v is None:
+            return None
+        try:
+            # Parse ISO format datetime string
+            from datetime import datetime
+            return datetime.fromisoformat(v.replace('Z', '+00:00'))
+        except ValueError:
+            raise ValueError('scheduled_at must be in ISO format (e.g., 2025-08-17T03:06:00.000Z)')
     
     class Config:
         json_schema_extra = {
             "example": {
-                "name": "Network Discovery Job",
-                "job_type": "discovery",
-                "description": "Discover devices on the network",
-                "parameters": {
-                    "network_range": "192.168.1.0/24",
-                    "scan_ports": [22, 80, 443]
-                },
-                "schedule": {
-                    "type": "cron",
-                    "expression": "0 2 * * *"
-                },
-                "priority": 7,
+                "name": "Simple Job",
+                "description": "A simple job example",
+                "actions": [
+                    {
+                        "action_name": "Execute Command",
+                        "action_type": "COMMAND",
+                        "action_parameters": {
+                            "command": "echo 'Hello World'"
+                        }
+                    }
+                ],
+                "target_ids": [1, 2, 3],
+                "scheduled_at": "2025-08-17T03:06:00.000Z",
+                "priority": 5,
                 "timeout": 3600,
-                "retry_count": 3
+                "retry_count": 0
             }
         }
 
@@ -90,6 +103,8 @@ class JobCreateRequest(BaseModel):
 class JobResponse(BaseModel):
     """Enhanced response model for job information"""
     id: int = Field(..., description="Job ID")
+    job_uuid: Optional[str] = Field(None, description="Permanent job UUID")
+    job_serial: Optional[str] = Field(None, description="Human-readable job serial (e.g., J20250000001)")
     name: str = Field(..., description="Job name")
     job_type: str = Field(..., description="Job type")
     description: Optional[str] = Field(None, description="Job description")
@@ -98,7 +113,8 @@ class JobResponse(BaseModel):
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
     created_by: int = Field(..., description="Creator user ID")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Job parameters")
-    schedule: Optional[Dict[str, Any]] = Field(None, description="Job schedule")
+    actions: List[Dict[str, Any]] = Field(default_factory=list, description="Job actions")
+    scheduled_at: Optional[datetime] = Field(None, description="Job scheduled execution time")
     priority: int = Field(..., description="Job priority")
     timeout: Optional[int] = Field(None, description="Job timeout")
     retry_count: int = Field(..., description="Retry count")
@@ -118,10 +134,7 @@ class JobResponse(BaseModel):
                 "parameters": {
                     "network_range": "192.168.1.0/24"
                 },
-                "schedule": {
-                    "type": "cron",
-                    "expression": "0 2 * * *"
-                },
+                "scheduled_at": "2025-01-01T02:00:00Z",
                 "priority": 7,
                 "timeout": 3600,
                 "retry_count": 3,
@@ -551,6 +564,8 @@ async def get_jobs(
     job_type: Optional[str] = Query(None, description="Filter by job type"),
     job_status: Optional[str] = Query(None, description="Filter by status"),
     user_id: Optional[int] = Query(None, description="Filter by user ID"),
+    sort_by: Optional[str] = Query("created_at", description="Sort by field (created_at, scheduled_at, name, status)"),
+    sort_order: Optional[str] = Query("desc", description="Sort order (asc, desc)"),
     current_user = Depends(require_job_permissions),
     db: Session = Depends(get_db)
 ) -> JobsListResponse:
@@ -570,6 +585,8 @@ async def get_jobs(
             user_id=user_id,
             job_type=job_type,
             status=job_status,
+            sort_by=sort_by,
+            sort_order=sort_order,
             current_user_id=current_user.id,
             current_username=current_user.username
         )
@@ -943,6 +960,396 @@ async def get_job_statistics(
             detail={
                 "error": "internal_server_error",
                 "message": "An internal error occurred while retrieving job statistics",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+class JobUpdateRequest(BaseModel):
+    """Request model for updating jobs"""
+    name: Optional[str] = Field(None, description="Job name")
+    description: Optional[str] = Field(None, description="Job description")
+    actions: Optional[List[JobActionCreateV2]] = Field(None, description="Job actions")
+    target_ids: Optional[List[int]] = Field(None, description="Target system IDs")
+    scheduled_at: Optional[datetime] = Field(None, description="Scheduled execution time")
+    priority: Optional[int] = Field(None, ge=1, le=10, description="Job priority (1-10)")
+    timeout: Optional[int] = Field(None, ge=1, description="Job timeout in seconds")
+    retry_count: Optional[int] = Field(None, ge=0, le=5, description="Number of retries")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "Updated Network Discovery Job",
+                "description": "Updated description",
+                "scheduled_at": "2025-01-01T02:00:00Z",
+                "priority": 8
+            }
+        }
+
+
+@router.put(
+    "/{job_id}",
+    response_model=JobResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Job",
+    description="""
+    Update an existing job with new information.
+    
+    **Features:**
+    - ✅ Partial updates (only provided fields are updated)
+    - ✅ Enhanced job data with execution history
+    - ✅ Comprehensive error handling
+    - ✅ Audit logging for changes
+    """,
+    responses={
+        200: {"description": "Job updated successfully", "model": JobResponse},
+        404: {"description": "Job not found"},
+        403: {"description": "Insufficient permissions"}
+    }
+)
+async def update_job(
+    job_id: int,
+    job_update: JobUpdateRequest,
+    current_user = Depends(require_job_permissions),
+    db: Session = Depends(get_db)
+) -> JobResponse:
+    """Enhanced job update with service layer and comprehensive features"""
+    
+    request_logger = RequestLogger(logger, "update_job")
+    request_logger.log_request_start("PUT", f"/api/v2/jobs/{job_id}", current_user.username)
+    
+    try:
+        # Initialize service layer
+        jobs_mgmt_service = JobsManagementService(db)
+        
+        # Update job through service layer
+        updated_job = await jobs_mgmt_service.update_job(
+            job_id=job_id,
+            job_update_data=job_update.dict(exclude_unset=True),
+            current_user_id=current_user.id,
+            current_username=current_user.username
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, 1)
+        
+        logger.info(
+            "Job update successful",
+            extra={
+                "job_id": job_id,
+                "updated_by": current_user.username,
+                "fields_updated": list(job_update.dict(exclude_unset=True).keys())
+            }
+        )
+        
+        return updated_job
+        
+    except JobsManagementError as e:
+        request_logger.log_request_end(status.HTTP_400_BAD_REQUEST, 0)
+        
+        logger.warning(
+            "Job update failed via service layer",
+            extra={
+                "job_id": job_id,
+                "error_code": e.error_code,
+                "error_message": e.message,
+                "updated_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": e.error_code,
+                "message": e.message,
+                "details": e.details,
+                "timestamp": e.timestamp.isoformat()
+            }
+        )
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Job update error via service layer",
+            extra={
+                "job_id": job_id,
+                "error": str(e),
+                "updated_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while updating the job",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.delete(
+    "/{job_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete Job",
+    description="""
+    Delete a job and all its associated data.
+    
+    **Features:**
+    - ✅ Cascading deletion of related data
+    - ✅ Comprehensive error handling
+    - ✅ Audit logging for deletion
+    - ✅ Soft delete option (preserves history)
+    """,
+    responses={
+        200: {"description": "Job deleted successfully"},
+        404: {"description": "Job not found"},
+        403: {"description": "Insufficient permissions"}
+    }
+)
+async def delete_job(
+    job_id: int,
+    soft_delete: bool = Query(False, description="Perform soft delete (preserve history)"),
+    current_user = Depends(require_job_permissions),
+    db: Session = Depends(get_db)
+):
+    """Enhanced job deletion with service layer and comprehensive features"""
+    
+    request_logger = RequestLogger(logger, "delete_job")
+    request_logger.log_request_start("DELETE", f"/api/v2/jobs/{job_id}", current_user.username)
+    
+    try:
+        # Initialize service layer
+        jobs_mgmt_service = JobsManagementService(db)
+        
+        # Delete job through service layer
+        result = await jobs_mgmt_service.delete_job(
+            job_id=job_id,
+            soft_delete=soft_delete,
+            current_user_id=current_user.id,
+            current_username=current_user.username
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, 1)
+        
+        logger.info(
+            "Job deletion successful",
+            extra={
+                "job_id": job_id,
+                "soft_delete": soft_delete,
+                "deleted_by": current_user.username
+            }
+        )
+        
+        return {
+            "message": "Job deleted successfully",
+            "job_id": job_id,
+            "soft_delete": soft_delete,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except JobsManagementError as e:
+        request_logger.log_request_end(status.HTTP_400_BAD_REQUEST, 0)
+        
+        logger.warning(
+            "Job deletion failed via service layer",
+            extra={
+                "job_id": job_id,
+                "error_code": e.error_code,
+                "error_message": e.message,
+                "deleted_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": e.error_code,
+                "message": e.message,
+                "details": e.details,
+                "timestamp": e.timestamp.isoformat()
+            }
+        )
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Job deletion error via service layer",
+            extra={
+                "job_id": job_id,
+                "error": str(e),
+                "deleted_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while deleting the job",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.get(
+    "/{job_id}/targets",
+    status_code=status.HTTP_200_OK,
+    summary="Get Job Targets",
+    description="""
+    Get all targets associated with a specific job.
+    
+    **Features:**
+    - ✅ Complete target information
+    - ✅ Target connection status
+    - ✅ Comprehensive error handling
+    """,
+    responses={
+        200: {"description": "Job targets retrieved successfully"},
+        404: {"description": "Job not found"}
+    }
+)
+async def get_job_targets(
+    job_id: int,
+    current_user = Depends(require_job_permissions),
+    db: Session = Depends(get_db)
+):
+    """Get targets associated with a job"""
+    
+    request_logger = RequestLogger(logger, "get_job_targets")
+    request_logger.log_request_start("GET", f"/api/v2/jobs/{job_id}/targets", current_user.username)
+    
+    try:
+        # Initialize service layer
+        jobs_mgmt_service = JobsManagementService(db)
+        
+        # Get job targets through service layer
+        targets = await jobs_mgmt_service.get_job_targets(
+            job_id=job_id,
+            current_user_id=current_user.id,
+            current_username=current_user.username
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(targets))
+        
+        return {
+            "job_id": job_id,
+            "targets": targets,
+            "total": len(targets),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except JobsManagementError as e:
+        request_logger.log_request_end(status.HTTP_404_NOT_FOUND, 0)
+        
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": e.error_code,
+                "message": e.message,
+                "timestamp": e.timestamp.isoformat()
+            }
+        )
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Job targets retrieval error",
+            extra={
+                "job_id": job_id,
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while retrieving job targets",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.get(
+    "/{job_id}/executions",
+    status_code=status.HTTP_200_OK,
+    summary="Get Job Execution History",
+    description="""
+    Get execution history for a specific job.
+    
+    **Features:**
+    - ✅ Complete execution information with serial numbers
+    - ✅ Execution status and timing details
+    - ✅ Pagination support
+    - ✅ Comprehensive error handling
+    """,
+    responses={
+        200: {"description": "Job execution history retrieved successfully"},
+        404: {"description": "Job not found"}
+    }
+)
+async def get_job_executions(
+    job_id: int,
+    skip: int = Query(0, ge=0, description="Number of executions to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of executions to return"),
+    current_user = Depends(require_job_permissions),
+    db: Session = Depends(get_db)
+):
+    """Get execution history for a job"""
+    
+    request_logger = RequestLogger(logger, "get_job_executions")
+    request_logger.log_request_start("GET", f"/api/v2/jobs/{job_id}/executions", current_user.username)
+    
+    try:
+        # Initialize service layer
+        jobs_mgmt_service = JobsManagementService(db)
+        
+        # Get job executions through service layer
+        executions_data = await jobs_mgmt_service.get_job_executions(
+            job_id=job_id,
+            skip=skip,
+            limit=limit,
+            current_user_id=current_user.id,
+            current_username=current_user.username
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(executions_data.get('executions', [])))
+        
+        return executions_data
+        
+    except JobsManagementError as e:
+        request_logger.log_request_end(status.HTTP_404_NOT_FOUND, 0)
+        
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": e.error_code,
+                "message": e.message,
+                "timestamp": e.timestamp.isoformat()
+            }
+        )
+        
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Job executions retrieval error",
+            extra={
+                "job_id": job_id,
+                "error": str(e),
+                "requested_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while retrieving job executions",
                 "timestamp": datetime.utcnow().isoformat()
             }
         )

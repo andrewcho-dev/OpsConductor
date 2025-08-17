@@ -608,25 +608,16 @@ class JobExecutionService:
         status: ExecutionStatus
     ):
         """Update execution as complete and update job status"""
-        # Update execution status
-        self.job_service.update_execution_status(
+        # Update execution status (this also updates job status automatically)
+        execution = self.job_service.update_execution_status(
             execution_id=execution_id,
             status=status,
             completed_at=datetime.now(timezone.utc)
         )
         
-        # Update job status as well
-        execution = self.job_service.get_job_execution(execution_id)
         if execution and execution.job:
-            from app.models.job_models import JobStatus
-            job_status = JobStatus.COMPLETED if status == ExecutionStatus.COMPLETED else JobStatus.FAILED
-            
-            # Update the job status and completion time
-            execution.job.status = job_status
-            execution.job.completed_at = datetime.now(timezone.utc)
-            self.job_service.db.commit()
-            
-            logger.info(f"Updated job {execution.job.id} status to {job_status.value}")
+            job_status = "completed" if status == ExecutionStatus.COMPLETED else "failed"
+            logger.info(f"Updated job {execution.job.id} status to {job_status}")
 
     async def _log_execution_event(
         self,

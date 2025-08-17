@@ -136,6 +136,7 @@ const JobDashboard = () => {
 
 
     const handleUpdateJob = async (updatedJobData) => {
+        console.log('🔄 Starting job update...', updatedJobData);
         try {
             const jobData = {
                 name: updatedJobData.name,
@@ -143,9 +144,17 @@ const JobDashboard = () => {
                 job_type: updatedJobData.job_type,
                 actions: updatedJobData.actions,
                 target_ids: updatedJobData.target_ids,
-                scheduled_at: updatedJobData.scheduled_at
+                scheduled_at: updatedJobData.scheduled_at,
+                priority: updatedJobData.priority,
+                timeout: updatedJobData.timeout,
+                retry_count: updatedJobData.retry_count
             };
+            console.log('📤 Sending job data:', jobData);
+            console.log('🎯 API endpoint:', `/v2/jobs/${updatedJobData.id || updatedJobData.job_id}`);
+            
             const response = await authService.api.put(`/v2/jobs/${updatedJobData.id || updatedJobData.job_id}`, jobData);
+            console.log('✅ API response:', response);
+            
             const updatedJob = response.data;
             // Update the job in the local state
             setJobs(prevJobs => 
@@ -157,6 +166,10 @@ const JobDashboard = () => {
             fetchJobs(); // Refresh the job list to get latest data
             return true;
         } catch (error) {
+            console.error('❌ Job update failed:', error);
+            console.error('❌ Error response:', error.response);
+            console.error('❌ Error status:', error.response?.status);
+            console.error('❌ Error data:', error.response?.data);
             addAlert(`Failed to update job: ${error.response?.data?.detail || error.message}`, 'error');
             return false;
         }

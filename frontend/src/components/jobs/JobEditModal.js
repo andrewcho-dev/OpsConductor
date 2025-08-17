@@ -51,13 +51,16 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
     job_type: 'command',
     actions: [],
     target_ids: [],
-    scheduled_at: null
+    scheduled_at: null,
+    priority: 5,
+    timeout: null,
+    retry_count: 0
   });
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (open && job) {
-      console.log('🔧 JobEditModal: Modal opened with job:', job);
+
       // Clear errors
       setErrors({});
       
@@ -113,7 +116,11 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
       // Convert UTC scheduled_at to local datetime string for datetime-local input
       let initialScheduledAt = null;
       if (job.scheduled_at) {
+        // job.scheduled_at is UTC string like "2025-08-17T15:30:00Z"
+        // new Date() automatically converts UTC to local time
         const utcDate = new Date(job.scheduled_at);
+        
+        // Extract local time components (getHours() returns local time after UTC conversion)
         const year = utcDate.getFullYear();
         const month = String(utcDate.getMonth() + 1).padStart(2, '0');
         const day = String(utcDate.getDate()).padStart(2, '0');
@@ -121,10 +128,7 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
         const minutes = String(utcDate.getMinutes()).padStart(2, '0');
         initialScheduledAt = `${year}-${month}-${day}T${hours}:${minutes}`;
         
-        console.log('🕐 Converting initial scheduled_at for edit:', {
-          utcFromProp: job.scheduled_at,
-          convertedToLocal: initialScheduledAt
-        });
+
       }
       
       const initialFormData = {
@@ -133,10 +137,13 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
         job_type: job.job_type || 'command',
         actions: jobActions,
         target_ids: job.target_ids || [],
-        scheduled_at: initialScheduledAt
+        scheduled_at: initialScheduledAt,
+        priority: job.priority || 5,
+        timeout: job.timeout || null,
+        retry_count: job.retry_count || 0
       };
       
-      console.log('🔧 JobEditModal: Setting initial form data:', initialFormData);
+
       setFormData(initialFormData);
       
       // Fetch additional data
@@ -153,13 +160,13 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
   const fetchJobDetails = async () => {
     try {
       const [jobResponse, targetsResponse] = await Promise.all([
-        fetch(`/api/jobs/${job.id}`, {
+        fetch(`/api/v2/jobs/${job.id}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         }),
-        fetch(`/api/jobs/${job.id}/targets`, {
+        fetch(`/api/v2/jobs/${job.id}/targets`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -204,9 +211,11 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
         // Convert UTC scheduled_at to local datetime string for datetime-local input
         let localScheduledAt = null;
         if (jobData.scheduled_at) {
-          // jobData.scheduled_at is UTC string like "2025-08-11T21:30:00.000Z"
-          // Convert to local datetime string like "2025-08-11T14:30" for datetime-local input
+          // jobData.scheduled_at is UTC string like "2025-08-17T15:30:00Z"
+          // new Date() automatically converts UTC to local time
           const utcDate = new Date(jobData.scheduled_at);
+          
+          // Extract local time components (getHours() returns local time after UTC conversion)
           const year = utcDate.getFullYear();
           const month = String(utcDate.getMonth() + 1).padStart(2, '0');
           const day = String(utcDate.getDate()).padStart(2, '0');
@@ -214,11 +223,7 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
           const minutes = String(utcDate.getMinutes()).padStart(2, '0');
           localScheduledAt = `${year}-${month}-${day}T${hours}:${minutes}`;
           
-          console.log('🕐 Converting scheduled_at for edit:', {
-            utcFromDatabase: jobData.scheduled_at,
-            convertedToLocal: localScheduledAt,
-            utcDateObject: utcDate.toString()
-          });
+
         }
         
         // Update form data with API data
@@ -233,10 +238,13 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
             action_parameters: { command: '' }
           }],
           target_ids: Array.isArray(targetIds) ? targetIds : [],
-          scheduled_at: localScheduledAt
+          scheduled_at: localScheduledAt,
+          priority: jobData.priority || 5,
+          timeout: jobData.timeout || null,
+          retry_count: jobData.retry_count || 0
         };
         
-        console.log('🔧 JobEditModal: Updating form data with API response:', updatedFormData);
+
         setFormData(updatedFormData);
       } else {
         console.error('Failed to fetch fresh job details - Response not OK');
@@ -270,10 +278,14 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
       const response = await fetch('/api/system/info');
       if (response.ok) {
         const data = await response.json();
-        setSystemTimezone(data.timezone?.display_name || 'UTC');
+        const timezone = data.timezone || 'UTC';
+        // Convert long timezone names to shorter, more user-friendly format
+        const shortTimezone = timezone.replace('America/', '').replace('Europe/', '').replace('_', ' ');
+        setSystemTimezone(shortTimezone);
       }
     } catch (error) {
       console.error('Failed to fetch system timezone:', error);
+      setSystemTimezone('UTC');
     }
   };
 
@@ -360,11 +372,7 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
         
         // Convert to ISO string (UTC) for backend
         submitData.scheduled_at = localDateTime.toISOString();
-        console.log('🕐 JobEdit datetime conversion:', {
-          original: formData.scheduled_at,
-          parsedAsLocal: localDateTime.toString(),
-          utcForBackend: submitData.scheduled_at
-        });
+
       }
       
       const success = await onSubmit(submitData);
@@ -625,16 +633,7 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
               size="small"
               type="datetime-local"
               label={`Schedule Time (${systemTimezone})`}
-              value={formData.scheduled_at ? (() => {
-                // Convert stored UTC time back to local time for display
-                const utcDate = new Date(formData.scheduled_at + (formData.scheduled_at.endsWith('Z') ? '' : 'Z'));
-                const year = utcDate.getFullYear();
-                const month = String(utcDate.getMonth() + 1).padStart(2, '0');
-                const day = String(utcDate.getDate()).padStart(2, '0');
-                const hours = String(utcDate.getHours()).padStart(2, '0');
-                const minutes = String(utcDate.getMinutes()).padStart(2, '0');
-                return `${year}-${month}-${day}T${hours}:${minutes}`;
-              })() : ''}
+              value={formData.scheduled_at || ''}
               onChange={(e) => handleInputChange('scheduled_at', e.target.value || null)}
               InputLabelProps={{ shrink: true }}
               helperText={`Leave empty to keep as draft. Time will be in ${systemTimezone}`}
@@ -654,6 +653,53 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
                 })()
               }}
             />
+          </Box>
+
+          <Divider />
+
+          {/* Advanced Options - Compact Grid */}
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, fontSize: '0.8rem', color: 'text.secondary' }}>
+              ADVANCED OPTIONS
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Priority"
+                  value={formData.priority}
+                  onChange={(e) => handleInputChange('priority', parseInt(e.target.value) || 5)}
+                  inputProps={{ min: 1, max: 10 }}
+                  helperText="1 (lowest) to 10 (highest)"
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Timeout (seconds)"
+                  value={formData.timeout || ''}
+                  onChange={(e) => handleInputChange('timeout', e.target.value ? parseInt(e.target.value) : null)}
+                  inputProps={{ min: 1 }}
+                  helperText="Leave empty for no timeout"
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Retry Count"
+                  value={formData.retry_count}
+                  onChange={(e) => handleInputChange('retry_count', parseInt(e.target.value) || 0)}
+                  inputProps={{ min: 0, max: 5 }}
+                  helperText="0 to 5 retries"
+                />
+              </Grid>
+            </Grid>
           </Box>
         </Box>
       </DialogContent>

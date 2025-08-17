@@ -135,12 +135,13 @@ const CeleryMonitorPage = () => {
 
       if (workerResponse.ok) {
         const workerData = await workerResponse.json();
+        const workers = workerData.workers || [];
         setWorkerStats({
-          workers: Object.values(workerData.workers || {}),
-          total_workers: Object.keys(workerData.workers || {}).length,
-          active_workers: Object.values(workerData.workers || {}).filter(w => w.online).length,
-          busy_workers: Object.values(workerData.workers || {}).filter(w => w.active_tasks > 0).length,
-          avg_load: Object.values(workerData.workers || {}).reduce((sum, w) => sum + (w.load || 0), 0) / Math.max(Object.keys(workerData.workers || {}).length, 1)
+          workers: workers,
+          total_workers: workers.length,
+          active_workers: workers.filter(w => w.status === "online").length,
+          busy_workers: workers.filter(w => w.active_tasks > 0).length,
+          avg_load: workers.reduce((sum, w) => sum + (w.load_avg || 0), 0) / Math.max(workers.length, 1)
         });
       }
 
@@ -171,7 +172,35 @@ const CeleryMonitorPage = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setMetricsHistory(data);
+        console.log('📊 Raw metrics data:', data);
+        
+        // Transform data for MetricsChart component
+        if (data.metrics && data.metrics.length > 0) {
+          const transformedData = {
+            ...data,
+            // Add chart-ready data for completed tasks
+            completedTasksChart: {
+              timestamps: data.metrics.map(m => m.timestamp),
+              values: data.metrics.map(m => m.completed_tasks || 0)
+            },
+            // Add chart-ready data for failed tasks  
+            failedTasksChart: {
+              timestamps: data.metrics.map(m => m.timestamp),
+              values: data.metrics.map(m => m.failed_tasks || 0)
+            },
+            // Add summary statistics
+            summary: {
+              total_completed: data.metrics.reduce((sum, m) => sum + (m.completed_tasks || 0), 0),
+              total_failed: data.metrics.reduce((sum, m) => sum + (m.failed_tasks || 0), 0),
+              avg_load: data.metrics.reduce((sum, m) => sum + (m.success_rate || 0), 0) / data.metrics.length
+            }
+          };
+          console.log('📈 Transformed metrics data:', transformedData);
+          setMetricsHistory(transformedData);
+        } else {
+          console.log('⚠️ No metrics data available');
+          setMetricsHistory(data);
+        }
       } else {
         console.error('Failed to fetch metrics history');
       }
@@ -184,8 +213,8 @@ const CeleryMonitorPage = () => {
 
   // Helper functions
   const getWorkerStatus = (worker) => {
-    if (!worker.online) return { status: 'offline', color: 'error' };
-    if (worker.active_tasks > worker.pool_size * 0.8) return { status: 'busy', color: 'warning' };
+    if (worker.status !== "online") return { status: 'offline', color: 'error' };
+    if (worker.active_tasks > 10) return { status: 'busy', color: 'warning' }; // Simplified threshold
     return { status: 'online', color: 'success' };
   };
 
@@ -686,9 +715,24 @@ const CeleryMonitorPage = () => {
             )}
 
             {/* Metrics Chart */}
-            {metricsHistory && (
+            {metricsHistory && metricsHistory.completedTasksChart && (
               <div style={{ marginTop: '16px' }}>
-                <MetricsChart data={metricsHistory} />
+                <MetricsChart 
+                  title="Completed Tasks" 
+                  data={metricsHistory.completedTasksChart} 
+                  color="rgb(75, 192, 192)"
+                />
+              </div>
+            )}
+            
+            {/* Failed Tasks Chart */}
+            {metricsHistory && metricsHistory.failedTasksChart && (
+              <div style={{ marginTop: '8px' }}>
+                <MetricsChart 
+                  title="Failed Tasks" 
+                  data={metricsHistory.failedTasksChart} 
+                  color="rgb(255, 99, 132)"
+                />
               </div>
             )}
           </div>

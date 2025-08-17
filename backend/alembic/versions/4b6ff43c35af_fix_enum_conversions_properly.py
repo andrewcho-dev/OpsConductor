@@ -1,8 +1,8 @@
-"""final_alignment_test
+"""fix_enum_conversions_properly
 
-Revision ID: 9a9be4ed38c0
+Revision ID: 4b6ff43c35af
 Revises: 2d9a04ef6730
-Create Date: 2025-08-15 05:25:40.405203
+Create Date: 2025-08-17 04:24:01.455342
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '9a9be4ed38c0'
+revision: str = '4b6ff43c35af'
 down_revision: Union[str, None] = '2d9a04ef6730'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -96,21 +96,21 @@ def upgrade() -> None:
     op.create_index(op.f('ix_discovered_devices_status'), 'discovered_devices', ['status'], unique=False)
     op.create_index(op.f('ix_discovered_devices_target_id'), 'discovered_devices', ['target_id'], unique=False)
     op.drop_constraint('discovered_devices_discovery_job_id_fkey', 'discovered_devices', type_='foreignkey')
-    op.create_foreign_key(None, 'discovered_devices', 'discovery_jobs', ['discovery_job_id'], ['id'])
-    op.create_foreign_key(None, 'discovered_devices', 'users', ['imported_by'], ['id'])
     op.create_foreign_key(None, 'discovered_devices', 'universal_targets', ['target_id'], ['id'])
-    op.drop_column('discovered_devices', 'is_reachable')
-    op.drop_column('discovered_devices', 'ports')
-    op.drop_column('discovered_devices', 'updated_at')
-    op.drop_column('discovered_devices', 'created_at')
-    op.drop_column('discovered_devices', 'device_serial')
-    op.drop_column('discovered_devices', 'last_seen')
+    op.create_foreign_key(None, 'discovered_devices', 'users', ['imported_by'], ['id'])
+    op.create_foreign_key(None, 'discovered_devices', 'discovery_jobs', ['discovery_job_id'], ['id'])
     op.drop_column('discovered_devices', 'discovery_method')
-    op.drop_column('discovered_devices', 'vendor')
-    op.drop_column('discovered_devices', 'model')
+    op.drop_column('discovered_devices', 'updated_at')
+    op.drop_column('discovered_devices', 'ports')
     op.drop_column('discovered_devices', 'device_uuid')
-    op.drop_column('discovered_devices', 'os_version')
+    op.drop_column('discovered_devices', 'is_reachable')
+    op.drop_column('discovered_devices', 'device_serial')
     op.drop_column('discovered_devices', 'raw_data')
+    op.drop_column('discovered_devices', 'created_at')
+    op.drop_column('discovered_devices', 'vendor')
+    op.drop_column('discovered_devices', 'last_seen')
+    op.drop_column('discovered_devices', 'os_version')
+    op.drop_column('discovered_devices', 'model')
     op.add_column('discovery_jobs', sa.Column('network_ranges', sa.JSON(), nullable=False))
     op.add_column('discovery_jobs', sa.Column('port_ranges', sa.JSON(), nullable=True))
     op.add_column('discovery_jobs', sa.Column('common_ports', sa.JSON(), nullable=True))
@@ -144,14 +144,14 @@ def upgrade() -> None:
     op.create_index(op.f('ix_discovery_jobs_id'), 'discovery_jobs', ['id'], unique=False)
     op.create_index(op.f('ix_discovery_jobs_name'), 'discovery_jobs', ['name'], unique=False)
     op.create_index(op.f('ix_discovery_jobs_status'), 'discovery_jobs', ['status'], unique=False)
-    op.drop_column('discovery_jobs', 'discovery_uuid')
-    op.drop_column('discovery_jobs', 'discovery_type')
     op.drop_column('discovery_jobs', 'updated_at')
     op.drop_column('discovery_jobs', 'target_range')
-    op.drop_column('discovery_jobs', 'error_message')
-    op.drop_column('discovery_jobs', 'discovery_serial')
-    op.drop_column('discovery_jobs', 'discovered_count')
+    op.drop_column('discovery_jobs', 'discovery_uuid')
     op.drop_column('discovery_jobs', 'discovery_config')
+    op.drop_column('discovery_jobs', 'discovery_serial')
+    op.drop_column('discovery_jobs', 'error_message')
+    op.drop_column('discovery_jobs', 'discovered_count')
+    op.drop_column('discovery_jobs', 'discovery_type')
     op.add_column('discovery_schedules', sa.Column('timezone', sa.String(length=50), nullable=True))
     op.add_column('discovery_schedules', sa.Column('last_run_at', sa.DateTime(timezone=True), nullable=True))
     op.add_column('discovery_schedules', sa.Column('next_run_at', sa.DateTime(timezone=True), nullable=True))
@@ -174,10 +174,10 @@ def upgrade() -> None:
     op.create_index(op.f('ix_discovery_schedules_name'), 'discovery_schedules', ['name'], unique=False)
     op.drop_constraint('discovery_schedules_template_id_fkey', 'discovery_schedules', type_='foreignkey')
     op.create_foreign_key(None, 'discovery_schedules', 'discovery_templates', ['template_id'], ['id'])
-    op.drop_column('discovery_schedules', 'next_run')
-    op.drop_column('discovery_schedules', 'schedule_serial')
     op.drop_column('discovery_schedules', 'last_run')
     op.drop_column('discovery_schedules', 'schedule_uuid')
+    op.drop_column('discovery_schedules', 'next_run')
+    op.drop_column('discovery_schedules', 'schedule_serial')
     op.add_column('discovery_templates', sa.Column('network_ranges', sa.JSON(), nullable=False))
     op.add_column('discovery_templates', sa.Column('port_ranges', sa.JSON(), nullable=True))
     op.add_column('discovery_templates', sa.Column('common_ports', sa.JSON(), nullable=True))
@@ -204,10 +204,10 @@ def upgrade() -> None:
     op.drop_index('idx_discovery_templates_template_uuid', table_name='discovery_templates')
     op.create_index(op.f('ix_discovery_templates_id'), 'discovery_templates', ['id'], unique=False)
     op.create_index(op.f('ix_discovery_templates_name'), 'discovery_templates', ['name'], unique=True)
-    op.drop_column('discovery_templates', 'discovery_type')
-    op.drop_column('discovery_templates', 'template_uuid')
     op.drop_column('discovery_templates', 'template_serial')
     op.drop_column('discovery_templates', 'template_config')
+    op.drop_column('discovery_templates', 'template_uuid')
+    op.drop_column('discovery_templates', 'discovery_type')
     op.alter_column('generated_reports', 'template_id',
                existing_type=sa.INTEGER(),
                nullable=False)
@@ -215,10 +215,10 @@ def upgrade() -> None:
     op.drop_index('idx_generated_reports_period', table_name='generated_reports')
     op.drop_index('idx_generated_reports_template', table_name='generated_reports')
     op.create_index(op.f('ix_generated_reports_id'), 'generated_reports', ['id'], unique=False)
-    op.drop_constraint('generated_reports_generated_by_fkey', 'generated_reports', type_='foreignkey')
     op.drop_constraint('generated_reports_template_id_fkey', 'generated_reports', type_='foreignkey')
-    op.create_foreign_key(None, 'generated_reports', 'users', ['generated_by'], ['id'])
+    op.drop_constraint('generated_reports_generated_by_fkey', 'generated_reports', type_='foreignkey')
     op.create_foreign_key(None, 'generated_reports', 'report_templates', ['template_id'], ['id'])
+    op.create_foreign_key(None, 'generated_reports', 'users', ['generated_by'], ['id'])
     op.drop_index('idx_job_action_results_action_id', table_name='job_action_results')
     op.drop_index('idx_job_action_results_branch_id', table_name='job_action_results')
     op.alter_column('job_actions', 'action_parameters',
@@ -262,19 +262,15 @@ def upgrade() -> None:
     op.alter_column('job_execution_logs', 'job_execution_id',
                existing_type=sa.INTEGER(),
                nullable=True)
-    op.alter_column('job_execution_logs', 'log_phase',
-               existing_type=postgresql.ENUM('creation', 'target_selection', 'authentication', 'communication', 'action_execution', 'result_collection', 'completion', name='log_phase'),
-               type_=sa.Enum('creation', 'target_selection', 'authentication', 'communication', 'action_execution', 'result_collection', 'completion', name='logphase'),
-               existing_nullable=False)
-    op.alter_column('job_execution_logs', 'log_level',
-               existing_type=postgresql.ENUM('info', 'warning', 'error', 'debug', name='log_level'),
-               type_=sa.Enum('info', 'warning', 'error', 'debug', name='loglevel'),
-               existing_nullable=False,
-               existing_server_default=sa.text("'info'::log_level"))
-    op.alter_column('job_execution_logs', 'log_category',
-               existing_type=postgresql.ENUM('authentication', 'communication', 'command_execution', 'file_transfer', 'system', name='log_category'),
-               type_=sa.Enum('authentication', 'communication', 'command_execution', 'file_transfer', 'system', name='logcategory'),
-               existing_nullable=False)
+    # Fix enum type conversions with proper casting
+    op.execute("ALTER TABLE job_execution_logs ALTER COLUMN log_phase TYPE logphase USING log_phase::text::logphase")
+    
+    # Handle log_level with default value
+    op.execute("ALTER TABLE job_execution_logs ALTER COLUMN log_level DROP DEFAULT")
+    op.execute("ALTER TABLE job_execution_logs ALTER COLUMN log_level TYPE loglevel USING log_level::text::loglevel")
+    op.execute("ALTER TABLE job_execution_logs ALTER COLUMN log_level SET DEFAULT 'info'::loglevel")
+    
+    op.execute("ALTER TABLE job_execution_logs ALTER COLUMN log_category TYPE logcategory USING log_category::text::logcategory")
     op.alter_column('job_execution_logs', 'log_details',
                existing_type=postgresql.JSONB(astext_type=sa.Text()),
                type_=sa.JSON(),
@@ -288,8 +284,8 @@ def upgrade() -> None:
     op.create_index(op.f('ix_job_execution_logs_id'), 'job_execution_logs', ['id'], unique=False)
     op.drop_constraint('job_execution_logs_branch_id_fkey', 'job_execution_logs', type_='foreignkey')
     op.drop_constraint('job_execution_logs_job_execution_id_fkey', 'job_execution_logs', type_='foreignkey')
-    op.create_foreign_key(None, 'job_execution_logs', 'job_execution_branches', ['branch_id'], ['id'])
     op.create_foreign_key(None, 'job_execution_logs', 'job_executions', ['job_execution_id'], ['id'])
+    op.create_foreign_key(None, 'job_execution_logs', 'job_execution_branches', ['branch_id'], ['id'])
     op.drop_table_comment(
         'job_execution_logs',
         existing_comment='Comprehensive logging with taxonomy-based categorization',
@@ -348,24 +344,24 @@ def upgrade() -> None:
     op.drop_constraint('job_schedules_job_id_fkey', 'job_schedules', type_='foreignkey')
     op.drop_constraint('job_schedules_created_by_fkey', 'job_schedules', type_='foreignkey')
     op.create_foreign_key(None, 'job_schedules', 'jobs', ['job_id'], ['id'])
-    op.drop_column('job_schedules', 'max_runs')
-    op.drop_column('job_schedules', 'interval_seconds')
-    op.drop_column('job_schedules', 'status')
+    op.drop_column('job_schedules', 'last_run_at')
     op.drop_column('job_schedules', 'schedule_config')
+    op.drop_column('job_schedules', 'max_runs')
+    op.drop_column('job_schedules', 'status')
+    op.drop_column('job_schedules', 'name')
     op.drop_column('job_schedules', 'start_date')
     op.drop_column('job_schedules', 'next_run_at')
-    op.drop_column('job_schedules', 'is_active')
-    op.drop_column('job_schedules', 'current_runs')
-    op.drop_column('job_schedules', 'name')
-    op.drop_column('job_schedules', 'last_run_at')
-    op.drop_column('job_schedules', 'schedule_serial')
     op.drop_column('job_schedules', 'created_by')
+    op.drop_column('job_schedules', 'current_runs')
+    op.drop_column('job_schedules', 'interval_seconds')
+    op.drop_column('job_schedules', 'is_active')
+    op.drop_column('job_schedules', 'schedule_serial')
     op.drop_index('idx_job_targets_job_id', table_name='job_targets')
     op.drop_index('idx_job_targets_target_id', table_name='job_targets')
     op.drop_constraint('job_targets_job_id_target_id_key', 'job_targets', type_='unique')
     op.create_index(op.f('ix_job_targets_id'), 'job_targets', ['id'], unique=False)
-    op.drop_constraint('job_targets_job_id_fkey', 'job_targets', type_='foreignkey')
     op.drop_constraint('job_targets_target_id_fkey', 'job_targets', type_='foreignkey')
+    op.drop_constraint('job_targets_job_id_fkey', 'job_targets', type_='foreignkey')
     op.create_foreign_key(None, 'job_targets', 'universal_targets', ['target_id'], ['id'])
     op.create_foreign_key(None, 'job_targets', 'jobs', ['job_id'], ['id'])
     op.drop_table_comment(
@@ -421,12 +417,12 @@ def upgrade() -> None:
     op.drop_constraint('notification_logs_template_id_fkey', 'notification_logs', type_='foreignkey')
     op.create_foreign_key(None, 'notification_logs', 'notification_templates', ['template_id'], ['id'])
     op.drop_column('notification_logs', 'message')
-    op.drop_column('notification_logs', 'context_data')
-    op.drop_column('notification_logs', 'log_serial')
-    op.drop_column('notification_logs', 'retry_count')
-    op.drop_column('notification_logs', 'log_uuid')
     op.drop_column('notification_logs', 'delivered_at')
     op.drop_column('notification_logs', 'max_retries')
+    op.drop_column('notification_logs', 'retry_count')
+    op.drop_column('notification_logs', 'log_uuid')
+    op.drop_column('notification_logs', 'log_serial')
+    op.drop_column('notification_logs', 'context_data')
     op.add_column('notification_templates', sa.Column('template_type', sa.String(length=50), nullable=False))
     op.alter_column('notification_templates', 'name',
                existing_type=sa.VARCHAR(length=255),
@@ -447,10 +443,10 @@ def upgrade() -> None:
     op.create_index(op.f('ix_notification_templates_name'), 'notification_templates', ['name'], unique=True)
     op.drop_constraint('notification_templates_created_by_fkey', 'notification_templates', type_='foreignkey')
     op.drop_column('notification_templates', 'template_uuid')
-    op.drop_column('notification_templates', 'template_config')
-    op.drop_column('notification_templates', 'notification_type')
-    op.drop_column('notification_templates', 'created_by')
     op.drop_column('notification_templates', 'template_serial')
+    op.drop_column('notification_templates', 'notification_type')
+    op.drop_column('notification_templates', 'template_config')
+    op.drop_column('notification_templates', 'created_by')
     op.drop_index('idx_performance_metrics_job_time', table_name='performance_metrics')
     op.drop_index('idx_performance_metrics_target_time', table_name='performance_metrics')
     op.drop_index('idx_performance_metrics_timestamp', table_name='performance_metrics')
@@ -464,8 +460,8 @@ def upgrade() -> None:
     op.create_index(op.f('ix_performance_metrics_metric_type'), 'performance_metrics', ['metric_type'], unique=False)
     op.create_index(op.f('ix_performance_metrics_target_id'), 'performance_metrics', ['target_id'], unique=False)
     op.create_index(op.f('ix_performance_metrics_timestamp'), 'performance_metrics', ['timestamp'], unique=False)
-    op.drop_constraint('performance_metrics_job_id_fkey', 'performance_metrics', type_='foreignkey')
     op.drop_constraint('performance_metrics_target_id_fkey', 'performance_metrics', type_='foreignkey')
+    op.drop_constraint('performance_metrics_job_id_fkey', 'performance_metrics', type_='foreignkey')
     op.create_foreign_key(None, 'performance_metrics', 'universal_targets', ['target_id'], ['id'])
     op.create_foreign_key(None, 'performance_metrics', 'jobs', ['job_id'], ['id'])
     op.create_index(op.f('ix_report_templates_id'), 'report_templates', ['id'], unique=False)
@@ -478,8 +474,8 @@ def upgrade() -> None:
     op.drop_constraint('schedule_executions_execution_serial_key', 'schedule_executions', type_='unique')
     op.drop_constraint('schedule_executions_execution_uuid_key', 'schedule_executions', type_='unique')
     op.create_index(op.f('ix_schedule_executions_id'), 'schedule_executions', ['id'], unique=False)
-    op.drop_constraint('schedule_executions_job_schedule_id_fkey', 'schedule_executions', type_='foreignkey')
     op.drop_constraint('schedule_executions_job_execution_id_fkey', 'schedule_executions', type_='foreignkey')
+    op.drop_constraint('schedule_executions_job_schedule_id_fkey', 'schedule_executions', type_='foreignkey')
     op.create_foreign_key(None, 'schedule_executions', 'job_executions', ['job_execution_id'], ['id'])
     op.create_foreign_key(None, 'schedule_executions', 'job_schedules', ['job_schedule_id'], ['id'])
     op.drop_index('idx_system_health_snapshots_timestamp', table_name='system_health_snapshots')
@@ -577,8 +573,8 @@ def downgrade() -> None:
     op.create_index('idx_system_health_snapshots_timestamp', 'system_health_snapshots', ['timestamp'], unique=False)
     op.drop_constraint(None, 'schedule_executions', type_='foreignkey')
     op.drop_constraint(None, 'schedule_executions', type_='foreignkey')
-    op.create_foreign_key('schedule_executions_job_execution_id_fkey', 'schedule_executions', 'job_executions', ['job_execution_id'], ['id'], ondelete='SET NULL')
     op.create_foreign_key('schedule_executions_job_schedule_id_fkey', 'schedule_executions', 'job_schedules', ['job_schedule_id'], ['id'], ondelete='CASCADE')
+    op.create_foreign_key('schedule_executions_job_execution_id_fkey', 'schedule_executions', 'job_executions', ['job_execution_id'], ['id'], ondelete='SET NULL')
     op.drop_index(op.f('ix_schedule_executions_id'), table_name='schedule_executions')
     op.create_unique_constraint('schedule_executions_execution_uuid_key', 'schedule_executions', ['execution_uuid'])
     op.create_unique_constraint('schedule_executions_execution_serial_key', 'schedule_executions', ['execution_serial'])
@@ -591,8 +587,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_report_templates_id'), table_name='report_templates')
     op.drop_constraint(None, 'performance_metrics', type_='foreignkey')
     op.drop_constraint(None, 'performance_metrics', type_='foreignkey')
-    op.create_foreign_key('performance_metrics_target_id_fkey', 'performance_metrics', 'universal_targets', ['target_id'], ['id'], ondelete='CASCADE')
     op.create_foreign_key('performance_metrics_job_id_fkey', 'performance_metrics', 'jobs', ['job_id'], ['id'], ondelete='CASCADE')
+    op.create_foreign_key('performance_metrics_target_id_fkey', 'performance_metrics', 'universal_targets', ['target_id'], ['id'], ondelete='CASCADE')
     op.drop_index(op.f('ix_performance_metrics_timestamp'), table_name='performance_metrics')
     op.drop_index(op.f('ix_performance_metrics_target_id'), table_name='performance_metrics')
     op.drop_index(op.f('ix_performance_metrics_metric_type'), table_name='performance_metrics')
@@ -606,10 +602,10 @@ def downgrade() -> None:
     op.create_index('idx_performance_metrics_timestamp', 'performance_metrics', ['timestamp'], unique=False)
     op.create_index('idx_performance_metrics_target_time', 'performance_metrics', ['target_id', 'timestamp'], unique=False)
     op.create_index('idx_performance_metrics_job_time', 'performance_metrics', ['job_id', 'timestamp'], unique=False)
-    op.add_column('notification_templates', sa.Column('template_serial', sa.VARCHAR(length=50), server_default=sa.text("('NTMPL-'::text || lpad((nextval('notification_templates_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
     op.add_column('notification_templates', sa.Column('created_by', sa.INTEGER(), autoincrement=False, nullable=False))
-    op.add_column('notification_templates', sa.Column('notification_type', postgresql.ENUM('email', 'slack', 'webhook', 'sms', name='notification_type'), autoincrement=False, nullable=False))
     op.add_column('notification_templates', sa.Column('template_config', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=False))
+    op.add_column('notification_templates', sa.Column('notification_type', postgresql.ENUM('email', 'slack', 'webhook', 'sms', name='notification_type'), autoincrement=False, nullable=False))
+    op.add_column('notification_templates', sa.Column('template_serial', sa.VARCHAR(length=50), server_default=sa.text("('NTMPL-'::text || lpad((nextval('notification_templates_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
     op.add_column('notification_templates', sa.Column('template_uuid', sa.UUID(), server_default=sa.text('gen_random_uuid()'), autoincrement=False, nullable=False))
     op.create_foreign_key('notification_templates_created_by_fkey', 'notification_templates', 'users', ['created_by'], ['id'])
     op.drop_index(op.f('ix_notification_templates_name'), table_name='notification_templates')
@@ -630,12 +626,12 @@ def downgrade() -> None:
                type_=sa.VARCHAR(length=255),
                existing_nullable=False)
     op.drop_column('notification_templates', 'template_type')
-    op.add_column('notification_logs', sa.Column('max_retries', sa.INTEGER(), server_default=sa.text('3'), autoincrement=False, nullable=True))
-    op.add_column('notification_logs', sa.Column('delivered_at', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
+    op.add_column('notification_logs', sa.Column('context_data', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('notification_logs', sa.Column('log_serial', sa.VARCHAR(length=50), server_default=sa.text("('NLOG-'::text || lpad((nextval('notification_logs_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
     op.add_column('notification_logs', sa.Column('log_uuid', sa.UUID(), server_default=sa.text('gen_random_uuid()'), autoincrement=False, nullable=False))
     op.add_column('notification_logs', sa.Column('retry_count', sa.INTEGER(), server_default=sa.text('0'), autoincrement=False, nullable=True))
-    op.add_column('notification_logs', sa.Column('log_serial', sa.VARCHAR(length=50), server_default=sa.text("('NLOG-'::text || lpad((nextval('notification_logs_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
-    op.add_column('notification_logs', sa.Column('context_data', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('notification_logs', sa.Column('max_retries', sa.INTEGER(), server_default=sa.text('3'), autoincrement=False, nullable=True))
+    op.add_column('notification_logs', sa.Column('delivered_at', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
     op.add_column('notification_logs', sa.Column('message', sa.TEXT(), autoincrement=False, nullable=False))
     op.drop_constraint(None, 'notification_logs', type_='foreignkey')
     op.create_foreign_key('notification_logs_template_id_fkey', 'notification_logs', 'notification_templates', ['template_id'], ['id'], ondelete='SET NULL')
@@ -693,24 +689,24 @@ def downgrade() -> None:
     )
     op.drop_constraint(None, 'job_targets', type_='foreignkey')
     op.drop_constraint(None, 'job_targets', type_='foreignkey')
-    op.create_foreign_key('job_targets_target_id_fkey', 'job_targets', 'universal_targets', ['target_id'], ['id'], ondelete='CASCADE')
     op.create_foreign_key('job_targets_job_id_fkey', 'job_targets', 'jobs', ['job_id'], ['id'], ondelete='CASCADE')
+    op.create_foreign_key('job_targets_target_id_fkey', 'job_targets', 'universal_targets', ['target_id'], ['id'], ondelete='CASCADE')
     op.drop_index(op.f('ix_job_targets_id'), table_name='job_targets')
     op.create_unique_constraint('job_targets_job_id_target_id_key', 'job_targets', ['job_id', 'target_id'])
     op.create_index('idx_job_targets_target_id', 'job_targets', ['target_id'], unique=False)
     op.create_index('idx_job_targets_job_id', 'job_targets', ['job_id'], unique=False)
-    op.add_column('job_schedules', sa.Column('created_by', sa.INTEGER(), autoincrement=False, nullable=False))
     op.add_column('job_schedules', sa.Column('schedule_serial', sa.VARCHAR(length=50), server_default=sa.text("('JSCHED-'::text || lpad((nextval('job_schedules_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
-    op.add_column('job_schedules', sa.Column('last_run_at', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
-    op.add_column('job_schedules', sa.Column('name', sa.VARCHAR(length=255), autoincrement=False, nullable=False))
-    op.add_column('job_schedules', sa.Column('current_runs', sa.INTEGER(), server_default=sa.text('0'), autoincrement=False, nullable=True))
     op.add_column('job_schedules', sa.Column('is_active', sa.BOOLEAN(), server_default=sa.text('true'), autoincrement=False, nullable=True))
+    op.add_column('job_schedules', sa.Column('interval_seconds', sa.INTEGER(), autoincrement=False, nullable=True))
+    op.add_column('job_schedules', sa.Column('current_runs', sa.INTEGER(), server_default=sa.text('0'), autoincrement=False, nullable=True))
+    op.add_column('job_schedules', sa.Column('created_by', sa.INTEGER(), autoincrement=False, nullable=False))
     op.add_column('job_schedules', sa.Column('next_run_at', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
     op.add_column('job_schedules', sa.Column('start_date', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
-    op.add_column('job_schedules', sa.Column('schedule_config', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('job_schedules', sa.Column('name', sa.VARCHAR(length=255), autoincrement=False, nullable=False))
     op.add_column('job_schedules', sa.Column('status', postgresql.ENUM('active', 'paused', 'disabled', 'expired', name='schedule_status'), server_default=sa.text("'active'::schedule_status"), autoincrement=False, nullable=False))
-    op.add_column('job_schedules', sa.Column('interval_seconds', sa.INTEGER(), autoincrement=False, nullable=True))
     op.add_column('job_schedules', sa.Column('max_runs', sa.INTEGER(), autoincrement=False, nullable=True))
+    op.add_column('job_schedules', sa.Column('schedule_config', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('job_schedules', sa.Column('last_run_at', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
     op.drop_constraint(None, 'job_schedules', type_='foreignkey')
     op.create_foreign_key('job_schedules_created_by_fkey', 'job_schedules', 'users', ['created_by'], ['id'])
     op.create_foreign_key('job_schedules_job_id_fkey', 'job_schedules', 'jobs', ['job_id'], ['id'], ondelete='CASCADE')
@@ -786,19 +782,15 @@ def downgrade() -> None:
                existing_type=sa.JSON(),
                type_=postgresql.JSONB(astext_type=sa.Text()),
                existing_nullable=True)
-    op.alter_column('job_execution_logs', 'log_category',
-               existing_type=sa.Enum('authentication', 'communication', 'command_execution', 'file_transfer', 'system', name='logcategory'),
-               type_=postgresql.ENUM('authentication', 'communication', 'command_execution', 'file_transfer', 'system', name='log_category'),
-               existing_nullable=False)
-    op.alter_column('job_execution_logs', 'log_level',
-               existing_type=sa.Enum('info', 'warning', 'error', 'debug', name='loglevel'),
-               type_=postgresql.ENUM('info', 'warning', 'error', 'debug', name='log_level'),
-               existing_nullable=False,
-               existing_server_default=sa.text("'info'::log_level"))
-    op.alter_column('job_execution_logs', 'log_phase',
-               existing_type=sa.Enum('creation', 'target_selection', 'authentication', 'communication', 'action_execution', 'result_collection', 'completion', name='logphase'),
-               type_=postgresql.ENUM('creation', 'target_selection', 'authentication', 'communication', 'action_execution', 'result_collection', 'completion', name='log_phase'),
-               existing_nullable=False)
+    # Fix enum type conversions with proper casting for downgrade
+    op.execute("ALTER TABLE job_execution_logs ALTER COLUMN log_category TYPE log_category USING log_category::text::log_category")
+    
+    # Handle log_level with default value for downgrade
+    op.execute("ALTER TABLE job_execution_logs ALTER COLUMN log_level DROP DEFAULT")
+    op.execute("ALTER TABLE job_execution_logs ALTER COLUMN log_level TYPE log_level USING log_level::text::log_level")
+    op.execute("ALTER TABLE job_execution_logs ALTER COLUMN log_level SET DEFAULT 'info'::log_level")
+    
+    op.execute("ALTER TABLE job_execution_logs ALTER COLUMN log_phase TYPE log_phase USING log_phase::text::log_phase")
     op.alter_column('job_execution_logs', 'job_execution_id',
                existing_type=sa.INTEGER(),
                nullable=False)
@@ -846,8 +838,8 @@ def downgrade() -> None:
     op.create_index('idx_job_action_results_action_id', 'job_action_results', ['action_id'], unique=False)
     op.drop_constraint(None, 'generated_reports', type_='foreignkey')
     op.drop_constraint(None, 'generated_reports', type_='foreignkey')
-    op.create_foreign_key('generated_reports_template_id_fkey', 'generated_reports', 'report_templates', ['template_id'], ['id'], ondelete='CASCADE')
     op.create_foreign_key('generated_reports_generated_by_fkey', 'generated_reports', 'users', ['generated_by'], ['id'], ondelete='SET NULL')
+    op.create_foreign_key('generated_reports_template_id_fkey', 'generated_reports', 'report_templates', ['template_id'], ['id'], ondelete='CASCADE')
     op.drop_index(op.f('ix_generated_reports_id'), table_name='generated_reports')
     op.create_index('idx_generated_reports_template', 'generated_reports', ['template_id'], unique=False)
     op.create_index('idx_generated_reports_period', 'generated_reports', ['report_period_start', 'report_period_end'], unique=False)
@@ -855,10 +847,10 @@ def downgrade() -> None:
     op.alter_column('generated_reports', 'template_id',
                existing_type=sa.INTEGER(),
                nullable=True)
+    op.add_column('discovery_templates', sa.Column('discovery_type', sa.VARCHAR(length=50), autoincrement=False, nullable=False))
+    op.add_column('discovery_templates', sa.Column('template_uuid', sa.UUID(), server_default=sa.text('gen_random_uuid()'), autoincrement=False, nullable=False))
     op.add_column('discovery_templates', sa.Column('template_config', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=False))
     op.add_column('discovery_templates', sa.Column('template_serial', sa.VARCHAR(length=50), server_default=sa.text("('TMPL-'::text || lpad((nextval('discovery_templates_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
-    op.add_column('discovery_templates', sa.Column('template_uuid', sa.UUID(), server_default=sa.text('gen_random_uuid()'), autoincrement=False, nullable=False))
-    op.add_column('discovery_templates', sa.Column('discovery_type', sa.VARCHAR(length=50), autoincrement=False, nullable=False))
     op.drop_index(op.f('ix_discovery_templates_name'), table_name='discovery_templates')
     op.drop_index(op.f('ix_discovery_templates_id'), table_name='discovery_templates')
     op.create_index('idx_discovery_templates_template_uuid', 'discovery_templates', ['template_uuid'], unique=False)
@@ -885,10 +877,10 @@ def downgrade() -> None:
     op.drop_column('discovery_templates', 'common_ports')
     op.drop_column('discovery_templates', 'port_ranges')
     op.drop_column('discovery_templates', 'network_ranges')
-    op.add_column('discovery_schedules', sa.Column('schedule_uuid', sa.UUID(), server_default=sa.text('gen_random_uuid()'), autoincrement=False, nullable=False))
-    op.add_column('discovery_schedules', sa.Column('last_run', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
     op.add_column('discovery_schedules', sa.Column('schedule_serial', sa.VARCHAR(length=50), server_default=sa.text("('SCHED-'::text || lpad((nextval('discovery_schedules_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
     op.add_column('discovery_schedules', sa.Column('next_run', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
+    op.add_column('discovery_schedules', sa.Column('schedule_uuid', sa.UUID(), server_default=sa.text('gen_random_uuid()'), autoincrement=False, nullable=False))
+    op.add_column('discovery_schedules', sa.Column('last_run', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
     op.drop_constraint(None, 'discovery_schedules', type_='foreignkey')
     op.create_foreign_key('discovery_schedules_template_id_fkey', 'discovery_schedules', 'discovery_templates', ['template_id'], ['id'], ondelete='CASCADE')
     op.drop_index(op.f('ix_discovery_schedules_name'), table_name='discovery_schedules')
@@ -911,14 +903,14 @@ def downgrade() -> None:
     op.drop_column('discovery_schedules', 'next_run_at')
     op.drop_column('discovery_schedules', 'last_run_at')
     op.drop_column('discovery_schedules', 'timezone')
-    op.add_column('discovery_jobs', sa.Column('discovery_config', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('discovery_jobs', sa.Column('discovery_type', sa.VARCHAR(length=50), server_default=sa.text("'network_scan'::character varying"), autoincrement=False, nullable=False))
     op.add_column('discovery_jobs', sa.Column('discovered_count', sa.INTEGER(), server_default=sa.text('0'), autoincrement=False, nullable=True))
-    op.add_column('discovery_jobs', sa.Column('discovery_serial', sa.VARCHAR(length=50), server_default=sa.text("('DISC-'::text || lpad((nextval('discovery_jobs_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
     op.add_column('discovery_jobs', sa.Column('error_message', sa.TEXT(), autoincrement=False, nullable=True))
+    op.add_column('discovery_jobs', sa.Column('discovery_serial', sa.VARCHAR(length=50), server_default=sa.text("('DISC-'::text || lpad((nextval('discovery_jobs_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
+    op.add_column('discovery_jobs', sa.Column('discovery_config', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('discovery_jobs', sa.Column('discovery_uuid', sa.UUID(), server_default=sa.text('gen_random_uuid()'), autoincrement=False, nullable=False))
     op.add_column('discovery_jobs', sa.Column('target_range', sa.VARCHAR(length=255), autoincrement=False, nullable=False))
     op.add_column('discovery_jobs', sa.Column('updated_at', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
-    op.add_column('discovery_jobs', sa.Column('discovery_type', sa.VARCHAR(length=50), server_default=sa.text("'network_scan'::character varying"), autoincrement=False, nullable=False))
-    op.add_column('discovery_jobs', sa.Column('discovery_uuid', sa.UUID(), server_default=sa.text('gen_random_uuid()'), autoincrement=False, nullable=False))
     op.drop_index(op.f('ix_discovery_jobs_status'), table_name='discovery_jobs')
     op.drop_index(op.f('ix_discovery_jobs_name'), table_name='discovery_jobs')
     op.drop_index(op.f('ix_discovery_jobs_id'), table_name='discovery_jobs')
@@ -952,18 +944,18 @@ def downgrade() -> None:
     op.drop_column('discovery_jobs', 'common_ports')
     op.drop_column('discovery_jobs', 'port_ranges')
     op.drop_column('discovery_jobs', 'network_ranges')
-    op.add_column('discovered_devices', sa.Column('raw_data', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
-    op.add_column('discovered_devices', sa.Column('os_version', sa.VARCHAR(length=100), autoincrement=False, nullable=True))
-    op.add_column('discovered_devices', sa.Column('device_uuid', sa.UUID(), server_default=sa.text('gen_random_uuid()'), autoincrement=False, nullable=False))
     op.add_column('discovered_devices', sa.Column('model', sa.VARCHAR(length=100), autoincrement=False, nullable=True))
-    op.add_column('discovered_devices', sa.Column('vendor', sa.VARCHAR(length=100), autoincrement=False, nullable=True))
-    op.add_column('discovered_devices', sa.Column('discovery_method', sa.VARCHAR(length=50), autoincrement=False, nullable=True))
+    op.add_column('discovered_devices', sa.Column('os_version', sa.VARCHAR(length=100), autoincrement=False, nullable=True))
     op.add_column('discovered_devices', sa.Column('last_seen', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), autoincrement=False, nullable=True))
-    op.add_column('discovered_devices', sa.Column('device_serial', sa.VARCHAR(length=50), server_default=sa.text("('DEV-'::text || lpad((nextval('discovered_devices_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
+    op.add_column('discovered_devices', sa.Column('vendor', sa.VARCHAR(length=100), autoincrement=False, nullable=True))
     op.add_column('discovered_devices', sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), autoincrement=False, nullable=True))
-    op.add_column('discovered_devices', sa.Column('updated_at', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
-    op.add_column('discovered_devices', sa.Column('ports', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('discovered_devices', sa.Column('raw_data', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('discovered_devices', sa.Column('device_serial', sa.VARCHAR(length=50), server_default=sa.text("('DEV-'::text || lpad((nextval('discovered_devices_id_seq'::regclass))::text, 8, '0'::text))"), autoincrement=False, nullable=False))
     op.add_column('discovered_devices', sa.Column('is_reachable', sa.BOOLEAN(), server_default=sa.text('true'), autoincrement=False, nullable=True))
+    op.add_column('discovered_devices', sa.Column('device_uuid', sa.UUID(), server_default=sa.text('gen_random_uuid()'), autoincrement=False, nullable=False))
+    op.add_column('discovered_devices', sa.Column('ports', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('discovered_devices', sa.Column('updated_at', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True))
+    op.add_column('discovered_devices', sa.Column('discovery_method', sa.VARCHAR(length=50), autoincrement=False, nullable=True))
     op.drop_constraint(None, 'discovered_devices', type_='foreignkey')
     op.drop_constraint(None, 'discovered_devices', type_='foreignkey')
     op.drop_constraint(None, 'discovered_devices', type_='foreignkey')
