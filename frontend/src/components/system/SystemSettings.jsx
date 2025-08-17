@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAlert } from '../layout/BottomStatusBar';
+import StandardPageLayout, { StandardContentCard } from '../common/StandardPageLayout';
 
 // Use centralized auth service with automatic token refresh and logout
 const api = authService.api;
