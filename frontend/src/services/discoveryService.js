@@ -170,13 +170,15 @@ class DiscoveryService {
 
   // Poll discovery task for completion
   async pollDiscoveryTask(taskId, progressCallback = null) {
-    const maxAttempts = 120; // 2 minutes max (120 * 1 second)
+    const maxAttempts = 300; // 5 minutes max (300 * 1 second) for large network scans
     let attempts = 0;
     
     while (attempts < maxAttempts) {
       try {
         const response = await apiService.get(`${this.baseUrl}/discover-memory/${taskId}`);
         const result = await response.json();
+        
+        console.log(`Discovery poll attempt ${attempts + 1}: Status=${result.status}, Progress=${result.progress}`);
         
         if (progressCallback) {
           const progress = result.progress || 0;
@@ -185,6 +187,7 @@ class DiscoveryService {
         }
         
         if (result.status === 'completed') {
+          console.log('Discovery completed, returning devices:', result.devices);
           return result.devices || [];
         } else if (result.status === 'failed') {
           throw new Error(result.error || 'Discovery task failed');
@@ -195,7 +198,7 @@ class DiscoveryService {
         attempts++;
         
       } catch (error) {
-        console.error('Error polling discovery task:', error);
+        console.error(`Error polling discovery task (attempt ${attempts + 1}):`, error);
         throw error;
       }
     }

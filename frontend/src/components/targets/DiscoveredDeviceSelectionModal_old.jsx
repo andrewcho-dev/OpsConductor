@@ -17,13 +17,23 @@ import {
   TableHead,
   TableRow,
   Checkbox,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
   Typography,
   Box,
   Chip,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Grid
 } from '@mui/material';
 import {
+  ExpandMore as ExpandMoreIcon,
   Computer as ComputerIcon,
   Router as RouterIcon,
   Storage as StorageIcon,
@@ -33,13 +43,38 @@ import discoveryService from '../../services/discoveryService';
 
 const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devices = [] }) => {
   const [selectedDevices, setSelectedDevices] = useState(new Set());
+  const [expandedDevices, setExpandedDevices] = useState(new Set());
+  const [deviceConfigs, setDeviceConfigs] = useState({});
+  const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState(null);
+
+  // Initialize device configurations when devices prop changes
+  useEffect(() => {
+    if (devices && devices.length > 0) {
+      const configs = {};
+      devices.forEach(device => {
+        configs[device.id] = {
+          target_name: device.hostname || `device-${device.ip_address.replace(/\./g, '-')}`,
+          description: `Discovered device at ${device.ip_address}`,
+          environment: 'development',
+          communication_method: device.suggested_communication_methods?.[0] || 'ssh',
+          username: 'admin',
+          password: '',
+          ssh_key: '',
+          ssh_passphrase: '',
+          port: null
+        };
+      });
+      setDeviceConfigs(configs);
+    }
+  }, [devices]);
 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (!open) {
       setSelectedDevices(new Set());
+      setExpandedDevices(new Set());
       setError(null);
     }
   }, [open]);
@@ -54,12 +89,32 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
     setSelectedDevices(newSelected);
   };
 
+  const handleAccordionToggle = (deviceId, expanded) => {
+    const newExpanded = new Set(expandedDevices);
+    if (expanded) {
+      newExpanded.add(deviceId);
+    } else {
+      newExpanded.delete(deviceId);
+    }
+    setExpandedDevices(newExpanded);
+  };
+
   const handleSelectAll = (selected) => {
     if (selected && devices) {
-      setSelectedDevices(new Set(devices.map(d => d.id || d.ip_address)));
+      setSelectedDevices(new Set(devices.map(d => d.id)));
     } else {
       setSelectedDevices(new Set());
     }
+  };
+
+  const handleConfigChange = (deviceId, field, value) => {
+    setDeviceConfigs(prev => ({
+      ...prev,
+      [deviceId]: {
+        ...prev[deviceId],
+        [field]: value
+      }
+    }));
   };
 
   const handleImportSelected = async () => {
@@ -74,7 +129,8 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
 
       // Prepare device configurations for selected devices
       const deviceConfigsList = Array.from(selectedDevices).map(deviceId => {
-        const device = devices.find(d => (d.id || d.ip_address) === deviceId);
+        const device = devices.find(d => d.id === deviceId);
+        const config = deviceConfigs[deviceId];
         
         return {
           // Include the full device data for in-memory devices
@@ -82,7 +138,7 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
             ip_address: device.ip_address,
             hostname: device.hostname,
             mac_address: device.mac_address,
-            open_ports: device.ports || device.open_ports,
+            open_ports: device.open_ports,
             services: device.services,
             snmp_info: device.snmp_info,
             device_type: device.device_type,
@@ -90,15 +146,15 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
             confidence_score: device.confidence_score,
             suggested_communication_methods: device.suggested_communication_methods
           },
-          target_name: device.hostname || `device-${device.ip_address.replace(/\./g, '-')}`,
-          description: `Discovered device at ${device.ip_address}`,
-          environment: 'development',
-          communication_method: device.suggested_communication_methods?.[0] || 'ssh',
-          username: 'admin',
-          password: null,
-          ssh_key: null,
-          ssh_passphrase: null,
-          port: null
+          target_name: config.target_name,
+          description: config.description,
+          environment: config.environment,
+          communication_method: config.communication_method,
+          username: config.username,
+          password: config.password || null,
+          ssh_key: config.ssh_key || null,
+          ssh_passphrase: config.ssh_passphrase || null,
+          port: config.port || null
         };
       });
 
@@ -124,7 +180,6 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
     switch (deviceType) {
       case 'router':
       case 'switch':
-      case 'network_device':
         return <RouterIcon />;
       case 'server':
         return <StorageIcon />;
@@ -136,11 +191,23 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
     }
   };
 
+  const getMethodColor = (method) => {
+    const colors = {
+      ssh: 'primary',
+      winrm: 'secondary',
+      snmp: 'success',
+      telnet: 'warning',
+      http: 'info',
+      https: 'info'
+    };
+    return colors[method] || 'default';
+  };
+
   return (
     <Dialog 
       open={open} 
       onClose={onClose}
-      maxWidth="xl"
+      maxWidth="lg"
       fullWidth
     >
       <DialogTitle>
@@ -150,7 +217,7 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
           </Typography>
           {devices && devices.length > 0 && (
             <Typography variant="body2" color="textSecondary">
-              {devices.length} device{devices.length !== 1 ? 's' : ''} found
+              {devices.length} importable device{devices.length !== 1 ? 's' : ''} found
             </Typography>
           )}
         </Box>
@@ -163,9 +230,13 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
           </Alert>
         )}
 
-        {!devices || devices.length === 0 ? (
+        {loading ? (
+          <Box display="flex" justifyContent="center" p={3}>
+            <CircularProgress />
+          </Box>
+        ) : !devices || devices.length === 0 ? (
           <Alert severity="info">
-            No devices found from discovery.
+            No importable devices found. All discovered devices may already be registered as targets.
           </Alert>
         ) : (
           <>
@@ -299,6 +370,107 @@ const DiscoveredDeviceSelectionModal = ({ open, onClose, onDevicesImported, devi
                 </TableBody>
               </Table>
             </TableContainer>
+                    <AccordionDetails>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} md={6}>
+                          <TextField
+                            label="Target Name"
+                            value={deviceConfigs[device.id]?.target_name || ''}
+                            onChange={(e) => handleConfigChange(device.id, 'target_name', e.target.value)}
+                            fullWidth
+                            size="small"
+                            disabled={importing}
+                            required
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <FormControl fullWidth size="small">
+                            <InputLabel>Environment</InputLabel>
+                            <Select
+                              value={deviceConfigs[device.id]?.environment || 'development'}
+                              onChange={(e) => handleConfigChange(device.id, 'environment', e.target.value)}
+                              disabled={importing}
+                            >
+                              <MenuItem value="development">Development</MenuItem>
+                              <MenuItem value="staging">Staging</MenuItem>
+                              <MenuItem value="production">Production</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <TextField
+                            label="Description"
+                            value={deviceConfigs[device.id]?.description || ''}
+                            onChange={(e) => handleConfigChange(device.id, 'description', e.target.value)}
+                            fullWidth
+                            size="small"
+                            disabled={importing}
+                            multiline
+                            rows={2}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <FormControl fullWidth size="small">
+                            <InputLabel>Communication Method</InputLabel>
+                            <Select
+                              value={deviceConfigs[device.id]?.communication_method || 'ssh'}
+                              onChange={(e) => handleConfigChange(device.id, 'communication_method', e.target.value)}
+                              disabled={importing}
+                            >
+                              {/* FIXED: Show ALL available communication methods */}
+                              <MenuItem value="ssh">SSH</MenuItem>
+                              <MenuItem value="winrm">WinRM</MenuItem>
+                              <MenuItem value="snmp">SNMP</MenuItem>
+                              <MenuItem value="telnet">Telnet</MenuItem>
+                              <MenuItem value="rest_api">REST API</MenuItem>
+                              <MenuItem value="smtp">SMTP</MenuItem>
+                              <MenuItem value="mysql">MySQL/MariaDB</MenuItem>
+                              <MenuItem value="postgresql">PostgreSQL</MenuItem>
+                              <MenuItem value="mssql">Microsoft SQL Server</MenuItem>
+                              <MenuItem value="oracle">Oracle Database</MenuItem>
+                              <MenuItem value="sqlite">SQLite</MenuItem>
+                              <MenuItem value="mongodb">MongoDB</MenuItem>
+                              <MenuItem value="redis">Redis</MenuItem>
+                              <MenuItem value="elasticsearch">Elasticsearch</MenuItem>
+                              {/* Include any additional suggested methods not in the standard list */}
+                              {device.suggested_communication_methods?.filter(method => 
+                                !['ssh', 'winrm', 'snmp', 'telnet', 'rest_api', 'smtp', 'mysql', 'postgresql', 'mssql', 'oracle', 'sqlite', 'mongodb', 'redis', 'elasticsearch'].includes(method)
+                              ).map(method => (
+                                <MenuItem key={method} value={method}>
+                                  {method.toUpperCase()}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <TextField
+                            label="Username"
+                            value={deviceConfigs[device.id]?.username || ''}
+                            onChange={(e) => handleConfigChange(device.id, 'username', e.target.value)}
+                            fullWidth
+                            size="small"
+                            disabled={importing}
+                            required
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <TextField
+                            label="Password"
+                            type="password"
+                            value={deviceConfigs[device.id]?.password || ''}
+                            onChange={(e) => handleConfigChange(device.id, 'password', e.target.value)}
+                            fullWidth
+                            size="small"
+                            disabled={importing}
+                          />
+                        </Grid>
+                      </Grid>
+                    </AccordionDetails>
+                  )}
+                </Accordion>
+              ))}
+            </Box>
           </>
         )}
       </DialogContent>

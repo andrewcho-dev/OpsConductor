@@ -740,13 +740,15 @@ class DiscoveryManagementService:
                 json.dumps(task_data, default=str)
             )
             
-            # Start the actual discovery task (simulate with asyncio task)
-            asyncio.create_task(self._run_in_memory_discovery_task(task_id, discovery_config))
+            # Start the actual discovery task using Celery
+            from app.tasks.discovery_tasks import run_in_memory_discovery_task
+            celery_task = run_in_memory_discovery_task.delay(task_id, discovery_config)
             
             logger.info(
-                "In-memory discovery task started",
+                "In-memory discovery task started via Celery",
                 extra={
                     "task_id": task_id,
+                    "celery_task_id": celery_task.id,
                     "initiated_by": current_username,
                     "discovery_config": discovery_config
                 }
@@ -846,10 +848,16 @@ class DiscoveryManagementService:
             scanned_count = 0
             max_hosts_to_scan = min(total_hosts, 50)  # Limit for demo
             
-            # Simulate scanning hosts across all networks
-            import random
+            # Real network scanning across all networks
+            import subprocess
+            import socket
+            import concurrent.futures
+            from concurrent.futures import ThreadPoolExecutor
+            
             for network in networks:
                 network_name = str(network)
+                logger.info(f"Processing network: {network_name}")
+                
                 await self._update_task_status(
                     task_id, 
                     "running", 
@@ -857,53 +865,92 @@ class DiscoveryManagementService:
                     f"Scanning network {network_name}..."
                 )
                 
-                for host in network.hosts():
-                    if scanned_count >= max_hosts_to_scan:  # Limit for demo
-                        break
+                # Get list of hosts to scan (limit to reasonable number)
+                if network.prefixlen == 32:
+                    # Single host (/32) - scan the host itself
+                    hosts_to_scan = [network.network_address]
+                else:
+                    # Network range - scan all hosts in the network
+                    hosts_to_scan = list(network.hosts())[:max_hosts_to_scan - scanned_count]
+                
+                logger.info(f"Hosts to scan in {network_name}: {len(hosts_to_scan)} hosts")
+                logger.info(f"First few hosts: {[str(h) for h in hosts_to_scan[:5]]}")
+                
+                # Scan hosts in parallel for better performance
+                max_workers = max(1, min(20, len(hosts_to_scan)))  # Ensure at least 1 worker
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    # Submit ping tasks
+                    ping_futures = {
+                        executor.submit(self._ping_host, str(host)): host 
+                        for host in hosts_to_scan
+                    }
+                    
+                    for future in concurrent.futures.as_completed(ping_futures):
+                        host = ping_futures[future]
+                        host_ip = str(host)
                         
-                    # Simulate scan delay
-                    await asyncio.sleep(0.1)
-                    
-                    # Simulate device discovery (random chance)
-                    if random.random() < 0.3:  # 30% chance of finding a device
-                        # Get common ports from discovery config
-                        common_ports = discovery_config.get("common_ports", [22, 23, 80, 443, 3389, 8080])
-                        discovered_ports = random.sample(common_ports, random.randint(1, min(3, len(common_ports))))
+                        try:
+                            is_alive = future.result()
+                            logger.info(f"Host {host_ip} alive check result: {is_alive}")
+                            if is_alive:
+                                # Host is alive, perform port scan and hostname resolution
+                                common_ports = discovery_config.get("common_ports", [22, 23, 80, 443, 3389, 8080])
+                                
+                                # Get hostname
+                                hostname = await self._resolve_hostname(host_ip)
+                                
+                                # Scan ports
+                                open_ports = await self._scan_ports(host_ip, common_ports, timeout)
+                                
+                                # Determine device type based on open ports
+                                device_type = self._determine_device_type(open_ports)
+                                
+                                device = {
+                                    "ip_address": host_ip,
+                                    "hostname": hostname,
+                                    "device_type": device_type,
+                                    "status": "discovered",
+                                    "ports": open_ports,
+                                    "network_range": network_name,
+                                    "discovered_at": datetime.utcnow().isoformat()
+                                }
+                                discovered_devices.append(device)
                         
-                        device = {
-                            "ip_address": str(host),
-                            "hostname": f"device-{str(host).split('.')[-1]}",
-                            "device_type": random.choice(["linux", "windows", "network_device", "printer"]),
-                            "status": "discovered",
-                            "ports": discovered_ports,
-                            "network_range": network_name,
-                            "discovered_at": datetime.utcnow().isoformat()
-                        }
-                        discovered_devices.append(device)
-                    
-                    scanned_count += 1
-                    progress = int((scanned_count / max_hosts_to_scan) * 100)
-                    
-                    # Update progress every 10 scans
-                    if scanned_count % 10 == 0:
-                        await self._update_task_status(
-                            task_id, 
-                            "running", 
-                            progress, 
-                            f"Scanned {scanned_count}/{max_hosts_to_scan} hosts, found {len(discovered_devices)} devices"
-                        )
+                        except Exception as e:
+                            # Host scan failed, continue with next host
+                            pass
+                        
+                        scanned_count += 1
+                        progress = int((scanned_count / max_hosts_to_scan) * 100)
+                        
+                        # Update progress every 10 scans
+                        if scanned_count % 10 == 0:
+                            await self._update_task_status(
+                                task_id, 
+                                "running", 
+                                progress, 
+                                f"Scanned {scanned_count}/{max_hosts_to_scan} hosts, found {len(discovered_devices)} devices"
+                            )
+                        
+                        # Break if we've reached the scan limit
+                        if scanned_count >= max_hosts_to_scan:
+                            break
                 
                 # Break if we've reached the scan limit
                 if scanned_count >= max_hosts_to_scan:
                     break
             
+            # Filter out devices that are already registered as targets
+            filtered_devices = await self._filter_duplicate_targets(discovered_devices)
+            
             # Complete the task
+            active_duplicates = len(discovered_devices) - len(filtered_devices)
             await self._update_task_status(
                 task_id, 
                 "completed", 
                 100, 
-                f"Discovery completed. Found {len(discovered_devices)} devices",
-                discovered_devices
+                f"Discovery completed. Found {len(discovered_devices)} devices ({len(filtered_devices)} available for import, {active_duplicates} active duplicates filtered)",
+                filtered_devices
             )
             
             logger.info(
@@ -920,7 +967,7 @@ class DiscoveryManagementService:
             await self._update_task_status(task_id, "failed", 0, f"Discovery failed: {str(e)}")
 
     async def _update_task_status(self, task_id: str, status: str, progress: int, message: str, devices: List = None):
-        """Update task status in Redis"""
+        """Update task status in Redis (async version)"""
         try:
             redis_client = await get_redis_client()
             task_data_str = await redis_client.get(f"in_memory_discovery:{task_id}")
@@ -947,6 +994,748 @@ class DiscoveryManagementService:
                 )
         except Exception as e:
             logger.error(f"Failed to update task status: {e}")
+
+    def _update_task_status_sync(self, task_id: str, status: str, progress: int, message: str, devices: List = None):
+        """Update task status in Redis (synchronous version for Celery tasks)"""
+        try:
+            import redis
+            from app.core.config import settings
+            
+            # Create synchronous Redis client
+            redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+            task_data_str = redis_client.get(f"in_memory_discovery:{task_id}")
+            
+            if task_data_str:
+                task_data = json.loads(task_data_str)
+                task_data.update({
+                    "status": status,
+                    "progress": progress,
+                    "message": message,
+                    "last_updated": datetime.utcnow().isoformat()
+                })
+                
+                if devices is not None:
+                    task_data["devices"] = devices
+                
+                if status == "completed":
+                    task_data["completed_at"] = datetime.utcnow().isoformat()
+                
+                redis_client.setex(
+                    f"in_memory_discovery:{task_id}",
+                    3600,  # 1 hour
+                    json.dumps(task_data, default=str)
+                )
+                logger.info(f"Task status updated in Redis: {task_id} -> {status}")
+        except Exception as e:
+            logger.error(f"Failed to update task status (sync): {e}")
+
+    def _get_device_info(self, host_ip: str, ports: List[int]) -> dict:
+        """
+        Get detailed device information for a discovered host.
+        """
+        import socket
+        from datetime import datetime
+        
+        device_info = {
+            'ip_address': host_ip,
+            'hostname': host_ip,
+            'device_type': 'unknown',
+            'status': 'discovered',
+            'ports': [],
+            'network_range': 'unknown',
+            'discovered_at': datetime.utcnow().isoformat()
+        }
+        
+        # Try to get hostname
+        try:
+            hostname = socket.gethostbyaddr(host_ip)[0]
+            device_info['hostname'] = hostname
+        except:
+            pass
+        
+        # Check which ports are open
+        open_ports = []
+        for port in ports:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2)
+                result = sock.connect_ex((host_ip, port))
+                if result == 0:
+                    open_ports.append(port)
+                sock.close()
+            except:
+                pass
+        
+        device_info['ports'] = open_ports
+        
+        # Get service banners for better identification
+        service_info = self._get_service_banners(host_ip, open_ports[:3])  # Only check first 3 ports for performance
+        device_info['services'] = service_info
+        
+        # Get MAC address and vendor info
+        mac_info = self._get_mac_address(host_ip)
+        if mac_info:
+            device_info['mac_address'] = mac_info.get('mac')
+            device_info['vendor'] = mac_info.get('vendor')
+        
+        # Advanced device type identification
+        device_info['device_type'] = self._identify_device_type(host_ip, open_ports, device_info.get('hostname', ''), service_info, mac_info)
+        
+        return device_info
+
+    def _get_service_banners(self, host_ip: str, ports: list) -> dict:
+        """
+        Get service banners from open ports for better device identification.
+        Only checks a few ports to avoid performance impact.
+        """
+        services = {}
+        
+        for port in ports:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(3)
+                sock.connect((host_ip, port))
+                
+                # Try to get banner
+                banner = ""
+                if port == 22:  # SSH
+                    banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
+                elif port == 80:  # HTTP
+                    sock.send(b"GET / HTTP/1.0\r\n\r\n")
+                    banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
+                elif port == 21:  # FTP
+                    banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
+                elif port == 25:  # SMTP
+                    banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
+                elif port == 23:  # Telnet
+                    banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
+                
+                if banner:
+                    services[port] = banner[:200]  # Limit banner length
+                
+                sock.close()
+                
+            except Exception:
+                # Banner grab failed, continue
+                pass
+        
+        return services
+
+    def _get_mac_address(self, host_ip: str) -> dict:
+        """
+        Get MAC address and vendor information using ARP table lookup.
+        This works best for devices on the same subnet.
+        """
+        try:
+            import subprocess
+            import re
+            
+            # Try to get MAC from ARP table
+            try:
+                # Ping first to populate ARP table
+                subprocess.run(['ping', '-c', '1', '-W', '1', host_ip], 
+                             capture_output=True, timeout=2)
+                
+                # Get ARP entry
+                result = subprocess.run(['arp', '-n', host_ip], 
+                                      capture_output=True, text=True, timeout=2)
+                
+                if result.returncode == 0:
+                    # Parse ARP output for MAC address
+                    mac_match = re.search(r'([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}', result.stdout)
+                    if mac_match:
+                        mac_address = mac_match.group(0).upper().replace('-', ':')
+                        vendor = self._get_vendor_from_mac(mac_address)
+                        return {
+                            'mac': mac_address,
+                            'vendor': vendor
+                        }
+            except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+                pass
+                
+        except Exception as e:
+            logger.debug(f"Failed to get MAC address for {host_ip}: {e}")
+            
+        return None
+
+    def _get_vendor_from_mac(self, mac_address: str) -> str:
+        """
+        Get vendor information from MAC address OUI (first 3 octets).
+        Uses a simplified vendor database for common manufacturers.
+        """
+        if not mac_address or len(mac_address) < 8:
+            return 'Unknown'
+            
+        # Get OUI (first 3 octets)
+        oui = mac_address[:8].upper()
+        
+        # Common vendor OUI mappings (simplified database)
+        vendor_db = {
+            # Network Equipment
+            '00:1B:67': 'Cisco Systems',
+            '00:26:99': 'Cisco Systems', 
+            '00:50:56': 'VMware',
+            '00:0C:29': 'VMware',
+            '00:05:69': 'VMware',
+            '08:00:27': 'Oracle VirtualBox',
+            '52:54:00': 'QEMU/KVM',
+            
+            # Common Manufacturers
+            '00:50:B6': 'Intel Corporation',
+            '00:E0:4C': 'Realtek',
+            '00:1E:C9': 'ASUSTEK',
+            '00:26:B9': 'Netgear',
+            '00:14:BF': 'Netgear',
+            '00:03:7F': 'Atheros',
+            '00:15:6D': 'Broadcom',
+            
+            # Apple
+            '00:03:93': 'Apple',
+            '00:16:CB': 'Apple',
+            '00:1B:63': 'Apple',
+            
+            # HP/Dell
+            '00:1F:29': 'Hewlett Packard',
+            '00:26:55': 'Dell Inc.',
+            '00:14:22': 'Dell Inc.',
+            
+            # Printers
+            '00:11:85': 'Canon',
+            '00:01:E3': 'Siemens',
+            '00:80:77': 'Brother',
+        }
+        
+        return vendor_db.get(oui, 'Unknown')
+
+    def _analyze_service_banners(self, service_info: dict) -> dict:
+        """Analyze service banners for OS and device type clues"""
+        clues = {
+            'os_hints': [],
+            'device_hints': [],
+            'software_hints': []
+        }
+        
+        for port, banner in service_info.items():
+            banner_lower = banner.lower()
+            
+            # OS detection from banners
+            if any(hint in banner_lower for hint in ['ubuntu', 'debian', 'centos', 'redhat', 'linux']):
+                clues['os_hints'].append('linux')
+            elif any(hint in banner_lower for hint in ['windows', 'microsoft', 'iis']):
+                clues['os_hints'].append('windows')
+            elif any(hint in banner_lower for hint in ['cisco', 'juniper', 'mikrotik']):
+                clues['device_hints'].append('network_device')
+            
+            # Software detection
+            if 'apache' in banner_lower:
+                clues['software_hints'].append('apache')
+            elif 'nginx' in banner_lower:
+                clues['software_hints'].append('nginx')
+            elif 'openssh' in banner_lower:
+                clues['software_hints'].append('openssh')
+            elif 'microsoft' in banner_lower:
+                clues['software_hints'].append('microsoft')
+        
+        return clues
+
+    def _analyze_vendor_info(self, mac_info: dict) -> dict:
+        """Analyze MAC vendor information for device type clues"""
+        clues = {
+            'device_hints': [],
+            'os_hints': []
+        }
+        
+        if not mac_info or not mac_info.get('vendor'):
+            return clues
+            
+        vendor = mac_info.get('vendor', '').lower()
+        
+        # Network equipment vendors
+        if any(v in vendor for v in ['cisco', 'juniper', 'netgear', 'linksys', 'dlink', 'tplink']):
+            clues['device_hints'].append('network_device')
+        
+        # Virtualization platforms
+        elif any(v in vendor for v in ['vmware', 'virtualbox', 'qemu']):
+            clues['device_hints'].append('virtual_machine')
+            
+        # Printer manufacturers
+        elif any(v in vendor for v in ['canon', 'brother', 'hp', 'epson']):
+            clues['device_hints'].append('printer')
+            
+        # Apple devices
+        elif 'apple' in vendor:
+            clues['os_hints'].append('macos')
+            clues['device_hints'].append('apple_device')
+            
+        return clues
+
+    def _get_ttl_os_hints(self, host_ip: str) -> list:
+        """
+        Get OS hints based on TTL (Time To Live) values from ping.
+        Different operating systems use different default TTL values.
+        """
+        try:
+            import subprocess
+            import re
+            
+            # Ping the host and get TTL
+            result = subprocess.run(['ping', '-c', '1', '-W', '2', host_ip], 
+                                  capture_output=True, text=True, timeout=3)
+            
+            if result.returncode == 0:
+                # Extract TTL from ping output
+                ttl_match = re.search(r'ttl=(\d+)', result.stdout.lower())
+                if ttl_match:
+                    ttl = int(ttl_match.group(1))
+                    
+                    # TTL-based OS detection
+                    if ttl <= 64:
+                        if ttl > 60:
+                            return ['linux', 'unix']  # Linux/Unix typically 64
+                        else:
+                            return ['linux', 'unix', 'network_device']  # Could be network device
+                    elif ttl <= 128:
+                        if ttl > 120:
+                            return ['windows']  # Windows typically 128
+                        else:
+                            return ['windows', 'network_device']
+                    elif ttl <= 255:
+                        return ['network_device', 'cisco']  # Network devices often 255
+                        
+        except Exception:
+            pass
+            
+        return []
+
+    def _identify_device_type(self, host_ip: str, open_ports: list, hostname: str = '', service_info: dict = None, mac_info: dict = None) -> str:
+        """
+        Advanced device type identification using multiple indicators:
+        - Port patterns
+        - Service banners
+        - Hostname patterns
+        - TTL analysis
+        - Service fingerprinting
+        """
+        try:
+            import socket
+            import re
+            
+            # Normalize hostname for analysis
+            hostname_lower = hostname.lower()
+            service_info = service_info or {}
+            mac_info = mac_info or {}
+            
+            # Check service banners for OS/device clues
+            banner_clues = self._analyze_service_banners(service_info)
+            
+            # Check MAC vendor for device clues
+            vendor_clues = self._analyze_vendor_info(mac_info)
+            
+            # Get TTL-based OS hints
+            ttl_hints = self._get_ttl_os_hints(host_ip)
+            
+            # 1. VENDOR-SPECIFIC DEVICES (highest priority)
+            if 'printer' in vendor_clues.get('device_hints', []):
+                return 'printer'
+            elif 'virtual_machine' in vendor_clues.get('device_hints', []):
+                return 'virtual_machine'
+            elif 'apple_device' in vendor_clues.get('device_hints', []):
+                return 'macos'
+            
+            # 2. SPECIALIZED DEVICES (most specific)
+            specialized_type = self._identify_specialized_device(open_ports, hostname_lower, host_ip, banner_clues, vendor_clues)
+            if specialized_type:
+                return specialized_type
+            
+            # 3. NETWORK INFRASTRUCTURE DEVICES
+            if self._is_network_device(open_ports, hostname_lower, host_ip, banner_clues, vendor_clues):
+                return 'network_device'
+            
+            # 4. WINDOWS SYSTEMS
+            if self._is_windows_system(open_ports, hostname_lower, host_ip, banner_clues, vendor_clues) or 'windows' in ttl_hints:
+                return 'windows'
+            
+            # 5. LINUX/UNIX SYSTEMS
+            if self._is_linux_system(open_ports, hostname_lower, host_ip, banner_clues, vendor_clues) or any(hint in ttl_hints for hint in ['linux', 'unix']):
+                return 'linux'
+            
+            # 5. FALLBACK CLASSIFICATION
+            return self._fallback_classification(open_ports, hostname_lower)
+            
+        except Exception as e:
+            logger.warning(f"Error in device identification for {host_ip}: {e}")
+            return 'unknown'
+
+    def _is_network_device(self, open_ports: list, hostname: str, host_ip: str, banner_clues: dict = None, vendor_clues: dict = None) -> bool:
+        """Identify network infrastructure devices"""
+        banner_clues = banner_clues or {}
+        vendor_clues = vendor_clues or {}
+        
+        # Network device indicators
+        network_indicators = [
+            # Vendor clues (strongest indicator)
+            'network_device' in vendor_clues.get('device_hints', []),
+            # Banner clues
+            'network_device' in banner_clues.get('device_hints', []),
+            # Hostname patterns
+            any(pattern in hostname for pattern in [
+                'router', 'switch', 'gateway', 'firewall', 'ap-', 'access-point',
+                'cisco', 'juniper', 'netgear', 'linksys', 'dlink', 'tplink',
+                'ubiquiti', 'mikrotik', 'fortinet', 'pfsense', 'opnsense'
+            ]),
+            # Port patterns typical of network devices
+            161 in open_ports and 22 in open_ports and 80 in open_ports,  # SNMP + SSH + Web
+            23 in open_ports and 80 in open_ports and not 3389 in open_ports,  # Telnet + Web, no RDP
+            # Common network device web ports
+            8080 in open_ports and 22 in open_ports and not 445 in open_ports,
+            # SNMP without typical server services
+            161 in open_ports and not any(port in open_ports for port in [3306, 5432, 1433, 25, 110])
+        ]
+        
+        return any(network_indicators)
+
+    def _is_windows_system(self, open_ports: list, hostname: str, host_ip: str, banner_clues: dict = None, vendor_clues: dict = None) -> bool:
+        """Identify Windows systems"""
+        banner_clues = banner_clues or {}
+        
+        # Windows-specific indicators
+        windows_indicators = [
+            # Banner clues
+            'windows' in banner_clues.get('os_hints', []),
+            'microsoft' in banner_clues.get('software_hints', []),
+            # RDP is strong Windows indicator
+            3389 in open_ports,
+            # SMB/NetBIOS combination
+            445 in open_ports and 139 in open_ports,
+            # Windows RPC
+            135 in open_ports and (445 in open_ports or 139 in open_ports),
+            # WinRM
+            5985 in open_ports or 5986 in open_ports,
+            # Hostname patterns
+            any(pattern in hostname for pattern in [
+                'win-', 'windows', 'dc-', 'ad-', 'exchange', 'sql-', 'iis-',
+                'desktop-', 'laptop-', 'pc-', 'workstation'
+            ])
+        ]
+        
+        return any(windows_indicators)
+
+    def _is_linux_system(self, open_ports: list, hostname: str, host_ip: str, banner_clues: dict = None, vendor_clues: dict = None) -> bool:
+        """Identify Linux/Unix systems"""
+        banner_clues = banner_clues or {}
+        
+        # Linux-specific indicators
+        linux_indicators = [
+            # Banner clues
+            'linux' in banner_clues.get('os_hints', []),
+            'openssh' in banner_clues.get('software_hints', []),
+            'apache' in banner_clues.get('software_hints', []),
+            'nginx' in banner_clues.get('software_hints', []),
+            # SSH is common on Linux
+            22 in open_ports and not 3389 in open_ports and not 445 in open_ports,
+            # Common Linux service combinations
+            22 in open_ports and (80 in open_ports or 443 in open_ports) and not 135 in open_ports,
+            # Hostname patterns
+            any(pattern in hostname for pattern in [
+                'ubuntu', 'debian', 'centos', 'rhel', 'fedora', 'suse', 'arch',
+                'linux', 'unix', 'server', 'web-', 'db-', 'mail-', 'dns-'
+            ])
+        ]
+        
+        return any(linux_indicators)
+
+    def _identify_specialized_device(self, open_ports: list, hostname: str, host_ip: str, banner_clues: dict = None, vendor_clues: dict = None) -> str:
+        """Identify specialized devices and appliances"""
+        
+        # Database servers
+        if any(port in open_ports for port in [3306, 5432, 1433, 1521, 27017]):
+            if 3306 in open_ports:
+                return 'database_mysql'
+            elif 5432 in open_ports:
+                return 'database_postgresql'
+            elif 1433 in open_ports:
+                return 'database_mssql'
+            elif 1521 in open_ports:
+                return 'database_oracle'
+            elif 27017 in open_ports:
+                return 'database_mongodb'
+        
+        # Web servers
+        if (80 in open_ports or 443 in open_ports) and not 22 in open_ports and not 3389 in open_ports:
+            return 'web_server'
+        
+        # Mail servers
+        if any(port in open_ports for port in [25, 110, 143, 993, 995, 587]):
+            return 'mail_server'
+        
+        # DNS servers
+        if 53 in open_ports:
+            return 'dns_server'
+        
+        # FTP servers
+        if 21 in open_ports:
+            return 'ftp_server'
+        
+        # VoIP devices
+        if any(port in open_ports for port in [5060, 5061]) or 'sip' in hostname:
+            return 'voip_device'
+        
+        # Printers
+        if any(port in open_ports for port in [631, 9100, 515]) or any(pattern in hostname for pattern in ['printer', 'print', 'hp-', 'canon-', 'epson-']):
+            return 'printer'
+        
+        # Storage devices (NAS/SAN)
+        if any(port in open_ports for port in [2049, 111]) or any(pattern in hostname for pattern in ['nas-', 'storage-', 'synology', 'qnap']):
+            return 'storage_device'
+        
+        # Virtualization hosts
+        if any(port in open_ports for port in [902, 443, 8006]) and any(pattern in hostname for pattern in ['esx', 'vcenter', 'proxmox', 'hyper-v']):
+            return 'virtualization_host'
+        
+        # IoT/Embedded devices
+        if 80 in open_ports and len(open_ports) <= 2 and not 22 in open_ports:
+            return 'iot_device'
+        
+        return None
+
+    def _fallback_classification(self, open_ports: list, hostname: str) -> str:
+        """Fallback classification when specific identification fails"""
+        
+        # Server-like (multiple services)
+        if len(open_ports) >= 3:
+            return 'server'
+        
+        # Web-based device
+        if 80 in open_ports or 443 in open_ports:
+            return 'web_device'
+        
+        # SSH-only device (likely Linux)
+        if 22 in open_ports and len(open_ports) == 1:
+            return 'linux'
+        
+        # RDP-only device (likely Windows)
+        if 3389 in open_ports and len(open_ports) == 1:
+            return 'windows'
+        
+        # Default
+        return 'unknown'
+
+    def _ping_host(self, host_ip: str) -> bool:
+        """
+        Check if a host is alive using multiple detection methods.
+        First tries ICMP ping (fast), then falls back to TCP port scanning.
+        Returns True if host is reachable, False otherwise.
+        """
+        try:
+            import socket
+            import subprocess
+            import platform
+            
+            # Try ICMP ping first (fastest method)
+            try:
+                # Use appropriate ping command based on OS
+                ping_cmd = ["ping", "-c", "1", "-W", "1", host_ip] if platform.system() != "Windows" else ["ping", "-n", "1", "-w", "1000", host_ip]
+                result = subprocess.run(ping_cmd, capture_output=True, timeout=2)
+                if result.returncode == 0:
+                    logger.info(f"Host {host_ip} is alive (ICMP ping successful)")
+                    return True
+            except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+                # ICMP ping failed or not available, fall back to TCP scanning
+                pass
+            
+            # Minimal port list for fast host detection
+            # Only scan the most common ports to quickly determine if host is alive
+            detection_ports = [
+                22,   # SSH (Linux/Unix)
+                80,   # HTTP (Web servers, many devices)
+                443,  # HTTPS (Web servers, many devices)
+                3389, # RDP (Windows)
+                135,  # Windows RPC
+                445   # SMB (Windows file sharing)
+            ]
+            
+            logger.info(f"Checking host {host_ip} for connectivity using TCP port scanning...")
+            
+            alive_indicators = 0
+            
+            for port in detection_ports:
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(0.3)  # Even faster timeout for detection
+                    result = sock.connect_ex((host_ip, port))
+                    sock.close()
+                    
+                    # Multiple indicators that host is alive:
+                    if result == 0:  # Port is open
+                        logger.info(f"Host {host_ip} is alive (port {port} open)")
+                        return True
+                    elif result in [111, 10061]:  # Connection refused (Linux/Windows)
+                        alive_indicators += 1
+                        if alive_indicators >= 1:  # Even one refused connection = host alive
+                            logger.info(f"Host {host_ip} is alive (connection refused on port {port})")
+                            return True
+                    elif result in [113, 10060]:  # No route to host / timeout
+                        # These typically indicate host is down or unreachable
+                        continue
+                        
+                except Exception as e:
+                    # Socket exceptions don't necessarily mean host is down
+                    continue
+            
+            # If we got some connection refused responses, host is likely alive
+            if alive_indicators > 0:
+                logger.info(f"Host {host_ip} appears to be alive (got {alive_indicators} connection refused responses)")
+                return True
+            
+            logger.info(f"Host {host_ip} appears to be down or unreachable")
+            return False
+        except Exception as e:
+            logger.error(f"Error checking host {host_ip}: {e}")
+            return False
+
+    async def _resolve_hostname(self, host_ip: str) -> str:
+        """
+        Resolve hostname for an IP address.
+        Returns hostname if found, otherwise returns the IP address.
+        """
+        try:
+            import socket
+            hostname = socket.gethostbyaddr(host_ip)[0]
+            return hostname
+        except Exception:
+            return host_ip
+
+    async def _scan_ports(self, host_ip: str, ports: list, timeout: float) -> list:
+        """
+        Scan specified ports on a host.
+        Returns list of open ports.
+        """
+        open_ports = []
+        
+        try:
+            import socket
+            import concurrent.futures
+            from concurrent.futures import ThreadPoolExecutor
+            
+            def scan_port(port):
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(min(timeout, 2))  # Max 2 seconds per port
+                    result = sock.connect_ex((host_ip, port))
+                    sock.close()
+                    return port if result == 0 else None
+                except Exception:
+                    return None
+            
+            # Scan ports in parallel
+            max_workers = max(1, min(10, len(ports)))  # Ensure at least 1 worker
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                port_futures = {executor.submit(scan_port, port): port for port in ports}
+                
+                for future in concurrent.futures.as_completed(port_futures):
+                    result = future.result()
+                    if result is not None:
+                        open_ports.append(result)
+        
+        except Exception:
+            pass
+        
+        return sorted(open_ports)
+
+    def _determine_device_type(self, open_ports: list) -> str:
+        """
+        Determine device type based on open ports.
+        """
+        if not open_ports:
+            return "unknown"
+        
+        # Common port patterns for device type detection
+        if 22 in open_ports:  # SSH
+            if 80 in open_ports or 443 in open_ports:
+                return "linux"  # Linux server/workstation
+            else:
+                return "network_device"  # Router/switch
+        elif 3389 in open_ports:  # RDP
+            return "windows"
+        elif 161 in open_ports:  # SNMP
+            return "network_device"
+        elif 80 in open_ports or 443 in open_ports:
+            if 23 in open_ports:  # Telnet + HTTP
+                return "network_device"
+            else:
+                return "server"
+        elif 23 in open_ports:  # Telnet only
+            return "network_device"
+        elif 445 in open_ports or 139 in open_ports:  # SMB
+            return "windows"
+        elif 631 in open_ports:  # IPP (Internet Printing Protocol)
+            return "printer"
+        else:
+            return "unknown"
+
+    async def _filter_duplicate_targets(self, discovered_devices: list) -> list:
+        """
+        Filter out discovered devices that are already registered as targets.
+        Prevents duplicate imports and protects existing target configurations.
+        """
+        try:
+            from app.database.database import get_db
+            from app.models.universal_target_models import TargetCommunicationMethod
+            from sqlalchemy.orm import Session
+            
+            # Get database session
+            db_gen = get_db()
+            db: Session = next(db_gen)
+            
+            try:
+                # Get ONLY ACTIVE IP addresses from ACTIVE targets with ACTIVE communication methods
+                active_ips = set()
+                
+                # Query ONLY active communication methods from ACTIVE targets
+                from app.models.universal_target_models import UniversalTarget
+                
+                comm_methods = db.query(TargetCommunicationMethod).join(
+                    UniversalTarget, TargetCommunicationMethod.target_id == UniversalTarget.id
+                ).filter(
+                    # Both target AND communication method must be active
+                    UniversalTarget.is_active == True,
+                    UniversalTarget.status == 'active',
+                    TargetCommunicationMethod.is_active == True
+                ).all()
+                
+                for comm_method in comm_methods:
+                    if comm_method.config and 'host' in comm_method.config:
+                        active_ips.add(comm_method.config['host'])
+                
+                logger.info(f"Found {len(active_ips)} ACTIVE target IP addresses: {list(active_ips)[:10]}...")
+                
+                # Filter out discovered devices that match ACTIVE IPs only
+                filtered_devices = []
+                active_duplicates_found = []
+                
+                for device in discovered_devices:
+                    device_ip = device.get('ip_address')
+                    if device_ip not in active_ips:
+                        filtered_devices.append(device)
+                        logger.info(f"Device {device_ip} is available for import (not in active targets)")
+                    else:
+                        active_duplicates_found.append(device_ip)
+                        logger.info(f"Filtered out ACTIVE duplicate device: {device_ip} (already registered as ACTIVE target)")
+                
+                if active_duplicates_found:
+                    logger.info(f"Filtered out {len(active_duplicates_found)} ACTIVE duplicate devices: {active_duplicates_found}")
+                else:
+                    logger.info("No active duplicates found - all discovered devices are available for import")
+                
+                return filtered_devices
+                
+            finally:
+                db.close()
+                
+        except Exception as e:
+            logger.error(f"Error filtering duplicate targets: {e}")
+            # If filtering fails, return original list to avoid losing discoveries
+            return discovered_devices
 
     # Placeholder methods for discovery operations (would be implemented based on specific requirements)
     async def _create_discovery_job(self, **kwargs) -> Dict: return {"id": "job_123"}

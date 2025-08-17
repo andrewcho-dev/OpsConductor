@@ -131,6 +131,27 @@ const SimpleNetworkDiscoveryModal = ({ open, onClose, onDiscoveryStarted }) => {
         throw new Error('Please specify at least one network range');
       }
 
+      // Warn about large network ranges
+      let totalHosts = 0;
+      for (const range of ranges) {
+        if (range.includes('/')) {
+          const [, cidr] = range.split('/');
+          const hosts = Math.pow(2, 32 - parseInt(cidr)) - 2; // Subtract network and broadcast
+          totalHosts += hosts;
+        }
+      }
+      
+      if (totalHosts > 100) {
+        const confirmed = window.confirm(
+          `Warning: You're about to scan ${totalHosts} hosts, which may take 3-5 minutes to complete. ` +
+          `Consider using smaller network ranges (e.g., /28 or /27) for faster results. Continue?`
+        );
+        if (!confirmed) {
+          setRunning(false);
+          return;
+        }
+      }
+
       // Create discovery config for in-memory discovery
       const discoveryConfig = {
         network_ranges: ranges,

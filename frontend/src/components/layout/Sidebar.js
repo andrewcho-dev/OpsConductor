@@ -21,7 +21,6 @@ import {
   Assessment as AssessmentIcon,
   People as PeopleIcon,
   Settings as SettingsIcon,
-  Notifications as NotificationsIcon,
   Dashboard as DashboardIcon,
   AutoAwesome as AutoAwesomeIcon,
   Speed as SpeedIcon,
@@ -99,12 +98,6 @@ const Sidebar = () => {
       text: 'System Settings',
       icon: <SettingsIcon />,
       path: '/system-settings',
-      roles: ['administrator']
-    },
-    {
-      text: 'Notifications',
-      icon: <NotificationsIcon />,
-      path: '/notifications',
       roles: ['administrator']
     }
   ];
