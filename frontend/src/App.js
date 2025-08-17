@@ -15,7 +15,6 @@ import CeleryMonitorPage from './components/jobs/CeleryMonitorPage';
 import LogViewer from './components/LogViewer';
 import LogViewerTest from './components/LogViewerTest';
 import SystemSettings from './components/system/SystemSettings';
-import NotificationCenter from './components/system/NotificationCenter';
 import SystemHealthDashboard from './components/system/SystemHealthDashboard';
 import AuditDashboard from './components/audit/AuditDashboard';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -98,14 +97,6 @@ function AppContent() {
                 element={
                   <ProtectedRoute requireAdmin>
                     <SystemSettings />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/notifications" 
-                element={
-                  <ProtectedRoute requireAdmin>
-                    <NotificationCenter />
                   </ProtectedRoute>
                 } 
               />

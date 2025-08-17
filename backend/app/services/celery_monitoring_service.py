@@ -47,25 +47,22 @@ class CeleryMonitoringService:
                 # Update existing record
                 existing_task.status = status
                 existing_task.completed_at = completed_at or datetime.now(timezone.utc)
-                existing_task.duration = duration
                 existing_task.result = result
-                existing_task.exception = exception
                 existing_task.traceback = traceback
                 existing_task.retries = retries
                 task_record = existing_task
             else:
                 # Create new record
+                logger.info(f"🔧 Creating CeleryTaskHistory with worker='{worker_name}', queue='{queue_name}'")
                 task_record = CeleryTaskHistory(
                     task_id=task_id,
                     task_name=task_name,
-                    worker_name=worker_name,
-                    queue_name=queue_name,
+                    worker=worker_name,
+                    queue=queue_name,
                     started_at=started_at,
                     completed_at=completed_at or datetime.now(timezone.utc),
-                    duration=duration,
                     status=status,
                     result=result,
-                    exception=exception,
                     traceback=traceback,
                     args=args,
                     kwargs=kwargs,

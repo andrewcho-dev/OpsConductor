@@ -182,16 +182,55 @@ const JobList = ({
             let aValue = a[sortField];
             let bValue = b[sortField];
             
-            if (aValue == null) aValue = '';
-            if (bValue == null) bValue = '';
+            // Handle null/undefined values
+            if (aValue == null && bValue == null) return 0;
+            if (aValue == null) return sortDirection === 'asc' ? 1 : -1;
+            if (bValue == null) return sortDirection === 'asc' ? -1 : 1;
             
-            aValue = String(aValue).toLowerCase();
-            bValue = String(bValue).toLowerCase();
+            // Handle date fields
+            if (sortField === 'created_at' || sortField === 'updated_at' || sortField === 'scheduled_at') {
+                const aDate = new Date(aValue);
+                const bDate = new Date(bValue);
+                
+                // Handle invalid dates
+                if (isNaN(aDate.getTime()) && isNaN(bDate.getTime())) return 0;
+                if (isNaN(aDate.getTime())) return sortDirection === 'asc' ? 1 : -1;
+                if (isNaN(bDate.getTime())) return sortDirection === 'asc' ? -1 : 1;
+                
+                return sortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+            }
+            
+            // Handle last_execution field (nested object)
+            if (sortField === 'last_execution') {
+                const aExec = aValue?.started_at;
+                const bExec = bValue?.started_at;
+                
+                // Handle null executions
+                if (!aExec && !bExec) return 0;
+                if (!aExec) return sortDirection === 'asc' ? 1 : -1;
+                if (!bExec) return sortDirection === 'asc' ? -1 : 1;
+                
+                const aDate = new Date(aExec);
+                const bDate = new Date(bExec);
+                
+                return sortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+            }
+            
+            // Handle numeric fields
+            if (sortField === 'priority' || sortField === 'timeout' || sortField === 'retry_count') {
+                const aNum = Number(aValue);
+                const bNum = Number(bValue);
+                return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+            }
+            
+            // Handle string fields
+            const aStr = String(aValue).toLowerCase();
+            const bStr = String(bValue).toLowerCase();
             
             if (sortDirection === 'asc') {
-                return aValue.localeCompare(bValue);
+                return aStr.localeCompare(bStr);
             } else {
-                return bValue.localeCompare(aValue);
+                return bStr.localeCompare(aStr);
             }
         });
         
@@ -319,7 +358,7 @@ const JobList = ({
 
         for (const job of jobsToTerminate) {
             try {
-                const response = await fetch(`/api/jobs/${job.id}/terminate`, {
+                const response = await fetch(`/api/v2/jobs/${job.id}/terminate`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -380,15 +419,31 @@ const JobList = ({
             sx={{ 
                 cursor: 'pointer', 
                 userSelect: 'none',
-                '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
+                position: 'relative',
+                '&:hover': { 
+                    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                    '& .sort-hint': { opacity: 0.3 }
+                }
             }}
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 {children}
-                {sortField === field && (
+                {sortField === field ? (
                     sortDirection === 'asc' ? 
-                        <ArrowUpwardIcon sx={{ fontSize: 14 }} /> : 
-                        <ArrowDownwardIcon sx={{ fontSize: 14 }} />
+                        <ArrowUpwardIcon sx={{ fontSize: 14, color: 'primary.main' }} /> : 
+                        <ArrowDownwardIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                ) : (
+                    <Box 
+                        className="sort-hint"
+                        sx={{ 
+                            opacity: 0, 
+                            fontSize: 12, 
+                            color: 'text.secondary',
+                            transition: 'opacity 0.2s'
+                        }}
+                    >
+                        ↕
+                    </Box>
                 )}
             </Box>
         </TableCell>
@@ -439,13 +494,13 @@ const JobList = ({
                         {/* Column Headers Row */}
                         <TableRow sx={{ backgroundColor: 'grey.100' }}>
                             <TableCell className="standard-table-header">Select</TableCell>
-                            <TableCell className="standard-table-header">Job Name</TableCell>
-                            <TableCell className="standard-table-header">Job Serial</TableCell>
-                            <TableCell className="standard-table-header">Type</TableCell>
-                            <TableCell className="standard-table-header">Status</TableCell>
-                            <TableCell className="standard-table-header">Created</TableCell>
-                            <TableCell className="standard-table-header">Last Run</TableCell>
-                            <TableCell className="standard-table-header">Next Scheduled</TableCell>
+                            <SortableHeader field="name" className="standard-table-header">Job Name</SortableHeader>
+                            <SortableHeader field="job_serial" className="standard-table-header">Job Serial</SortableHeader>
+                            <SortableHeader field="job_type" className="standard-table-header">Type</SortableHeader>
+                            <SortableHeader field="status" className="standard-table-header">Status</SortableHeader>
+                            <SortableHeader field="created_at" className="standard-table-header">Created</SortableHeader>
+                            <SortableHeader field="last_execution" className="standard-table-header">Last Run</SortableHeader>
+                            <SortableHeader field="scheduled_at" className="standard-table-header">Next Scheduled</SortableHeader>
                             <TableCell className="standard-table-header">Actions</TableCell>
                         </TableRow>
                         

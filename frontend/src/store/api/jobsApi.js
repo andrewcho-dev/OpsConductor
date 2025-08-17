@@ -15,7 +15,7 @@ export const jobsApi = apiSlice.injectEndpoints({
         search = '',
         dateRange = null 
       } = {}) => ({
-        url: '/api/jobs/',
+        url: '/api/v2/jobs/',
         params: {
           skip: (page - 1) * pageSize,
           limit: pageSize,
@@ -34,7 +34,7 @@ export const jobsApi = apiSlice.injectEndpoints({
 
     // Get job by ID
     getJobById: builder.query({
-      query: (id) => `/api/jobs/${id}`,
+      query: (id) => `/api/v2/jobs/${id}`,
       providesTags: (result, error, id) => [{ type: 'Job', id }],
       transformResponse: (response) => response.data || response,
     }),
@@ -47,7 +47,7 @@ export const jobsApi = apiSlice.injectEndpoints({
         pageSize = 25, 
         status = '' 
       } = {}) => ({
-        url: '/api/jobs/executions/',
+        url: '/api/v2/jobs/executions/',
         params: {
           skip: (page - 1) * pageSize,
           limit: pageSize,
@@ -61,7 +61,7 @@ export const jobsApi = apiSlice.injectEndpoints({
 
     // Get job execution by ID
     getJobExecutionById: builder.query({
-      query: (id) => `/api/jobs/executions/${id}`,
+      query: (id) => `/api/v2/jobs/executions/${id}`,
       providesTags: (result, error, id) => [{ type: 'JobExecution', id }],
       transformResponse: (response) => response.data || response,
     }),
@@ -69,7 +69,7 @@ export const jobsApi = apiSlice.injectEndpoints({
     // Create new job
     createJob: builder.mutation({
       query: (jobData) => ({
-        url: '/api/jobs/',
+        url: '/api/v2/jobs/',
         method: 'POST',
         body: jobData,
       }),
@@ -80,7 +80,7 @@ export const jobsApi = apiSlice.injectEndpoints({
     // Update job
     updateJob: builder.mutation({
       query: ({ id, ...jobData }) => ({
-        url: `/api/jobs/${id}`,
+        url: `/api/v2/jobs/${id}`,
         method: 'PUT',
         body: jobData,
       }),
@@ -94,7 +94,7 @@ export const jobsApi = apiSlice.injectEndpoints({
     // Execute job
     executeJob: builder.mutation({
       query: ({ id, params = {} }) => ({
-        url: `/api/jobs/${id}/execute`,
+        url: `/api/v2/jobs/${id}/execute`,
         method: 'POST',
         body: { execution_params: params },
       }),
@@ -105,7 +105,7 @@ export const jobsApi = apiSlice.injectEndpoints({
     // Delete job
     deleteJob: builder.mutation({
       query: (id) => ({
-        url: `/api/jobs/${id}`,
+        url: `/api/v2/jobs/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Job'],
@@ -113,14 +113,14 @@ export const jobsApi = apiSlice.injectEndpoints({
 
     // Get job statistics
     getJobStatistics: builder.query({
-      query: () => '/api/jobs/statistics',
+      query: () => '/api/v2/jobs/statistics',
       providesTags: ['JobStats'],
       transformResponse: (response) => response.data || response,
     }),
 
     // Get running executions
     getRunningExecutions: builder.query({
-      query: () => '/api/jobs/executions/running',
+      query: () => '/api/v2/jobs/executions/running',
       providesTags: ['JobExecution'],
       transformResponse: (response) => response.data || response,
     }),
@@ -128,7 +128,7 @@ export const jobsApi = apiSlice.injectEndpoints({
     // Stop job execution
     stopJobExecution: builder.mutation({
       query: (executionId) => ({
-        url: `/api/jobs/executions/${executionId}/stop`,
+        url: `/api/v2/jobs/executions/${executionId}/stop`,
         method: 'POST',
       }),
       invalidatesTags: (result, error, executionId) => [
@@ -140,7 +140,7 @@ export const jobsApi = apiSlice.injectEndpoints({
     // Get job execution logs
     getJobExecutionLogs: builder.query({
       query: ({ executionId, page = 1, pageSize = 100 }) => ({
-        url: `/api/jobs/executions/${executionId}/logs`,
+        url: `/api/v2/jobs/executions/${executionId}/logs`,
         params: {
           skip: (page - 1) * pageSize,
           limit: pageSize,
@@ -155,7 +155,7 @@ export const jobsApi = apiSlice.injectEndpoints({
     // Schedule job
     scheduleJob: builder.mutation({
       query: ({ id, scheduleConfig }) => ({
-        url: `/api/jobs/${id}/schedule`,
+        url: `/api/v2/jobs/${id}/schedule`,
         method: 'POST',
         body: { schedule_config: scheduleConfig },
       }),
@@ -168,7 +168,7 @@ export const jobsApi = apiSlice.injectEndpoints({
     // Unschedule job
     unscheduleJob: builder.mutation({
       query: (id) => ({
-        url: `/api/jobs/${id}/unschedule`,
+        url: `/api/v2/jobs/${id}/unschedule`,
         method: 'POST',
       }),
       invalidatesTags: (result, error, id) => [

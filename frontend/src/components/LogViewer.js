@@ -1,40 +1,57 @@
+/**
+ * Log Viewer - Ultra-compact, space-efficient job execution monitoring
+ * Follows SystemSettings visual pattern with maximum information density
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  Box,
-  Card,
-  CardContent,
-  TextField,
-  Button,
   Typography,
-  Paper,
-  Chip,
+  Button,
   IconButton,
-  Collapse,
-  Grid,
+  TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Pagination,
-  Alert,
+  Autocomplete,
+  Chip,
+  Box,
   Tooltip,
+  Collapse,
+  LinearProgress,
+  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Autocomplete
+  Pagination,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from '@mui/material';
 import {
   Search as SearchIcon,
+  Refresh as RefreshIcon,
+  Download as DownloadIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  FilterList as FilterIcon,
-  Download as DownloadIcon,
-  Refresh as RefreshIcon,
-  Info as InfoIcon,
   ContentCopy as CopyIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Info as InfoIcon,
+  CheckCircle as CheckCircleIcon,
+  Error as ErrorIcon,
+  Schedule as ScheduleIcon,
+  PlayArrow as PlayArrowIcon,
+  Computer as ComputerIcon,
+  Work as WorkIcon,
+  Timeline as TimelineIcon,
+  Assessment as AssessmentIcon,
+  Storage as StorageIcon,
+  Speed as SpeedIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
@@ -44,7 +61,7 @@ const LogViewer = () => {
   const { token } = useAuth();
   const location = useLocation();
   
-  // State
+  // State management
   const [searchPattern, setSearchPattern] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [results, setResults] = useState([]);
@@ -52,18 +69,24 @@ const LogViewer = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  
+  // Expansion state - ultra-compact management
   const [expandedJobs, setExpandedJobs] = useState(new Set());
   const [expandedExecutions, setExpandedExecutions] = useState(new Set());
-  const [expandedTargets, setExpandedTargets] = useState(new Set());
+  const [expandedBranches, setExpandedBranches] = useState(new Set());
   const [expandedActions, setExpandedActions] = useState(new Set());
+  
+  // Modal state
   const [selectedAction, setSelectedAction] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  
+  // Pagination
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  
-  const ITEMS_PER_PAGE = 50;
+  const ITEMS_PER_PAGE = 100; // Increased for dense display
 
-  // Pattern suggestions
+  // Pattern suggestions for autocomplete
   const patternExamples = [
     'J20250000001 - Specific job',
     'J20250000001.0001 - Specific execution',
@@ -76,7 +99,7 @@ const LogViewer = () => {
     'setup - Text search'
   ];
 
-  // API call helper
+  // API helper
   const apiCall = async (url, options = {}) => {
     try {
       const response = await authService.api.get(url.replace('/api', ''), options);
@@ -86,89 +109,87 @@ const LogViewer = () => {
     }
   };
 
-  // Transform flat results into hierarchical structure
+  // Transform flat results into ultra-compact hierarchical structure
   const transformToHierarchical = (flatResults) => {
     const jobMap = new Map();
     
     flatResults.forEach(action => {
       const jobKey = action.job_serial;
       const executionKey = `${jobKey}.${action.execution_serial}`;
-      const targetKey = `${executionKey}.${action.target_serial}`;
+      const branchKey = `${executionKey}.${action.branch_serial}`;
       
-      // Initialize job if not exists
+      // Initialize job
       if (!jobMap.has(jobKey)) {
         jobMap.set(jobKey, {
           id: jobKey,
           job_serial: action.job_serial,
           job_name: action.job_name,
           executions: new Map(),
-          totalActions: 0,
-          completedActions: 0,
-          failedActions: 0,
-          runningActions: 0
+          stats: { total: 0, completed: 0, failed: 0, running: 0 },
+          lastExecution: null
         });
       }
       
       const job = jobMap.get(jobKey);
-      job.totalActions++;
-      if (action.status === 'completed') job.completedActions++;
-      else if (action.status === 'failed') job.failedActions++;
-      else if (action.status === 'running') job.runningActions++;
+      job.stats.total++;
+      if (action.status === 'completed') job.stats.completed++;
+      else if (action.status === 'failed') job.stats.failed++;
+      else if (action.status === 'running') job.stats.running++;
       
-      // Initialize execution if not exists
+      // Initialize execution
       if (!job.executions.has(executionKey)) {
         job.executions.set(executionKey, {
           id: executionKey,
           execution_serial: action.execution_serial,
-          targets: new Map(),
-          totalActions: 0,
-          completedActions: 0,
-          failedActions: 0,
-          runningActions: 0
+          branches: new Map(),
+          stats: { total: 0, completed: 0, failed: 0, running: 0 },
+          started_at: action.started_at,
+          completed_at: action.completed_at
         });
       }
       
       const execution = job.executions.get(executionKey);
-      execution.totalActions++;
-      if (action.status === 'completed') execution.completedActions++;
-      else if (action.status === 'failed') execution.failedActions++;
-      else if (action.status === 'running') execution.runningActions++;
+      execution.stats.total++;
+      if (action.status === 'completed') execution.stats.completed++;
+      else if (action.status === 'failed') execution.stats.failed++;
+      else if (action.status === 'running') execution.stats.running++;
       
-      // Initialize target if not exists
-      if (!execution.targets.has(targetKey)) {
-        execution.targets.set(targetKey, {
-          id: targetKey,
+      // Update job's last execution
+      if (!job.lastExecution || new Date(action.started_at) > new Date(job.lastExecution)) {
+        job.lastExecution = action.started_at;
+      }
+      
+      // Initialize branch
+      if (!execution.branches.has(branchKey)) {
+        execution.branches.set(branchKey, {
+          id: branchKey,
+          branch_serial: action.branch_serial,
           target_serial: action.target_serial,
           target_name: action.target_name,
           target_type: action.target_type,
           actions: [],
-          totalActions: 0,
-          completedActions: 0,
-          failedActions: 0,
-          runningActions: 0
+          stats: { total: 0, completed: 0, failed: 0, running: 0 }
         });
       }
       
-      const target = execution.targets.get(targetKey);
-      target.totalActions++;
-      if (action.status === 'completed') target.completedActions++;
-      else if (action.status === 'failed') target.failedActions++;
-      else if (action.status === 'running') target.runningActions++;
+      const branch = execution.branches.get(branchKey);
+      branch.stats.total++;
+      if (action.status === 'completed') branch.stats.completed++;
+      else if (action.status === 'failed') branch.stats.failed++;
+      else if (action.status === 'running') branch.stats.running++;
       
-      // Add action to target
-      target.actions.push(action);
+      // Add action
+      branch.actions.push(action);
     });
     
-    // Convert Maps to Arrays for easier rendering
-    const hierarchical = Array.from(jobMap.values()).map(job => ({
+    // Convert to arrays and sort
+    return Array.from(jobMap.values()).map(job => ({
       ...job,
       executions: Array.from(job.executions.values()).map(execution => ({
         ...execution,
-        targets: Array.from(execution.targets.values())
-      }))
-    }));
-    
-    return hierarchical;
+        branches: Array.from(execution.branches.values())
+      })).sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
+    })).sort((a, b) => new Date(b.lastExecution) - new Date(a.lastExecution));
   };
 
   // Search function
@@ -188,17 +209,18 @@ const LogViewer = () => {
         params.append('pattern', pattern.trim());
       }
       
-      const response = await apiCall(`/api/log-viewer/search?${params}`);
-      
+      const response = await apiCall(`/api/v2/log-viewer/search?${params}`);
       const flatResults = response.results || [];
+      
       setResults(flatResults);
       setHierarchicalData(transformToHierarchical(flatResults));
-      setTotalPages(Math.ceil(((flatResults).length === ITEMS_PER_PAGE ? (offset + ITEMS_PER_PAGE + 1) : offset + (flatResults).length) / ITEMS_PER_PAGE));
+      setTotalPages(Math.ceil(response.total_count / ITEMS_PER_PAGE));
+      setLastUpdated(new Date());
       
-      // Get stats
-      const statsParams = pattern.trim() ? `?pattern=${encodeURIComponent(pattern.trim())}` : '';
+      // Get comprehensive stats
       try {
-        const statsResponse = await apiCall(`/api/log-viewer/stats${statsParams}`);
+        const statsParams = pattern.trim() ? `?pattern=${encodeURIComponent(pattern.trim())}` : '';
+        const statsResponse = await apiCall(`/api/v2/log-viewer/stats${statsParams}`);
         setStats(statsResponse.stats);
       } catch (statsError) {
         console.warn('Stats API not available:', statsError);
@@ -214,7 +236,7 @@ const LogViewer = () => {
     }
   }, [token]);
 
-  // Handle navigation state and initial load
+  // Initialize
   useEffect(() => {
     const state = location.state;
     if (state?.searchPattern) {
@@ -223,21 +245,20 @@ const LogViewer = () => {
     } else {
       performSearch('', 'all', 1);
     }
-  }, [location.state]);
+  }, [location.state, performSearch]);
 
-  // Handle search
+  // Event handlers
   const handleSearch = () => {
     setPage(1);
     performSearch(searchPattern, statusFilter, 1);
   };
 
-  // Handle page change
   const handlePageChange = (event, value) => {
     setPage(value);
     performSearch(searchPattern, statusFilter, value);
   };
 
-  // Toggle functions for each level
+  // Toggle functions for ultra-compact expansion
   const toggleJob = (jobId) => {
     const newExpanded = new Set(expandedJobs);
     if (newExpanded.has(jobId)) {
@@ -258,31 +279,19 @@ const LogViewer = () => {
     setExpandedExecutions(newExpanded);
   };
 
-  const toggleTarget = (targetId) => {
-    const newExpanded = new Set(expandedTargets);
-    if (newExpanded.has(targetId)) {
-      newExpanded.delete(targetId);
+  const toggleBranch = (branchId) => {
+    const newExpanded = new Set(expandedBranches);
+    if (newExpanded.has(branchId)) {
+      newExpanded.delete(branchId);
     } else {
-      newExpanded.add(targetId);
+      newExpanded.add(branchId);
     }
-    setExpandedTargets(newExpanded);
+    setExpandedBranches(newExpanded);
   };
 
-  const toggleAction = (actionId) => {
-    const newExpanded = new Set(expandedActions);
-    if (newExpanded.has(actionId)) {
-      newExpanded.delete(actionId);
-    } else {
-      newExpanded.add(actionId);
-    }
-    setExpandedActions(newExpanded);
-  };
-
-
-
-  // Get status color
+  // Utility functions
   const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case 'completed': return 'success';
       case 'failed': return 'error';
       case 'running': return 'warning';
@@ -291,7 +300,16 @@ const LogViewer = () => {
     }
   };
 
-  // Format duration
+  const getStatusIcon = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'completed': return <CheckCircleIcon fontSize="inherit" />;
+      case 'failed': return <ErrorIcon fontSize="inherit" />;
+      case 'running': return <PlayArrowIcon fontSize="inherit" />;
+      case 'scheduled': return <ScheduleIcon fontSize="inherit" />;
+      default: return <InfoIcon fontSize="inherit" />;
+    }
+  };
+
   const formatDuration = (ms) => {
     if (!ms) return 'N/A';
     if (ms < 1000) return `${ms}ms`;
@@ -299,41 +317,29 @@ const LogViewer = () => {
     return `${(ms / 60000).toFixed(1)}m`;
   };
 
-  // Format timestamp
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return 'N/A';
-    return new Date(timestamp).toLocaleString();
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
   };
 
-  // Copy text to clipboard
-  const copyToClipboard = async (text, type = 'text') => {
+  const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      console.log(`${type} copied to clipboard`);
     } catch (err) {
-      console.error('Failed to copy to clipboard:', err);
+      console.error('Failed to copy:', err);
     }
   };
 
-  // Save text as file
-  const saveAsFile = (content, filename, type = 'text/plain') => {
-    const blob = new Blob([content], { type });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  };
-
-  // Export results
   const exportResults = () => {
     const csv = [
-      // Header
       'Action Serial,Action Name,Status,Exit Code,Duration,Job,Execution,Branch,Target,Started At,Completed At',
-      // Data
       ...results.map(result => [
         result.action_serial,
         result.action_name,
@@ -353,79 +359,184 @@ const LogViewer = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `log-viewer-results-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `log-viewer-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
+  // Calculate comprehensive stats
+  const overallStats = {
+    total_jobs: hierarchicalData.length,
+    total_executions: hierarchicalData.reduce((sum, job) => sum + job.executions.length, 0),
+    total_actions: results.length,
+    completed_actions: results.filter(r => r.status === 'completed').length,
+    failed_actions: results.filter(r => r.status === 'failed').length,
+    running_actions: results.filter(r => r.status === 'running').length
+  };
+
+  if (loading && hierarchicalData.length === 0) {
+    return (
+      <div className="dashboard-container">
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+          <Typography variant="h6">Loading execution logs...</Typography>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard-container">
-      {/* Page Header */}
+      {/* Compact Page Header - Following Design Guidelines */}
       <div className="page-header">
         <Typography className="page-title">
-          Log Viewer
+          Execution Log Viewer
         </Typography>
         <div className="page-actions">
+          {lastUpdated && (
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+              Updated: {lastUpdated.toLocaleTimeString()}
+            </Typography>
+          )}
           <Button
+            className="btn-compact"
+            size="small"
             variant="outlined"
-            startIcon={<RefreshIcon />}
+            startIcon={<RefreshIcon fontSize="small" />}
             onClick={() => performSearch(searchPattern, statusFilter, page)}
             disabled={loading}
-            size="small"
           >
             Refresh
           </Button>
           <Button
+            className="btn-compact"
+            size="small"
             variant="outlined"
-            startIcon={<DownloadIcon />}
+            startIcon={<DownloadIcon fontSize="small" />}
             onClick={exportResults}
             disabled={results.length === 0}
-            size="small"
           >
             Export
           </Button>
         </div>
       </div>
-      
-      {/* Search Controls */}
-      <div className="filters-container">
+
+      {/* Enhanced Statistics Grid - Following Design Guidelines */}
+      <div className="stats-grid">
+        <div className="stat-card fade-in">
+          <div className="stat-card-content">
+            <div className="stat-icon primary">
+              <WorkIcon fontSize="small" />
+            </div>
+            <div className="stat-details">
+              <h3>{overallStats.total_jobs}</h3>
+              <p>Total Jobs</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="stat-card fade-in">
+          <div className="stat-card-content">
+            <div className="stat-icon info">
+              <TimelineIcon fontSize="small" />
+            </div>
+            <div className="stat-details">
+              <h3>{overallStats.total_executions}</h3>
+              <p>Executions</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="stat-card fade-in">
+          <div className="stat-card-content">
+            <div className="stat-icon secondary">
+              <AssessmentIcon fontSize="small" />
+            </div>
+            <div className="stat-details">
+              <h3>{overallStats.total_actions}</h3>
+              <p>Total Actions</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="stat-card fade-in">
+          <div className="stat-card-content">
+            <div className="stat-icon success">
+              <CheckCircleIcon fontSize="small" />
+            </div>
+            <div className="stat-details">
+              <h3>{overallStats.completed_actions}</h3>
+              <p>Completed</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card fade-in">
+          <div className="stat-card-content">
+            <div className="stat-icon error">
+              <ErrorIcon fontSize="small" />
+            </div>
+            <div className="stat-details">
+              <h3>{overallStats.failed_actions}</h3>
+              <p>Failed</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card fade-in">
+          <div className="stat-card-content">
+            <div className="stat-icon warning">
+              <PlayArrowIcon fontSize="small" />
+            </div>
+            <div className="stat-details">
+              <h3>{overallStats.running_actions}</h3>
+              <p>Running</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search Controls - Ultra-compact */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '12px', marginBottom: '16px' }}>
         <Autocomplete
           freeSolo
           options={patternExamples}
           value={searchPattern}
           onInputChange={(event, newValue) => setSearchPattern(newValue || '')}
-          className="search-field"
+          size="small"
           renderInput={(params) => (
             <TextField
               {...params}
               label="Search Pattern"
               placeholder="Enter serial pattern or search term..."
               size="small"
+              sx={{ '& .MuiInputBase-input': { fontSize: '0.8rem' } }}
             />
           )}
         />
         
-        <FormControl className="filter-item" size="small">
-          <InputLabel>Status</InputLabel>
+        <FormControl size="small">
+          <InputLabel sx={{ fontSize: '0.8rem' }}>Status</InputLabel>
           <Select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             label="Status"
+            sx={{ fontSize: '0.8rem' }}
           >
-            <MenuItem value="all">All</MenuItem>
-            <MenuItem value="completed">Completed</MenuItem>
-            <MenuItem value="failed">Failed</MenuItem>
-            <MenuItem value="running">Running</MenuItem>
-            <MenuItem value="scheduled">Scheduled</MenuItem>
+            <MenuItem value="all" sx={{ fontSize: '0.8rem' }}>All</MenuItem>
+            <MenuItem value="completed" sx={{ fontSize: '0.8rem' }}>Completed</MenuItem>
+            <MenuItem value="failed" sx={{ fontSize: '0.8rem' }}>Failed</MenuItem>
+            <MenuItem value="running" sx={{ fontSize: '0.8rem' }}>Running</MenuItem>
+            <MenuItem value="scheduled" sx={{ fontSize: '0.8rem' }}>Scheduled</MenuItem>
           </Select>
         </FormControl>
         
         <Button
           variant="contained"
-          startIcon={<SearchIcon />}
+          startIcon={<SearchIcon fontSize="small" />}
           onClick={handleSearch}
           disabled={loading}
           size="small"
+          sx={{ fontSize: '0.8rem' }}
         >
           Search
         </Button>
@@ -433,275 +544,271 @@ const LogViewer = () => {
 
       {/* Error Display */}
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert severity="error" sx={{ mb: 2, fontSize: '0.8rem' }}>
           {error}
         </Alert>
       )}
 
-      {/* Hierarchical Results View */}
-      <Card>
-        <CardContent>
+      {/* Ultra-Compact Hierarchical Results */}
+      <div className="main-content-card fade-in">
+        <div className="content-card-header">
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+            <StorageIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+            EXECUTION LOGS
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+            {hierarchicalData.length} jobs, {overallStats.total_executions} executions, {overallStats.total_actions} actions
+          </Typography>
+        </div>
+        
+        <div className="content-card-body" style={{ padding: '8px' }}>
           {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <Typography>Loading...</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+              <LinearProgress sx={{ width: '100%' }} />
             </Box>
           ) : hierarchicalData.length === 0 ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <Typography color="textSecondary">
+              <Typography color="textSecondary" sx={{ fontSize: '0.8rem' }}>
                 No results found. Try adjusting your search pattern.
               </Typography>
             </Box>
           ) : (
-            <Box>
+            <Box sx={{ maxHeight: '600px', overflowY: 'auto' }}>
               {hierarchicalData.map((job) => (
-                <Box key={job.id} sx={{ mb: 1 }}>
-                  {/* Job Level */}
+                <Box key={job.id} sx={{ mb: 0.5 }}>
+                  {/* Job Level - Ultra-compact */}
                   <Box
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      p: 1,
+                      p: 0.5,
                       bgcolor: 'grey.100',
-                      borderRadius: 1,
+                      borderRadius: 0.5,
                       cursor: 'pointer',
+                      minHeight: '24px',
                       '&:hover': { bgcolor: 'grey.200' }
                     }}
                     onClick={() => toggleJob(job.id)}
                   >
-                    <IconButton size="small" sx={{ mr: 1 }}>
-                      {expandedJobs.has(job.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    <IconButton size="small" sx={{ p: 0.25, mr: 0.5 }}>
+                      {expandedJobs.has(job.id) ? 
+                        <ExpandLessIcon sx={{ fontSize: '16px' }} /> : 
+                        <ExpandMoreIcon sx={{ fontSize: '16px' }} />
+                      }
                     </IconButton>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', mr: 2 }}>
+                    
+                    <Typography variant="body2" sx={{ 
+                      fontFamily: 'monospace', 
+                      fontWeight: 'bold', 
+                      fontSize: '0.7rem',
+                      mr: 1,
+                      minWidth: '120px'
+                    }}>
                       {job.job_serial}
                     </Typography>
-                    <Typography variant="body2" sx={{ mr: 2, color: 'text.secondary' }}>
+                    
+                    <Typography variant="body2" sx={{ 
+                      fontSize: '0.7rem', 
+                      mr: 1,
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
                       {job.job_name}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      ({job.executions.length} executions)
-                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                      <Chip 
+                        label={`${job.stats.completed}/${job.stats.total}`}
+                        size="small" 
+                        color={job.stats.failed > 0 ? 'error' : job.stats.completed === job.stats.total ? 'success' : 'warning'}
+                        sx={{ fontSize: '0.65rem', height: '18px' }}
+                      />
+                      <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>
+                        {formatTimestamp(job.lastExecution)}
+                      </Typography>
+                    </Box>
                   </Box>
 
-                  {/* Executions Level */}
+                  {/* Executions Level - Ultra-compact */}
                   <Collapse in={expandedJobs.has(job.id)}>
-                    <Box sx={{ ml: 2, mt: 0.5 }}>
+                    <Box sx={{ ml: 1, mt: 0.25 }}>
                       {job.executions.map((execution) => (
-                        <Box key={execution.id} sx={{ mb: 0.5 }}>
+                        <Box key={execution.id} sx={{ mb: 0.25 }}>
                           <Box
                             sx={{
                               display: 'flex',
                               alignItems: 'center',
-                              p: 0.75,
+                              p: 0.5,
                               bgcolor: 'grey.50',
-                              borderRadius: 1,
+                              borderRadius: 0.5,
                               cursor: 'pointer',
+                              minHeight: '22px',
                               '&:hover': { bgcolor: 'grey.100' }
                             }}
                             onClick={() => toggleExecution(execution.id)}
                           >
-                            <IconButton size="small" sx={{ mr: 1 }}>
-                              {expandedExecutions.has(execution.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            <IconButton size="small" sx={{ p: 0.25, mr: 0.5 }}>
+                              {expandedExecutions.has(execution.id) ? 
+                                <ExpandLessIcon sx={{ fontSize: '14px' }} /> : 
+                                <ExpandMoreIcon sx={{ fontSize: '14px' }} />
+                              }
                             </IconButton>
-                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', mr: 2 }}>
-                              {execution.execution_serial}
+                            
+                            <Typography variant="body2" sx={{ 
+                              fontFamily: 'monospace', 
+                              fontWeight: 'bold', 
+                              fontSize: '0.65rem',
+                              mr: 1,
+                              minWidth: '80px'
+                            }}>
+                              .{execution.execution_serial.split('.').pop()}
                             </Typography>
-                            <Typography variant="body2" sx={{ mr: 2, color: 'text.secondary' }}>
-                              {execution.targets.length > 0 && execution.targets[0].actions.length > 0 
-                                ? formatTimestamp(execution.targets[0].actions[0].started_at)
-                                : 'N/A'}
+                            
+                            <Typography variant="body2" sx={{ 
+                              fontSize: '0.65rem', 
+                              mr: 1,
+                              flex: 1
+                            }}>
+                              {formatTimestamp(execution.started_at)}
                             </Typography>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              ({execution.totalActions} actions)
-                            </Typography>
+                            
+                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                              <Chip 
+                                label={`${execution.stats.completed}/${execution.stats.total}`}
+                                size="small" 
+                                color={execution.stats.failed > 0 ? 'error' : execution.stats.completed === execution.stats.total ? 'success' : 'warning'}
+                                sx={{ fontSize: '0.6rem', height: '16px' }}
+                              />
+                              <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary' }}>
+                                {execution.branches.length} targets
+                              </Typography>
+                            </Box>
                           </Box>
 
-                          {/* Targets Level */}
+                          {/* Branches Level - Ultra-compact */}
                           <Collapse in={expandedExecutions.has(execution.id)}>
-                            <Box sx={{ ml: 2, mt: 0.5 }}>
-                              {execution.targets.map((target) => (
-                                <Box key={target.id} sx={{ mb: 0.5 }}>
+                            <Box sx={{ ml: 1, mt: 0.25 }}>
+                              {execution.branches.map((branch) => (
+                                <Box key={branch.id} sx={{ mb: 0.25 }}>
                                   <Box
                                     sx={{
                                       display: 'flex',
                                       alignItems: 'center',
-                                      p: 0.75,
+                                      p: 0.5,
                                       bgcolor: 'background.paper',
                                       border: '1px solid',
                                       borderColor: 'divider',
-                                      borderRadius: 1,
+                                      borderRadius: 0.5,
                                       cursor: 'pointer',
+                                      minHeight: '20px',
                                       '&:hover': { bgcolor: 'grey.50' }
                                     }}
-                                    onClick={() => toggleTarget(target.id)}
+                                    onClick={() => toggleBranch(branch.id)}
                                   >
-                                    <IconButton size="small" sx={{ mr: 1 }}>
-                                      {expandedTargets.has(target.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                    <IconButton size="small" sx={{ p: 0.25, mr: 0.5 }}>
+                                      {expandedBranches.has(branch.id) ? 
+                                        <ExpandLessIcon sx={{ fontSize: '12px' }} /> : 
+                                        <ExpandMoreIcon sx={{ fontSize: '12px' }} />
+                                      }
                                     </IconButton>
-                                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', mr: 2 }}>
-                                      {target.target_serial}
+                                    
+                                    <Typography variant="body2" sx={{ 
+                                      fontFamily: 'monospace', 
+                                      fontWeight: 'bold', 
+                                      fontSize: '0.6rem',
+                                      mr: 1,
+                                      minWidth: '60px'
+                                    }}>
+                                      .{branch.branch_serial.split('.').pop()}
                                     </Typography>
-                                    <Typography variant="body2" sx={{ mr: 2, color: 'text.secondary' }}>
-                                      {target.target_name}
+                                    
+                                    <Typography variant="body2" sx={{ 
+                                      fontSize: '0.6rem', 
+                                      mr: 1,
+                                      flex: 1,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}>
+                                      {branch.target_name}
                                     </Typography>
-                                    <Chip 
-                                      label={target.failedActions > 0 ? 'Failed' : target.completedActions > 0 ? 'Success' : 'Running'} 
-                                      size="small" 
-                                      color={target.failedActions > 0 ? 'error' : target.completedActions > 0 ? 'success' : 'default'}
-                                      variant="outlined"
-                                    />
+                                    
+                                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                                      <Chip 
+                                        label={branch.stats.failed > 0 ? 'Failed' : branch.stats.completed > 0 ? 'Success' : 'Running'} 
+                                        size="small" 
+                                        color={branch.stats.failed > 0 ? 'error' : branch.stats.completed > 0 ? 'success' : 'warning'}
+                                        sx={{ fontSize: '0.55rem', height: '14px' }}
+                                      />
+                                      <Typography variant="caption" sx={{ fontSize: '0.55rem', color: 'text.secondary' }}>
+                                        {branch.actions.length} actions
+                                      </Typography>
+                                    </Box>
                                   </Box>
 
-                                  {/* Action Results Level */}
-                                  <Collapse in={expandedTargets.has(target.id)}>
-                                    <Box sx={{ ml: 2, mt: 0.5, p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                                      {target.actions.map((action, index) => (
-                                        <Box key={action.id} sx={{ mb: index < target.actions.length - 1 ? 2 : 0 }}>
-                                          <Box sx={{ mb: 1 }}>
-                                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', mb: 0.5 }}>
-                                              {action.action_serial} - {action.action_name}
-                                            </Typography>
-                                            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-                                              <Chip
-                                                label={action.status}
-                                                color={getStatusColor(action.status)}
-                                                size="small"
-                                                variant="outlined"
-                                              />
-                                              <Chip
-                                                label={`Exit: ${action.exit_code}`}
-                                                color={action.exit_code === 0 ? 'success' : 'error'}
-                                                size="small"
-                                                variant="outlined"
-                                              />
-                                              <Typography variant="caption" sx={{ alignSelf: 'center', color: 'text.secondary' }}>
-                                                {formatDuration(action.execution_time_ms)}
-                                              </Typography>
-                                            </Box>
-                                          </Box>
-                                          
-                                          {action.command_executed && (
-                                            <Box sx={{ mb: 1 }}>
-                                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
-                                                  Command:
-                                                </Typography>
-                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                                  <IconButton
+                                  {/* Actions Level - Ultra-compact table */}
+                                  <Collapse in={expandedBranches.has(branch.id)}>
+                                    <Box sx={{ ml: 1, mt: 0.25, p: 0.5, bgcolor: 'grey.50', borderRadius: 0.5 }}>
+                                      <TableContainer component={Paper} sx={{ boxShadow: 'none' }}>
+                                        <Table size="small" sx={{ minWidth: 'auto' }}>
+                                          <TableHead>
+                                            <TableRow>
+                                              <TableCell sx={{ fontSize: '0.6rem', fontWeight: 600, p: 0.5 }}>Action</TableCell>
+                                              <TableCell sx={{ fontSize: '0.6rem', fontWeight: 600, p: 0.5 }}>Status</TableCell>
+                                              <TableCell sx={{ fontSize: '0.6rem', fontWeight: 600, p: 0.5 }}>Exit</TableCell>
+                                              <TableCell sx={{ fontSize: '0.6rem', fontWeight: 600, p: 0.5 }}>Duration</TableCell>
+                                              <TableCell sx={{ fontSize: '0.6rem', fontWeight: 600, p: 0.5 }}>Actions</TableCell>
+                                            </TableRow>
+                                          </TableHead>
+                                          <TableBody>
+                                            {branch.actions.map((action) => (
+                                              <TableRow key={action.id} hover sx={{ height: '24px' }}>
+                                                <TableCell sx={{ fontSize: '0.6rem', p: 0.5, fontFamily: 'monospace' }}>
+                                                  <Tooltip title={action.action_name}>
+                                                    <span>{action.action_serial.split('.').pop()} - {action.action_name.substring(0, 20)}...</span>
+                                                  </Tooltip>
+                                                </TableCell>
+                                                <TableCell sx={{ p: 0.5 }}>
+                                                  <Chip
+                                                    icon={getStatusIcon(action.status)}
+                                                    label={action.status}
+                                                    color={getStatusColor(action.status)}
                                                     size="small"
-                                                    onClick={() => copyToClipboard(action.command_executed, 'Command')}
-                                                    title="Copy command"
-                                                  >
-                                                    <CopyIcon fontSize="small" />
-                                                  </IconButton>
-                                                  <IconButton
+                                                    sx={{ fontSize: '0.55rem', height: '16px' }}
+                                                  />
+                                                </TableCell>
+                                                <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
+                                                  <Chip
+                                                    label={action.exit_code ?? 'N/A'}
+                                                    color={action.exit_code === 0 ? 'success' : action.exit_code > 0 ? 'error' : 'default'}
                                                     size="small"
-                                                    onClick={() => saveAsFile(action.command_executed, `${action.action_serial}-command.txt`)}
-                                                    title="Save command as file"
-                                                  >
-                                                    <SaveIcon fontSize="small" />
-                                                  </IconButton>
-                                                </Box>
-                                              </Box>
-                                              <Typography
-                                                variant="body2"
-                                                sx={{ 
-                                                  fontFamily: 'monospace', 
-                                                  bgcolor: 'background.paper', 
-                                                  p: 1, 
-                                                  borderRadius: 1,
-                                                  border: '1px solid',
-                                                  borderColor: 'divider'
-                                                }}
-                                              >
-                                                {action.command_executed}
-                                              </Typography>
-                                            </Box>
-                                          )}
-                                          
-                                          {action.result_output && (
-                                            <Box sx={{ mb: 1 }}>
-                                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
-                                                  Output:
-                                                </Typography>
-                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                                  <IconButton
-                                                    size="small"
-                                                    onClick={() => copyToClipboard(action.result_output, 'Output')}
-                                                    title="Copy output"
-                                                  >
-                                                    <CopyIcon fontSize="small" />
-                                                  </IconButton>
-                                                  <IconButton
-                                                    size="small"
-                                                    onClick={() => saveAsFile(action.result_output, `${action.action_serial}-output.txt`)}
-                                                    title="Save output as file"
-                                                  >
-                                                    <SaveIcon fontSize="small" />
-                                                  </IconButton>
-                                                </Box>
-                                              </Box>
-                                              <Typography
-                                                variant="body2"
-                                                sx={{
-                                                  fontFamily: 'monospace',
-                                                  bgcolor: 'background.paper',
-                                                  p: 1,
-                                                  borderRadius: 1,
-                                                  border: '1px solid',
-                                                  borderColor: 'divider',
-                                                  maxHeight: 150,
-                                                  overflow: 'auto',
-                                                  whiteSpace: 'pre-wrap'
-                                                }}
-                                              >
-                                                {action.result_output}
-                                              </Typography>
-                                            </Box>
-                                          )}
-                                          
-                                          {action.result_error && (
-                                            <Box sx={{ mb: 1 }}>
-                                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'error.main' }}>
-                                                  Error:
-                                                </Typography>
-                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                                  <IconButton
-                                                    size="small"
-                                                    onClick={() => copyToClipboard(action.result_error, 'Error')}
-                                                    title="Copy error"
-                                                  >
-                                                    <CopyIcon fontSize="small" />
-                                                  </IconButton>
-                                                  <IconButton
-                                                    size="small"
-                                                    onClick={() => saveAsFile(action.result_error, `${action.action_serial}-error.txt`)}
-                                                    title="Save error as file"
-                                                  >
-                                                    <SaveIcon fontSize="small" />
-                                                  </IconButton>
-                                                </Box>
-                                              </Box>
-                                              <Typography
-                                                variant="body2"
-                                                sx={{
-                                                  fontFamily: 'monospace',
-                                                  bgcolor: 'error.light',
-                                                  color: 'error.contrastText',
-                                                  p: 1,
-                                                  borderRadius: 1,
-                                                  maxHeight: 150,
-                                                  overflow: 'auto',
-                                                  whiteSpace: 'pre-wrap'
-                                                }}
-                                              >
-                                                {action.result_error}
-                                              </Typography>
-                                            </Box>
-                                          )}
-                                        </Box>
-                                      ))}
+                                                    sx={{ fontSize: '0.55rem', height: '16px' }}
+                                                  />
+                                                </TableCell>
+                                                <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
+                                                  {formatDuration(action.execution_time_ms)}
+                                                </TableCell>
+                                                <TableCell sx={{ p: 0.5 }}>
+                                                  <Tooltip title="View Details">
+                                                    <IconButton 
+                                                      size="small" 
+                                                      onClick={() => {
+                                                        setSelectedAction(action);
+                                                        setDetailsOpen(true);
+                                                      }}
+                                                      sx={{ p: 0.25 }}
+                                                    >
+                                                      <InfoIcon sx={{ fontSize: '12px' }} />
+                                                    </IconButton>
+                                                  </Tooltip>
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+                                          </TableBody>
+                                        </Table>
+                                      </TableContainer>
                                     </Box>
                                   </Collapse>
                                 </Box>
@@ -716,115 +823,114 @@ const LogViewer = () => {
               ))}
             </Box>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Pagination */}
-      {results.length > 0 && (
+      {totalPages > 1 && (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
           <Pagination
             count={totalPages}
             page={page}
             onChange={handlePageChange}
             color="primary"
+            size="small"
           />
         </Box>
       )}
 
-      {/* Action Details Dialog */}
+      {/* Action Details Modal */}
       <Dialog
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
-        maxWidth="lg"
+        maxWidth="md"
         fullWidth
       >
-        <DialogTitle>
+        <DialogTitle sx={{ fontSize: '0.9rem', fontWeight: 600 }}>
           Action Details: {selectedAction?.action_serial}
         </DialogTitle>
         <DialogContent>
           {selectedAction && (
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="h6" gutterBottom>Basic Information</Typography>
-                <Typography><strong>Action Name:</strong> {selectedAction.action_name}</Typography>
-                <Typography><strong>Action Type:</strong> {selectedAction.action_type}</Typography>
-                <Typography><strong>Action Order:</strong> {selectedAction.action_order}</Typography>
-                <Typography><strong>Status:</strong> <Chip label={selectedAction.status} color={getStatusColor(selectedAction.status)} size="small" /></Typography>
-                <Typography><strong>Exit Code:</strong> {selectedAction.exit_code}</Typography>
-                <Typography><strong>Duration:</strong> {formatDuration(selectedAction.execution_time_ms)}</Typography>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Typography variant="h6" gutterBottom>Context</Typography>
-                <Typography><strong>Job:</strong> {selectedAction.job_name} ({selectedAction.job_serial})</Typography>
-                <Typography><strong>Execution:</strong> {selectedAction.execution_serial}</Typography>
-                <Typography><strong>Branch:</strong> {selectedAction.branch_serial}</Typography>
-                <Typography><strong>Target:</strong> {selectedAction.target_name} ({selectedAction.target_serial})</Typography>
-                <Typography><strong>Target Type:</strong> {selectedAction.target_type}</Typography>
-              </Grid>
-              
-              <Grid item xs={12}>
-                <Typography variant="h6" gutterBottom>Timing</Typography>
-                <Typography><strong>Started:</strong> {formatTimestamp(selectedAction.started_at)}</Typography>
-                <Typography><strong>Completed:</strong> {formatTimestamp(selectedAction.completed_at)}</Typography>
-                <Typography><strong>Created:</strong> {formatTimestamp(selectedAction.created_at)}</Typography>
-              </Grid>
-              
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  Basic Information
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                    <strong>Name:</strong> {selectedAction.action_name}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                    <strong>Status:</strong> {selectedAction.status}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                    <strong>Exit Code:</strong> {selectedAction.exit_code ?? 'N/A'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                    <strong>Duration:</strong> {formatDuration(selectedAction.execution_time_ms)}
+                  </Typography>
+                </Box>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  Execution Details
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                    <strong>Started:</strong> {formatTimestamp(selectedAction.started_at)}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                    <strong>Completed:</strong> {formatTimestamp(selectedAction.completed_at)}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
+                    <strong>Target:</strong> {selectedAction.target_name}
+                  </Typography>
+                </Box>
+              </Box>
               {selectedAction.command_executed && (
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>Command</Typography>
-                  <Typography
-                    fontFamily="monospace"
-                    sx={{ bgcolor: 'grey.100', p: 2, borderRadius: 1, whiteSpace: 'pre-wrap' }}
-                  >
+                <Box sx={{ gridColumn: '1 / -1' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                      Command Executed
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      onClick={() => copyToClipboard(selectedAction.command_executed)}
+                      title="Copy command"
+                    >
+                      <CopyIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                  <Paper sx={{ p: 1, bgcolor: 'grey.100', fontFamily: 'monospace', fontSize: '0.7rem' }}>
                     {selectedAction.command_executed}
-                  </Typography>
-                </Grid>
+                  </Paper>
+                </Box>
               )}
-              
               {selectedAction.result_output && (
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>Output</Typography>
-                  <Typography
-                    fontFamily="monospace"
-                    sx={{ 
-                      bgcolor: 'grey.100', 
-                      p: 2, 
-                      borderRadius: 1, 
-                      maxHeight: 300, 
-                      overflow: 'auto',
-                      whiteSpace: 'pre-wrap'
-                    }}
-                  >
+                <Box sx={{ gridColumn: '1 / -1' }}>
+                  <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                    Output
+                  </Typography>
+                  <Paper sx={{ p: 1, bgcolor: 'grey.100', fontFamily: 'monospace', fontSize: '0.7rem', maxHeight: '200px', overflowY: 'auto' }}>
                     {selectedAction.result_output}
-                  </Typography>
-                </Grid>
+                  </Paper>
+                </Box>
               )}
-              
               {selectedAction.result_error && (
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom color="error">Error</Typography>
-                  <Typography
-                    fontFamily="monospace"
-                    sx={{ 
-                      bgcolor: 'error.light', 
-                      color: 'error.contrastText',
-                      p: 2, 
-                      borderRadius: 1, 
-                      maxHeight: 300, 
-                      overflow: 'auto',
-                      whiteSpace: 'pre-wrap'
-                    }}
-                  >
-                    {selectedAction.result_error}
+                <Box sx={{ gridColumn: '1 / -1' }}>
+                  <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1, color: 'error.main' }}>
+                    Error Output
                   </Typography>
-                </Grid>
+                  <Paper sx={{ p: 1, bgcolor: 'error.50', fontFamily: 'monospace', fontSize: '0.7rem', maxHeight: '200px', overflowY: 'auto' }}>
+                    {selectedAction.result_error}
+                  </Paper>
+                </Box>
               )}
-            </Grid>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDetailsOpen(false)}>Close</Button>
+          <Button onClick={() => setDetailsOpen(false)} size="small">Close</Button>
         </DialogActions>
       </Dialog>
     </div>

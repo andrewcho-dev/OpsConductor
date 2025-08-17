@@ -165,7 +165,7 @@ class AuditSearchRequest(BaseModel):
     """Enhanced request model for audit search"""
     query: str = Field(..., description="Search query", min_length=1, max_length=500)
     page: int = Field(1, description="Page number", ge=1)
-    limit: int = Field(50, description="Results per page", ge=1, le=1000)
+    limit: int = Field(50, description="Results per page", ge=1, le=10000)
     start_date: Optional[datetime] = Field(None, description="Search start date")
     end_date: Optional[datetime] = Field(None, description="Search end date")
     event_types: Optional[List[str]] = Field(None, description="Filter by event types")
@@ -464,7 +464,7 @@ def require_admin_permissions(current_user = Depends(get_current_user)):
 )
 async def get_audit_events(
     page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(50, ge=1, le=1000, description="Events per page"),
+    limit: int = Query(50, ge=1, le=10000, description="Events per page"),
     event_type: Optional[str] = Query(None, description="Filter by event type"),
     user_id: Optional[int] = Query(None, description="Filter by user ID"),
     severity: Optional[str] = Query(None, description="Filter by severity level"),

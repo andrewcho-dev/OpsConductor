@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAlert } from '../layout/BottomStatusBar';
+import StandardPageLayout, { StandardContentCard } from '../common/StandardPageLayout';
 
 // Use centralized auth service with automatic token refresh and logout
 const api = authService.api;
@@ -52,6 +53,7 @@ const SystemSettings = () => {
   // Notification configuration state
   const [emailTargets, setEmailTargets] = useState([]);
   const [selectedEmailTarget, setSelectedEmailTarget] = useState('');
+  const [testEmailAddress, setTestEmailAddress] = useState('');
   
   // Track if settings have been modified
   const [originalSettings, setOriginalSettings] = useState({});
@@ -226,25 +228,81 @@ const SystemSettings = () => {
 
   const loadEmailTargets = async () => {
     try {
-      console.log('🔥 LOADING EMAIL TARGETS - FUNCTION CALLED');
-      // Use the universal targets API and filter for SMTP targets
-      const response = await api.get('/api/targets/');
-      console.log('🔥 API RESPONSE:', response);
-      const allTargets = response.data;
+      console.log('Loading eligible email targets...');
+      // Use the new system API endpoint for eligible email targets
+      const response = await api.get('/v2/system/email-targets/eligible');
+      console.log('Email targets response:', response.data);
       
-      // Filter for targets that have SMTP communication methods
-      const emailTargets = allTargets.filter(target => 
-        target.communication_methods && 
-        target.communication_methods.some(method => 
-          method.method_type === 'smtp' && method.is_active
-        )
-      );
+      setEmailTargets(response.data.targets || []);
       
-      setEmailTargets(emailTargets);
+      // Also load current email target configuration
+      const configResponse = await api.get('/v2/system/email-target/config');
+      console.log('Email target config:', configResponse.data);
+      
+      if (configResponse.data.is_configured && configResponse.data.target_id) {
+        setSelectedEmailTarget(configResponse.data.target_id.toString());
+      } else {
+        setSelectedEmailTarget('');
+      }
     } catch (err) {
       console.error('Failed to load email targets:', err);
       // Set empty array on error
       setEmailTargets([]);
+      setSelectedEmailTarget('');
+    }
+  };
+
+  const saveEmailTarget = async () => {
+    try {
+      console.log('Saving email target:', selectedEmailTarget);
+      const targetId = selectedEmailTarget ? parseInt(selectedEmailTarget) : null;
+      
+      const response = await api.put('/v2/system/email-target/config', {
+        target_id: targetId
+      });
+      
+      console.log('Email target saved:', response.data);
+      addAlert('Email target configuration saved successfully', 'success', 3000);
+      
+      return true;
+    } catch (err) {
+      console.error('Failed to save email target:', err);
+      const errorMessage = err.response?.data?.detail?.message || err.response?.data?.detail || 'Failed to save email target configuration';
+      addAlert(errorMessage, 'error', 5000);
+      return false;
+    }
+  };
+
+  const testEmailTarget = async () => {
+    if (!testEmailAddress.trim()) {
+      addAlert('Please enter an email address to send the test email to', 'warning', 3000);
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(testEmailAddress.trim())) {
+      addAlert('Please enter a valid email address', 'warning', 3000);
+      return;
+    }
+
+    try {
+      console.log('Testing email target...', testEmailAddress);
+      const response = await api.post('/v2/system/email-target/test', {
+        test_email: testEmailAddress.trim()
+      });
+      
+      console.log('Email test result:', response.data);
+      
+      if (response.data.success) {
+        addAlert(`Test email sent successfully to ${testEmailAddress}! Check your inbox.`, 'success', 5000);
+      } else {
+        addAlert(`Test email failed: ${response.data.message}`, 'error', 8000);
+      }
+    } catch (err) {
+      console.error('Failed to test email target:', err);
+      const errorMessage = err.response?.data?.detail?.message || err.response?.data?.detail || 'Failed to test email target';
+      addAlert(errorMessage, 'error', 5000);
     }
   };
 
@@ -292,12 +350,23 @@ const SystemSettings = () => {
         }
       }
 
+      // Also save email target configuration
+      const emailTargetSaved = await saveEmailTarget();
+      if (emailTargetSaved) {
+        savedCount++;
+      } else {
+        errors.push('Email Target: Failed to save email target configuration');
+      }
+
       // Reload system info to get updated values
       console.log('Reloading system info after save...');
       await loadSystemInfo();
       await loadCurrentTime();
+      await loadEmailTargets(); // Reload email targets to get updated config
       
-      if (savedCount === settingsToSave.length) {
+      const totalSettings = settingsToSave.length + 1; // +1 for email target
+      
+      if (savedCount === totalSettings) {
         addAlert('All system settings saved successfully', 'success', 3000);
         setHasUnsavedChanges(false);
         
@@ -310,7 +379,7 @@ const SystemSettings = () => {
         };
         setOriginalSettings(newOriginalSettings);
       } else if (savedCount > 0) {
-        addAlert(`${savedCount} of ${settingsToSave.length} settings saved. Some failed: ${errors.join(', ')}`, 'warning', 8000);
+        addAlert(`${savedCount} of ${totalSettings} settings saved. Some failed: ${errors.join(', ')}`, 'warning', 8000);
       } else {
         addAlert(`Failed to save settings: ${errors.join(', ')}`, 'error', 0);
       }
@@ -868,10 +937,10 @@ const SystemSettings = () => {
           </div>
           
           <div className="content-card-body">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', minWidth: 0 }}>
             
               {/* Email Server Configuration */}
-              <div>
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
                 <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
                   <EmailIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
                   Email Server
@@ -884,41 +953,77 @@ const SystemSettings = () => {
                     onChange={(e) => setSelectedEmailTarget(e.target.value)}
                     sx={{ 
                       fontSize: '0.8rem',
-                      '& .MuiSelect-select': { fontSize: '0.8rem' }
+                      '& .MuiSelect-select': { 
+                        fontSize: '0.8rem',
+                        textOverflow: 'ellipsis',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap'
+                      }
                     }}
                   >
                     <MenuItem value="" sx={{ fontSize: '0.8rem' }}>Select Email Server</MenuItem>
                     {emailTargets.map((target) => {
-                      // Find the SMTP communication method to get host/port info
-                      const smtpMethod = target.communication_methods?.find(method => 
-                        method.method_type === 'smtp' && method.is_active
-                      );
-                      const config = smtpMethod?.config || {};
-                      const host = config.host || target.ip_address || 'Unknown';
-                      const port = config.port || '587';
+                      // The new API already provides host/port info directly
+                      const host = target.host || 'Unknown';
+                      const port = target.port || '587';
+                      const healthIcon = target.health_status === 'healthy' ? '🟢' : 
+                                       target.health_status === 'warning' ? '🟡' : '🔴';
+                      
+                      // Truncate long names to prevent column expansion
+                      const displayName = target.name.length > 15 ? target.name.substring(0, 15) + '...' : target.name;
                       
                       return (
-                        <MenuItem key={target.id} value={target.id.toString()} sx={{ fontSize: '0.8rem' }}>
-                          {target.name} ({host}:{port})
+                        <MenuItem 
+                          key={target.id} 
+                          value={target.id.toString()} 
+                          sx={{ 
+                            fontSize: '0.8rem',
+                            maxWidth: '100%',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title={`${target.name} (${host}:${port})`} // Show full info on hover
+                        >
+                          {healthIcon} {displayName}
                         </MenuItem>
                       );
                     })}
                   </Select>
                 </FormControl>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Test Email Address"
+                  placeholder="Enter email to test..."
+                  value={testEmailAddress}
+                  onChange={(e) => setTestEmailAddress(e.target.value)}
+                  sx={{ 
+                    mb: 1,
+                    '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+                    '& .MuiInputBase-input': { 
+                      fontSize: '0.8rem',
+                      textOverflow: 'ellipsis',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap'
+                    }
+                  }}
+                />
                 <Button
                   fullWidth
                   variant="outlined"
                   startIcon={<EmailIcon fontSize="small" />}
                   size="small"
                   sx={{ height: '32px', fontSize: '0.75rem' }}
-                  onClick={() => addAlert('Test email functionality coming soon', 'info', 3000)}
+                  onClick={testEmailTarget}
+                  disabled={!selectedEmailTarget || !testEmailAddress.trim()}
                 >
                   Test Email
                 </Button>
               </div>
 
               {/* SMS Configuration */}
-              <div>
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
                 <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
                   <SmsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
                   SMS Configuration
@@ -931,7 +1036,12 @@ const SystemSettings = () => {
                   sx={{ 
                     mb: 1,
                     '& .MuiInputLabel-root': { fontSize: '0.8rem' },
-                    '& .MuiInputBase-input': { fontSize: '0.8rem' }
+                    '& .MuiInputBase-input': { 
+                      fontSize: '0.8rem',
+                      textOverflow: 'ellipsis',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap'
+                    }
                   }}
                   disabled
                 />
@@ -948,7 +1058,7 @@ const SystemSettings = () => {
               </div>
 
               {/* Notification Rules */}
-              <div>
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
                 <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
                   <NotificationsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
                   Notification Rules

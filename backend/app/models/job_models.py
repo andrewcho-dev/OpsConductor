@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, JSON, ForeignKey, Enum
+    Column, Integer, String, Text, DateTime, JSON, ForeignKey, Enum, Boolean
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -23,6 +23,7 @@ class JobStatus(str, enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    DELETED = "deleted"
 
 
 class ExecutionStatus(str, enum.Enum):
@@ -86,6 +87,11 @@ class Job(Base):
     scheduled_at = Column(DateTime(timezone=True), nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    priority = Column(Integer, default=5, nullable=False)  # Priority 1-10, default 5
+    timeout = Column(Integer, nullable=True)  # Timeout in seconds, null = no timeout
+    retry_count = Column(Integer, default=0, nullable=False)  # Number of retries, default 0
+    is_deleted = Column(Boolean, default=False, nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     actions = relationship("JobAction", back_populates="job", cascade="all, delete-orphan")
