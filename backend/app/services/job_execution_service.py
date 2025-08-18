@@ -535,37 +535,72 @@ class JobExecutionService:
         overall_success = True
         overall_exit_code = 0
         
-        for action_result in action_results:
-            # Generate action serial
-            action_serial = SerialService.generate_action_serial(
-                self.job_service.db, 
-                branch.branch_serial
-            )
-            
-            # Create individual action result record
-            action_result_record = JobActionResult(
-                branch_id=branch_id,
-                action_id=action_result.get("action_id", 0),  # Will be set properly in execution
-                action_serial=action_serial,
-                action_order=action_result.get("action_order", 1),
-                action_name=action_result.get("action_name", "Unknown Action"),
-                action_type=action_result.get("action_type", "command"),
-                status=ExecutionStatus.COMPLETED if action_result.get("success", False) else ExecutionStatus.FAILED,
-                started_at=action_result.get("started_at"),
-                completed_at=action_result.get("completed_at"),
-                execution_time_ms=action_result.get("execution_time_ms"),
-                result_output=action_result.get("output"),
-                result_error=action_result.get("error"),
-                exit_code=action_result.get("exit_code", 0),
-                command_executed=action_result.get("command")
-            )
-            
-            self.job_service.db.add(action_result_record)
-            
-            # Track overall status
-            if action_result.get("exit_code", 0) != 0:
-                overall_success = False
-                overall_exit_code = action_result.get("exit_code", -1)
+        try:
+            for i, action_result in enumerate(action_results):
+                try:
+                    # Generate action serial with retry mechanism
+                    action_serial = SerialService.generate_action_serial(
+                        self.job_service.db, 
+                        branch.branch_serial
+                    )
+                    
+                    # Create individual action result record
+                    action_result_record = JobActionResult(
+                        branch_id=branch_id,
+                        action_id=action_result.get("action_id", 0),
+                        action_serial=action_serial,
+                        action_order=action_result.get("action_order", i + 1),  # Use loop index as fallback
+                        action_name=action_result.get("action_name", "Unknown Action"),
+                        action_type=action_result.get("action_type", "command"),
+                        status=ExecutionStatus.COMPLETED if action_result.get("success", False) else ExecutionStatus.FAILED,
+                        started_at=action_result.get("started_at"),
+                        completed_at=action_result.get("completed_at"),
+                        execution_time_ms=action_result.get("execution_time_ms"),
+                        result_output=action_result.get("output"),
+                        result_error=action_result.get("error"),
+                        exit_code=action_result.get("exit_code", 0),
+                        command_executed=action_result.get("command")
+                    )
+                    
+                    self.job_service.db.add(action_result_record)
+                    
+                    # Track overall status
+                    if action_result.get("exit_code", 0) != 0:
+                        overall_success = False
+                        overall_exit_code = action_result.get("exit_code", -1)
+                        
+                except Exception as e:
+                    logger.error(f"Failed to create action result record for branch {branch_id}, action {i}: {e}")
+                    overall_success = False
+                    overall_exit_code = -1
+                    
+                    # Create a fallback error record
+                    try:
+                        fallback_serial = f"{branch.branch_serial}.{i+1:04d}"
+                        error_record = JobActionResult(
+                            branch_id=branch_id,
+                            action_id=1,  # Use existing action ID
+                            action_serial=fallback_serial,
+                            action_order=i + 1,
+                            action_name=action_result.get("action_name", "Failed Action"),
+                            action_type="command",
+                            status=ExecutionStatus.FAILED,
+                            started_at=datetime.now(timezone.utc),
+                            completed_at=datetime.now(timezone.utc),
+                            execution_time_ms=0,
+                            result_output="",
+                            result_error=f"Failed to process action result: {str(e)}",
+                            exit_code=-1,
+                            command_executed=action_result.get("command", "")
+                        )
+                        self.job_service.db.add(error_record)
+                    except Exception as fallback_error:
+                        logger.error(f"Failed to create fallback error record: {fallback_error}")
+                        
+        except Exception as e:
+            logger.error(f"Critical error in _update_branch_results for branch {branch_id}: {e}")
+            overall_success = False
+            overall_exit_code = -1
         
         # Create summary for branch (for backward compatibility)
         summary_output = f"Executed {len(action_results)} actions. See individual action results for details."

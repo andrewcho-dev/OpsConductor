@@ -86,7 +86,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/jobs/${job.id}/executions`, {
+      const response = await fetch(`/api/v2/jobs/${job.id}/executions`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -95,9 +95,10 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
 
       if (response.ok) {
         const data = await response.json();
-        setExecutions(data);
-        if (data.length > 0 && !selectedExecution) {
-          setSelectedExecution(data[0]);
+        const executionsArray = data.executions || [];
+        setExecutions(executionsArray);
+        if (executionsArray.length > 0 && !selectedExecution) {
+          setSelectedExecution(executionsArray[0]);
         }
       }
     } catch (error) {

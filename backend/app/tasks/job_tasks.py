@@ -20,6 +20,89 @@ from app.schemas.job_schemas import JobExecuteRequest
 logger = logging.getLogger(__name__)
 
 
+def _create_execution_error_logs(db, execution_id: int, error_message: str, error_traceback: str, target_ids: List[int]):
+    """
+    Create error logs for failed job executions to ensure visibility of failures
+    """
+    try:
+        from app.models.job_models import JobExecution, JobExecutionBranch, JobActionResult, ExecutionStatus
+        from app.services.serial_service import SerialService
+        
+        # Get the execution
+        execution = db.query(JobExecution).filter(JobExecution.id == execution_id).first()
+        if not execution:
+            logger.error(f"Cannot create error logs: execution {execution_id} not found")
+            return
+            
+        # Get or create branches for the targets
+        branches = db.query(JobExecutionBranch).filter(
+            JobExecutionBranch.job_execution_id == execution_id
+        ).all()
+        
+        # If no branches exist, create them
+        if not branches and target_ids:
+            from app.models.universal_target_models import UniversalTarget
+            targets = db.query(UniversalTarget).filter(UniversalTarget.id.in_(target_ids)).all()
+            
+            for i, target in enumerate(targets):
+                branch_serial = f"{execution.execution_serial}.{i+1:03d}"
+                branch = JobExecutionBranch(
+                    job_execution_id=execution_id,
+                    target_id=target.id,
+                    branch_serial=branch_serial,
+                    branch_id=f"{i+1:03d}",
+                    target_serial_ref=target.target_serial,
+                    status=ExecutionStatus.FAILED,
+                    started_at=datetime.now(timezone.utc),
+                    completed_at=datetime.now(timezone.utc)
+                )
+                db.add(branch)
+                branches.append(branch)
+        
+        # Create error action results for each branch
+        for i, branch in enumerate(branches):
+            try:
+                # Generate a simple error serial (fallback method)
+                error_serial = f"{branch.branch_serial}.0001"
+                
+                error_record = JobActionResult(
+                    branch_id=branch.id,
+                    action_id=1,  # Use existing action ID
+                    action_serial=error_serial,
+                    action_order=1,
+                    action_name="Job Execution Error",
+                    action_type="command",
+                    status=ExecutionStatus.FAILED,
+                    started_at=datetime.now(timezone.utc),
+                    completed_at=datetime.now(timezone.utc),
+                    execution_time_ms=0,
+                    result_output="",
+                    result_error=f"Job execution failed: {error_message}\n\nTraceback:\n{error_traceback}",
+                    exit_code=-1,
+                    command_executed="N/A - Job failed before execution"
+                )
+                
+                db.add(error_record)
+                
+                # Update branch status
+                branch.status = ExecutionStatus.FAILED
+                branch.completed_at = datetime.now(timezone.utc)
+                
+            except Exception as branch_error:
+                logger.error(f"Failed to create error log for branch {branch.id}: {branch_error}")
+        
+        # Commit the error logs
+        db.commit()
+        logger.info(f"Created error logs for failed execution {execution_id}")
+        
+    except Exception as e:
+        logger.error(f"Failed to create execution error logs for {execution_id}: {e}")
+        try:
+            db.rollback()
+        except:
+            pass
+
+
 @celery_app.task(bind=True, name="app.tasks.job_tasks.execute_job_task")
 def execute_job_task(self, execution_id: int, target_ids: List[int]):
     """
@@ -120,12 +203,16 @@ def execute_job_task(self, execution_id: int, target_ids: List[int]):
         except Exception as monitor_e:
             logger.error(f"Failed to record task failure: {monitor_e}")
         
-        # Mark execution as failed
+        # Mark execution as failed and create error logs
         try:
             job_service.update_execution_status(
                 execution_id,
                 ExecutionStatus.FAILED
             )
+            
+            # Create error logs for the failed execution
+            _create_execution_error_logs(db, execution_id, str(e), error_traceback, target_ids)
+            
         except Exception as inner_e:
             logger.error(f"❌ Failed to mark execution as failed: {str(inner_e)}")
         

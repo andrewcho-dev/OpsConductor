@@ -145,28 +145,42 @@ class SerialService:
         """
         Generate a unique action serial number in format: J20250001.0001.0001.0001
         Based on the branch serial and action sequence.
+        Uses database-level locking to prevent race conditions.
         """
         try:
-            # Get next action number for this branch
+            # Use SELECT FOR UPDATE to prevent race conditions
+            # First get the branch ID for locking
+            branch_result = db.execute(text("""
+                SELECT id FROM job_execution_branches 
+                WHERE branch_serial = :branch_serial
+                FOR UPDATE
+            """), {"branch_serial": branch_serial})
+            
+            branch_row = branch_result.fetchone()
+            if not branch_row:
+                raise ValueError(f"Branch with serial {branch_serial} not found")
+            
+            branch_id = branch_row[0]
+            
+            # Get next action number for this branch with proper locking
             result = db.execute(text("""
                 SELECT COALESCE(MAX(action_order), 0) + 1 as next_num
-                FROM job_action_results jar
-                JOIN job_execution_branches jeb ON jar.branch_id = jeb.id
-                WHERE jeb.branch_serial = :branch_serial
-            """), {"branch_serial": branch_serial})
+                FROM job_action_results 
+                WHERE branch_id = :branch_id
+            """), {"branch_id": branch_id})
             
             next_num = result.fetchone()[0]
             
             # Format: J20250001.0001.0001.0001 (4 digits, zero-padded)
             serial = f"{branch_serial}.{next_num:04d}"
             
-            logger.info(f"Generated action serial: {serial}")
+            logger.info(f"Generated action serial: {serial} (action_order: {next_num})")
             return serial
             
         except Exception as e:
             logger.error(f"Error generating action serial: {e}")
-            # Fallback to timestamp-based serial
-            timestamp = int(datetime.now().timestamp()) % 9999
+            # Fallback to timestamp-based serial with microseconds for uniqueness
+            timestamp = int(datetime.now().timestamp() * 1000000) % 9999
             return f"{branch_serial}.{timestamp:04d}"
     
     @staticmethod

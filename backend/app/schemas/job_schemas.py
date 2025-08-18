@@ -60,6 +60,7 @@ class JobResponse(BaseModel):
     scheduled_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    last_execution: Optional[Dict[str, Any]] = None
     actions: List[JobActionResponse] = []
 
     @field_validator('job_uuid', mode='before')
@@ -112,7 +113,7 @@ class JobExecutionResponse(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime
-    branches: List[JobExecutionBranchResponse] = []
+    branches: List['JobExecutionBranchResponse'] = []
 
     @field_validator('execution_uuid', mode='before')
     @classmethod
@@ -158,7 +159,7 @@ class JobListItem(BaseModel):
     status: JobStatus
     created_at: datetime
     scheduled_at: Optional[datetime] = None
-    last_execution: Optional[JobExecutionResponse] = None
+    last_execution: Optional[Dict[str, Any]] = None
 
     @field_validator('job_uuid', mode='before')
     @classmethod

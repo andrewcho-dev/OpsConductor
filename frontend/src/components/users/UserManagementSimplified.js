@@ -63,7 +63,7 @@ const UserManagementSimplified = () => {
 
   // Pagination state
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   // Column filters state
   const [columnFilters, setColumnFilters] = useState({});
@@ -245,14 +245,16 @@ const UserManagementSimplified = () => {
             </IconButton>
           </Tooltip>
           <Tooltip title="Refresh users">
-            <IconButton 
-              className="btn-icon" 
-              onClick={loadUsers} 
-              disabled={loading}
-              size="small"
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
+            <span>
+              <IconButton 
+                className="btn-icon" 
+                onClick={loadUsers} 
+                disabled={loading}
+                size="small"
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </span>
           </Tooltip>
           <Button
             className="btn-compact"

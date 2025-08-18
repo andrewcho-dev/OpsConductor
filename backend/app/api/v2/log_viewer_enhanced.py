@@ -219,7 +219,7 @@ def build_search_query(db: Session, pattern: Optional[str] = None, status_filter
                         Job.job_serial.like(f"{pattern}%"),
                         JobExecution.execution_serial.like(f"{pattern}%"),
                         JobExecutionBranch.branch_serial.like(f"{pattern}%"),
-                        UniversalTarget.serial.like(f"{pattern}%")
+                        UniversalTarget.target_serial.like(f"{pattern}%")
                     )
                 )
         else:
@@ -321,7 +321,7 @@ async def search_execution_logs(
                 job_name=job.name,
                 execution_serial=execution.execution_serial,
                 branch_serial=branch.branch_serial,
-                target_serial=target.serial,
+                target_serial=target.target_serial,
                 target_name=target.name,
                 target_type=target.target_type
             )

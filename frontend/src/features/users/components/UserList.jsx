@@ -458,7 +458,7 @@ const UserList = () => {
             onPageChange={handlePageChange}
             rowsPerPage={pagination.users.pageSize}
             onRowsPerPageChange={handlePageSizeChange}
-            rowsPerPageOptions={[10, 25, 50, 100]}
+            rowsPerPageOptions={[25, 50, 100, 200, 500]}
             sx={{ 
               borderTop: '1px solid', 
               borderColor: 'divider',

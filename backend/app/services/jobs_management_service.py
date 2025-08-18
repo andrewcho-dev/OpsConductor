@@ -935,6 +935,21 @@ class JobsManagementService:
             # Format execution data
             execution_data = []
             for execution in paginated_executions:
+                # Get branch data
+                branches_data = []
+                if hasattr(execution, 'branches') and execution.branches:
+                    for branch in execution.branches:
+                        branch_info = {
+                            "id": branch.id,
+                            "branch_id": branch.branch_id,
+                            "branch_serial": branch.branch_serial,
+                            "target_id": branch.target_id,
+                            "status": branch.status.value if hasattr(branch.status, 'value') else str(branch.status),
+                            "started_at": branch.started_at.isoformat() if hasattr(branch, 'started_at') and branch.started_at else None,
+                            "completed_at": branch.completed_at.isoformat() if hasattr(branch, 'completed_at') and branch.completed_at else None,
+                        }
+                        branches_data.append(branch_info)
+                
                 execution_info = {
                     "id": execution.id,
                     "execution_serial": execution.execution_serial,
@@ -943,7 +958,8 @@ class JobsManagementService:
                     "started_at": execution.started_at.isoformat() if execution.started_at else None,
                     "completed_at": execution.completed_at.isoformat() if execution.completed_at else None,
                     "created_at": execution.created_at.isoformat() if execution.created_at else None,
-                    "duration": None
+                    "duration": None,
+                    "branches": branches_data
                 }
                 
                 # Calculate duration if both timestamps exist
@@ -1055,15 +1071,16 @@ class JobsManagementService:
 
     # Private helper methods
     
+    def _datetime_to_iso(self, dt):
+        """Helper function to convert datetime to ISO string"""
+        if dt is None:
+            return None
+        if isinstance(dt, datetime):
+            return dt.isoformat()
+        return dt
+    
     async def _enhance_job_data(self, job) -> Dict[str, Any]:
         """Enhance job data with additional information"""
-        # Helper function to convert datetime to ISO string
-        def datetime_to_iso(dt):
-            if dt is None:
-                return None
-            if isinstance(dt, datetime):
-                return dt.isoformat()
-            return dt
         
         # Get job actions manually from database using the job service
         actions = []
@@ -1087,6 +1104,18 @@ class JobsManagementService:
             actions = []
         
         
+        # Get job targets
+        targets = []
+        try:
+            targets = self.job_service.get_job_targets(job.id)
+            logger.info(f"Found {len(targets)} targets for job {job.id}")
+        except Exception as e:
+            logger.error(f"Error loading targets for job {job.id}: {str(e)}")
+            targets = []
+        
+        # Get last execution data
+        last_execution_data = await self._get_last_job_execution(job.id)
+        
         enhanced_data = {
             "id": job.id,
             "job_uuid": str(getattr(job, "job_uuid", None)) if getattr(job, "job_uuid", None) else None,
@@ -1095,20 +1124,22 @@ class JobsManagementService:
             "job_type": job.job_type,
             "description": getattr(job, "description", ""),
             "status": str(getattr(job, "status", "unknown")),
-            "created_at": datetime_to_iso(job.created_at if hasattr(job, "created_at") and job.created_at else datetime.utcnow()),
-            "updated_at": datetime_to_iso(job.updated_at if hasattr(job, "updated_at") else None),
+            "created_at": self._datetime_to_iso(job.created_at if hasattr(job, "created_at") and job.created_at else datetime.utcnow()),
+            "updated_at": self._datetime_to_iso(job.updated_at if hasattr(job, "updated_at") else None),
             "created_by": getattr(job, "created_by", 1),
             "parameters": getattr(job, "parameters", {}),
             "actions": actions,
-            "scheduled_at": datetime_to_iso(getattr(job, "scheduled_at", None)),
+            "targets": targets,
+            "scheduled_at": self._datetime_to_iso(getattr(job, "scheduled_at", None)),
             "priority": getattr(job, "priority", 5),
             "timeout": getattr(job, "timeout", None),
             "retry_count": getattr(job, "retry_count", 0),
+            "last_execution": last_execution_data,
             "metadata": {
                 "enhanced": True,
                 "last_enhanced": datetime.utcnow().isoformat(),
                 "execution_count": await self._get_job_execution_count(job.id),
-                "last_execution": await self._get_last_job_execution(job.id)
+                "target_count": len(targets)
             }
         }
         return enhanced_data
@@ -1204,8 +1235,8 @@ class JobsManagementService:
             logger.warning(f"Failed to get execution count for job {job_id}: {e}")
             return 0
     
-    async def _get_last_job_execution(self, job_id: int) -> Optional[str]:
-        """Get the last execution serial for a job"""
+    async def _get_last_job_execution(self, job_id: int) -> Optional[Dict[str, Any]]:
+        """Get the last execution object for a job"""
         try:
             from app.models.job_models import JobExecution
             last_execution = (self.db.query(JobExecution)
@@ -1214,7 +1245,19 @@ class JobsManagementService:
                             .first())
             
             if last_execution:
-                return last_execution.execution_serial
+                execution_data = {
+                    "id": last_execution.id,
+                    "execution_uuid": str(last_execution.execution_uuid) if last_execution.execution_uuid else None,
+                    "execution_serial": last_execution.execution_serial,
+                    "execution_number": last_execution.execution_number,
+                    "status": last_execution.status.value if last_execution.status else "unknown",
+                    "scheduled_at": self._datetime_to_iso(last_execution.scheduled_at),
+                    "started_at": self._datetime_to_iso(last_execution.started_at),
+                    "completed_at": self._datetime_to_iso(last_execution.completed_at),
+                    "created_at": self._datetime_to_iso(last_execution.created_at),
+                    "branches": []  # Add empty branches list as required by schema
+                }
+                return execution_data
             return None
         except Exception as e:
             logger.warning(f"Failed to get last execution for job {job_id}: {e}")

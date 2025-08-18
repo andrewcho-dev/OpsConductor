@@ -60,7 +60,6 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
   useEffect(() => {
     if (open && job) {
-
       // Clear errors
       setErrors({});
       
@@ -74,10 +73,25 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
           
           if (action.action_parameters?.command) {
             command = action.action_parameters.command;
+          } else if (action.action_parameters?.script_content) {
+            command = action.action_parameters.script_content;
+          } else if (action.action_parameters?.content) {
+            // For file operations, show the content
+            command = action.action_parameters.content;
+          } else if (action.action_parameters?.operation) {
+            // For complex operations, create a descriptive command
+            const params = action.action_parameters;
+            if (params.operation === 'create' && params.destination_path) {
+              command = `# File Operation: ${params.operation}\n# Destination: ${params.destination_path}\n${params.content || ''}`;
+            } else {
+              command = JSON.stringify(params, null, 2);
+            }
           } else if (action.command) {
             command = action.command;
           } else if (action.parameters?.command) {
             command = action.parameters.command;
+          } else if (action.parameters?.script_content) {
+            command = action.parameters.script_content;
           } else if (action.action_data?.command) {
             command = action.action_data.command;
           } else if (action.config?.command) {
@@ -131,12 +145,15 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
       }
       
+      // Extract target IDs from targets array
+      const targetIds = job.targets ? job.targets.map(target => target.id) : [];
+      
       const initialFormData = {
         name: job.name || '',
         description: job.description || '',
         job_type: job.job_type || 'command',
         actions: jobActions,
-        target_ids: job.target_ids || [],
+        target_ids: targetIds,
         scheduled_at: initialScheduledAt,
         priority: job.priority || 5,
         timeout: job.timeout || null,
@@ -146,40 +163,40 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
       setFormData(initialFormData);
       
-      // Fetch additional data
-      fetchTargets();
-      fetchSystemTimezone();
+      // Fetch additional data in parallel
+      const fetchPromises = [
+        fetchTargets(),
+        fetchSystemTimezone()
+      ];
       
       // Always fetch full job details since JobList only provides basic info
       if (job.id) {
-        fetchJobDetails();
+        fetchPromises.push(fetchJobDetails());
       }
+      
+      // Wait for all data to be fetched
+      Promise.all(fetchPromises).catch(error => {
+        console.error('Error fetching job edit data:', error);
+      });
     }
   }, [open, job, token]);
 
   const fetchJobDetails = async () => {
     try {
-      const [jobResponse, targetsResponse] = await Promise.all([
-        fetch(`/api/v2/jobs/${job.id}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }),
-        fetch(`/api/v2/jobs/${job.id}/targets`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        })
-      ]);
+      const jobResponse = await fetch(`/api/v2/jobs/${job.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-      if (jobResponse.ok && targetsResponse.ok) {
+      if (jobResponse.ok) {
         const jobWithExecutions = await jobResponse.json();
-        const targetIds = await targetsResponse.json();
-        
-        // Extract job data from the response (API returns JobWithExecutionsResponse)
+        // Extract job data from the response
         const jobData = jobWithExecutions.job || jobWithExecutions;
+        
+        // Extract target IDs from targets array
+        const apiTargetIds = jobData.targets ? jobData.targets.map(target => target.id) : [];
         
         // Process actions from API response
         let apiActions = [];
@@ -189,12 +206,25 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
             let command = '';
             if (action.action_parameters?.command) {
               command = action.action_parameters.command;
+            } else if (action.action_parameters?.script_content) {
+              command = action.action_parameters.script_content;
+            } else if (action.action_parameters?.content) {
+              // For file operations, show the content
+              command = action.action_parameters.content;
+            } else if (action.action_parameters?.operation) {
+              // For complex operations, create a descriptive command
+              const params = action.action_parameters;
+              if (params.operation === 'create' && params.destination_path) {
+                command = `# File Operation: ${params.operation}\n# Destination: ${params.destination_path}\n${params.content || ''}`;
+              } else {
+                command = JSON.stringify(params, null, 2);
+              }
             } else if (action.action_config?.command) {
               command = action.action_config.command;
             } else if (action.action_parameters) {
               // Look for command in any parameter field
               const params = action.action_parameters;
-              command = params.command || params.script || params.cmd || params.exec || '';
+              command = params.command || params.script_content || params.script || params.cmd || params.exec || '';
             }
             
             return {
@@ -222,8 +252,6 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
           const hours = String(utcDate.getHours()).padStart(2, '0');
           const minutes = String(utcDate.getMinutes()).padStart(2, '0');
           localScheduledAt = `${year}-${month}-${day}T${hours}:${minutes}`;
-          
-
         }
         
         // Update form data with API data
@@ -237,18 +265,17 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
             action_name: 'Execute Command',
             action_parameters: { command: '' }
           }],
-          target_ids: Array.isArray(targetIds) ? targetIds : [],
+          target_ids: apiTargetIds,
           scheduled_at: localScheduledAt,
           priority: jobData.priority || 5,
           timeout: jobData.timeout || null,
           retry_count: jobData.retry_count || 0
         };
         
-
         setFormData(updatedFormData);
       } else {
         console.error('Failed to fetch fresh job details - Response not OK');
-        console.log('Response status:', jobResponse.status, targetsResponse.status);
+        console.log('Response status:', jobResponse.status);
       }
     } catch (error) {
       console.error('Failed to fetch fresh job details:', error);
@@ -275,17 +302,30 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
   const fetchSystemTimezone = async () => {
     try {
-      const response = await fetch('/api/system/info');
+      // Try the v2 system health endpoint first
+      const response = await fetch('/api/v2/system/health', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       if (response.ok) {
         const data = await response.json();
-        const timezone = data.timezone || 'UTC';
+        const timezone = data.timezone || data.system?.timezone || 'UTC';
         // Convert long timezone names to shorter, more user-friendly format
         const shortTimezone = timezone.replace('America/', '').replace('Europe/', '').replace('_', ' ');
         setSystemTimezone(shortTimezone);
+      } else {
+        // Fallback to browser timezone
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const shortTimezone = browserTimezone.replace('America/', '').replace('Europe/', '').replace('_', ' ');
+        setSystemTimezone(shortTimezone);
       }
     } catch (error) {
-      console.error('Failed to fetch system timezone:', error);
-      setSystemTimezone('UTC');
+      // Fallback to browser timezone
+      const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const shortTimezone = browserTimezone.replace('America/', '').replace('Europe/', '').replace('_', ' ');
+      setSystemTimezone(shortTimezone);
     }
   };
 

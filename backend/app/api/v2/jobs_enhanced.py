@@ -114,10 +114,12 @@ class JobResponse(BaseModel):
     created_by: int = Field(..., description="Creator user ID")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Job parameters")
     actions: List[Dict[str, Any]] = Field(default_factory=list, description="Job actions")
+    targets: List[Dict[str, Any]] = Field(default_factory=list, description="Job targets")
     scheduled_at: Optional[datetime] = Field(None, description="Job scheduled execution time")
     priority: int = Field(..., description="Job priority")
     timeout: Optional[int] = Field(None, description="Job timeout")
     retry_count: int = Field(..., description="Retry count")
+    last_execution: Optional[Dict[str, Any]] = Field(None, description="Last execution data")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Job metadata")
     
     class Config:
@@ -594,6 +596,8 @@ async def get_jobs(
         # Convert to response format
         job_responses = []
         for job_data in jobs_result["jobs"]:
+            # Keep last_execution as dict for now to avoid Pydantic serialization issues
+            # TODO: Fix JobExecutionResponse serialization
             job_responses.append(JobResponse(**job_data))
         
         response = JobsListResponse(
@@ -649,6 +653,8 @@ async def get_jobs(
             "Jobs retrieval error via service layer",
             extra={
                 "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": str(e.__traceback__),
                 "requested_by": current_user.username
             }
         )

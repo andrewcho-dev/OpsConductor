@@ -133,6 +133,17 @@ npm run test:comprehensive
 - **API Tests**: Comprehensive testing of REST API endpoints
 - **E2E Tests**: Full user workflow testing with browser automation
 - **Smoke Tests**: Basic functionality verification
+- **Frontend E2E Tests**: Complete frontend testing covering authentication, navigation, CRUD operations, real-time features, and system health monitoring
+
+#### E2E Test Coverage
+- **Authentication & Security**: Login flow with SSL certificate handling
+- **Universal Targets**: Target management, creation, filtering, health monitoring
+- **Job Management**: Job creation wizard, scheduling, execution tracking
+- **System Health**: Real-time monitoring dashboard, container management, resource tracking
+- **User Management**: User CRUD operations, role management, status tracking
+- **Navigation**: Cross-page navigation, responsive design, layout consistency
+- **Real-time Features**: Live timestamps, system status, loading states
+- **Error Handling**: Empty states, network conditions, graceful degradation
 
 #### Run Commands
 ```bash

@@ -163,14 +163,16 @@ const SystemHealthDashboard = () => {
             </Typography>
           )}
           <Tooltip title="Refresh health data">
-            <IconButton 
-              className="btn-icon" 
-              onClick={fetchAllHealthData} 
-              disabled={refreshing}
-              size="small"
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
+            <span>
+              <IconButton 
+                className="btn-icon" 
+                onClick={fetchAllHealthData} 
+                disabled={refreshing}
+                size="small"
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </span>
           </Tooltip>
         </div>
       </div>
