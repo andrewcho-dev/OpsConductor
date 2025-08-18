@@ -698,12 +698,8 @@ class JobsManagementService:
                 # Note: We don't remove extra actions to avoid foreign key issues
                 # In a production system, you might want to mark them as inactive instead
             
-            # Handle special cases
-            if 'scheduled_at' in job_update_data:
-                if job_update_data['scheduled_at']:
-                    existing_job.status = JobStatus.SCHEDULED
-                else:
-                    existing_job.status = JobStatus.DRAFT
+            # Handle scheduling - both simple and recurring
+            await self._handle_job_scheduling(existing_job, job_update_data)
             
             existing_job.updated_at = datetime.utcnow()
             self.db.commit()
@@ -1116,6 +1112,9 @@ class JobsManagementService:
         # Get last execution data
         last_execution_data = await self._get_last_job_execution(job.id)
         
+        # Get schedule data
+        schedule_data = await self._get_job_schedule_data(job.id)
+        
         enhanced_data = {
             "id": job.id,
             "job_uuid": str(getattr(job, "job_uuid", None)) if getattr(job, "job_uuid", None) else None,
@@ -1135,6 +1134,8 @@ class JobsManagementService:
             "timeout": getattr(job, "timeout", None),
             "retry_count": getattr(job, "retry_count", 0),
             "last_execution": last_execution_data,
+            # Add schedule data to the main job object
+            **schedule_data,
             "metadata": {
                 "enhanced": True,
                 "last_enhanced": datetime.utcnow().isoformat(),
@@ -1269,6 +1270,165 @@ class JobsManagementService:
     async def _get_total_job_executions(self) -> int: return 0
     async def _get_failed_job_executions(self) -> int: return 0
     async def _get_pending_job_executions(self) -> int: return 0
+    
+    async def _handle_job_scheduling(self, job, job_update_data: Dict[str, Any]):
+        """Handle both simple and recurring job scheduling"""
+        from app.models.job_schedule_models import JobSchedule
+        from app.models.job_models import JobStatus
+        
+        # Handle simple scheduled_at field
+        if 'scheduled_at' in job_update_data:
+            if job_update_data['scheduled_at']:
+                job.scheduled_at = job_update_data['scheduled_at']
+                job.status = JobStatus.SCHEDULED
+            else:
+                job.scheduled_at = None
+                job.status = JobStatus.DRAFT
+        
+        # Handle recurring schedule fields
+        schedule_type = job_update_data.get('schedule_type')
+        if schedule_type and schedule_type in ['recurring', 'cron']:
+            # Remove any existing schedules for this job
+            existing_schedules = self.db.query(JobSchedule).filter(JobSchedule.job_id == job.id).all()
+            for schedule in existing_schedules:
+                self.db.delete(schedule)
+            
+            # Create new schedule
+            schedule_data = {
+                'job_id': job.id,
+                'schedule_type': schedule_type,
+                'enabled': True
+            }
+            
+            if schedule_type == 'recurring':
+                schedule_data.update({
+                    'recurring_type': job_update_data.get('recurring_type', 'daily'),
+                    'interval': job_update_data.get('interval', 1),
+                    'time': job_update_data.get('time', '09:00'),
+                    'days_of_week': ','.join(map(str, job_update_data.get('days_of_week', []))) if job_update_data.get('days_of_week') else None,
+                    'day_of_month': job_update_data.get('day_of_month'),
+                    'max_executions': job_update_data.get('max_executions')
+                })
+                
+                # Generate cron expression from recurring settings
+                cron_expr = self._generate_cron_from_recurring(
+                    job_update_data.get('recurring_type', 'daily'),
+                    job_update_data.get('interval', 1),
+                    job_update_data.get('time', '09:00'),
+                    job_update_data.get('days_of_week', []),
+                    job_update_data.get('day_of_month', 1)
+                )
+                schedule_data['cron_expression'] = cron_expr
+                
+            elif schedule_type == 'cron':
+                schedule_data['cron_expression'] = job_update_data.get('cron_expression', '')
+            
+            # Create the schedule
+            new_schedule = JobSchedule(**schedule_data)
+            self.db.add(new_schedule)
+            
+            # Update job status
+            job.status = JobStatus.SCHEDULED
+            
+        elif schedule_type == 'once' and 'scheduled_at' not in job_update_data:
+            # Clear any existing schedules if switching to one-time
+            existing_schedules = self.db.query(JobSchedule).filter(JobSchedule.job_id == job.id).all()
+            for schedule in existing_schedules:
+                self.db.delete(schedule)
+    
+    def _generate_cron_from_recurring(self, recurring_type: str, interval: int, time: str, days_of_week: list, day_of_month: int) -> str:
+        """Generate cron expression from recurring schedule settings"""
+        try:
+            # Parse time (format: "HH:MM")
+            hour, minute = time.split(':')
+            hour, minute = int(hour), int(minute)
+        except:
+            hour, minute = 9, 0  # Default to 9:00 AM
+        
+        if recurring_type == 'hourly':
+            return f"{minute} */{interval} * * *"
+        elif recurring_type == 'daily':
+            return f"{minute} {hour} */{interval} * *"
+        elif recurring_type == 'weekly':
+            if days_of_week:
+                # Convert Monday=1 to Sunday=0 format for cron
+                cron_days = []
+                for day in days_of_week:
+                    cron_day = 0 if day == 7 else day  # Sunday = 0 in cron
+                    cron_days.append(str(cron_day))
+                days_str = ','.join(cron_days)
+            else:
+                days_str = '1'  # Default to Monday
+            return f"{minute} {hour} * * {days_str}"
+        elif recurring_type == 'monthly':
+            day = day_of_month if day_of_month else 1
+            return f"{minute} {hour} {day} */{interval} *"
+        else:
+            return f"{minute} {hour} * * *"  # Default to daily
+    
+    async def _get_job_schedule_data(self, job_id: int) -> Dict[str, Any]:
+        """Get schedule data for a job"""
+        try:
+            from app.models.job_schedule_models import JobSchedule
+            
+            schedule = self.db.query(JobSchedule).filter(JobSchedule.job_id == job_id).first()
+            
+            if schedule:
+                # Parse days_of_week string back to list
+                days_of_week = []
+                if schedule.days_of_week:
+                    try:
+                        days_of_week = [int(d) for d in schedule.days_of_week.split(',') if d.strip()]
+                    except:
+                        days_of_week = []
+                
+                return {
+                    'schedule_type': schedule.schedule_type,
+                    'recurring_type': schedule.recurring_type,
+                    'interval': schedule.interval,
+                    'time': schedule.time,
+                    'days_of_week': days_of_week,
+                    'day_of_month': schedule.day_of_month,
+                    'max_executions': schedule.max_executions,
+                    'cron_expression': schedule.cron_expression,
+                    'schedule_enabled': schedule.enabled,
+                    'next_run': self._datetime_to_iso(schedule.next_run),
+                    'last_run': self._datetime_to_iso(schedule.last_run),
+                    'execution_count': schedule.execution_count or 0
+                }
+            else:
+                # No recurring schedule, return defaults
+                return {
+                    'schedule_type': 'once',
+                    'recurring_type': None,
+                    'interval': None,
+                    'time': None,
+                    'days_of_week': [],
+                    'day_of_month': None,
+                    'max_executions': None,
+                    'cron_expression': None,
+                    'schedule_enabled': None,
+                    'next_run': None,
+                    'last_run': None,
+                    'execution_count': 0
+                }
+                
+        except Exception as e:
+            logger.warning(f"Failed to get schedule data for job {job_id}: {e}")
+            return {
+                'schedule_type': 'once',
+                'recurring_type': None,
+                'interval': None,
+                'time': None,
+                'days_of_week': [],
+                'day_of_month': None,
+                'max_executions': None,
+                'cron_expression': None,
+                'schedule_enabled': None,
+                'next_run': None,
+                'last_run': None,
+                'execution_count': 0
+            }
 
 
 class JobsManagementError(Exception):
