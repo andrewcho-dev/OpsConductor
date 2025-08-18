@@ -184,6 +184,23 @@ class CacheService:
         
         return False
     
+    async def get_ttl(self, key: str) -> int:
+        """Get time to live for a key in seconds."""
+        if self.redis_client:
+            try:
+                ttl = await self.redis_client.ttl(key)
+                return ttl if ttl > 0 else 0
+            except Exception as e:
+                logger.error(f"Redis TTL error for key {key}: {e}")
+        
+        # Check memory cache TTL
+        if key in self.memory_cache:
+            cache_entry = self.memory_cache[key]
+            remaining = (cache_entry["expires_at"] - datetime.now()).total_seconds()
+            return max(0, int(remaining))
+        
+        return 0
+    
     async def clear_pattern(self, pattern: str) -> int:
         """Clear all keys matching a pattern."""
         count = 0

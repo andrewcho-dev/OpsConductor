@@ -77,7 +77,7 @@ const TopHeader = () => {
             onClick={handleHomeClick}
             sx={{ mr: 2, p: 0.5 }}
           >
-            <Logo size={40} variant="hat" theme="dark" />
+            <Logo size={40} variant="hat" theme="light" />
           </IconButton>
           
           <Typography 
