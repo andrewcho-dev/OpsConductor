@@ -179,36 +179,6 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
     }
   }, [open, executionSerial, statusFilter, performSearch]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (!open) return;
-      
-      // Ctrl/Cmd + E = Expand All
-      if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
-        event.preventDefault();
-        expandAll();
-      }
-      
-      // Ctrl/Cmd + Shift + E = Collapse All
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'E') {
-        event.preventDefault();
-        collapseAll();
-      }
-      
-      // Escape = Close modal
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-      }
-    };
-
-    if (open) {
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [open, expandAll, collapseAll, onClose]);
-
   // Event handlers
   const handleRefresh = () => {
     performSearch(statusFilter);
@@ -256,6 +226,36 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
     setExpandedBranches(new Set());
     setExpandedActions(new Set());
   };
+
+  // Keyboard shortcuts - defined after expandAll and collapseAll
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (!open) return;
+      
+      // Ctrl/Cmd + E = Expand All
+      if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
+        event.preventDefault();
+        expandAll();
+      }
+      
+      // Ctrl/Cmd + Shift + E = Collapse All
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'E') {
+        event.preventDefault();
+        collapseAll();
+      }
+      
+      // Escape = Close modal
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    if (open) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [open, onClose]); // Removed expandAll and collapseAll from dependencies to avoid stale closures
 
   // Utility functions
   const getStatusColor = (status) => {
