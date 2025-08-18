@@ -825,7 +825,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
       <Dialog 
         open={open} 
         onClose={onClose} 
-        maxWidth="xl" 
+        maxWidth="lg" 
         fullWidth
         PaperProps={{
           sx: { 
@@ -922,7 +922,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
     <Dialog 
       open={open} 
       onClose={onClose} 
-      maxWidth="xl" 
+      maxWidth="lg" 
       fullWidth
       PaperProps={{
         sx: { 
