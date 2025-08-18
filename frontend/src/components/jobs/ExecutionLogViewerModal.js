@@ -48,7 +48,10 @@ import {
   Assessment as AssessmentIcon,
   Storage as StorageIcon,
   Speed as SpeedIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  UnfoldMore as ExpandAllIcon,
+  UnfoldLess as CollapseAllIcon,
+  ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { authService } from '../../services/authService';
@@ -176,6 +179,36 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
     }
   }, [open, executionSerial, statusFilter, performSearch]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (!open) return;
+      
+      // Ctrl/Cmd + E = Expand All
+      if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
+        event.preventDefault();
+        expandAll();
+      }
+      
+      // Ctrl/Cmd + Shift + E = Collapse All
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'E') {
+        event.preventDefault();
+        collapseAll();
+      }
+      
+      // Escape = Close modal
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    if (open) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [open, expandAll, collapseAll, onClose]);
+
   // Event handlers
   const handleRefresh = () => {
     performSearch(statusFilter);
@@ -204,6 +237,24 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
       newExpanded.add(actionId);
     }
     setExpandedActions(newExpanded);
+  };
+
+  // Expand/Collapse all functions
+  const expandAll = () => {
+    const allBranchIds = new Set(hierarchicalData.map(branch => branch.id));
+    const allActionIds = new Set();
+    hierarchicalData.forEach(branch => {
+      branch.actions.forEach(action => {
+        allActionIds.add(action.id);
+      });
+    });
+    setExpandedBranches(allBranchIds);
+    setExpandedActions(allActionIds);
+  };
+
+  const collapseAll = () => {
+    setExpandedBranches(new Set());
+    setExpandedActions(new Set());
   };
 
   // Utility functions
@@ -277,17 +328,41 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
     >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography variant="h6" component="div">
-              Execution Logs: {executionSerial}
-            </Typography>
-            {jobName && (
-              <Typography variant="body2" color="text.secondary">
-                Job: {jobName}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Tooltip title="Back to Execution History">
+              <Button
+                startIcon={<ArrowBackIcon />}
+                onClick={onClose}
+                variant="outlined"
+                size="small"
+                sx={{ textTransform: 'none' }}
+              >
+                Back
+              </Button>
+            </Tooltip>
+            <Box>
+              <Typography variant="h6" component="div">
+                Execution Logs: {executionSerial}
               </Typography>
-            )}
+              {jobName && (
+                <Typography variant="body2" color="text.secondary">
+                  Job: {jobName}
+                </Typography>
+              )}
+            </Box>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Tooltip title="Expand All (Ctrl+E)">
+              <IconButton onClick={expandAll} disabled={loading || hierarchicalData.length === 0}>
+                <ExpandAllIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Collapse All (Ctrl+Shift+E)">
+              <IconButton onClick={collapseAll} disabled={loading || hierarchicalData.length === 0}>
+                <CollapseAllIcon />
+              </IconButton>
+            </Tooltip>
+            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
             <Tooltip title="Refresh">
               <IconButton onClick={handleRefresh} disabled={loading}>
                 <RefreshIcon />
@@ -337,22 +412,27 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={3}>
-              {stats && (
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <Chip 
-                    size="small" 
-                    label={`${stats.total_actions} actions`} 
-                    color="primary" 
-                    variant="outlined" 
-                  />
-                  <Chip 
-                    size="small" 
-                    label={`${stats.branches} branches`} 
-                    color="info" 
-                    variant="outlined" 
-                  />
-                </Box>
-              )}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {stats && (
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Chip 
+                      size="small" 
+                      label={`${stats.total_actions} actions`} 
+                      color="primary" 
+                      variant="outlined" 
+                    />
+                    <Chip 
+                      size="small" 
+                      label={`${stats.branches} branches`} 
+                      color="info" 
+                      variant="outlined" 
+                    />
+                  </Box>
+                )}
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                  Ctrl+E: Expand All • Ctrl+Shift+E: Collapse All
+                </Typography>
+              </Box>
             </Grid>
           </Grid>
         </Box>
@@ -503,7 +583,7 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
                                       component="pre" 
                                       sx={{ 
                                         fontFamily: 'monospace',
-                                        fontSize: '0.75rem',
+                                        fontSize: '0.875rem',
                                         whiteSpace: 'pre-wrap',
                                         wordBreak: 'break-word',
                                         margin: 0
@@ -544,7 +624,7 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
                                       component="pre" 
                                       sx={{ 
                                         fontFamily: 'monospace',
-                                        fontSize: '0.75rem',
+                                        fontSize: '0.875rem',
                                         whiteSpace: 'pre-wrap',
                                         wordBreak: 'break-word',
                                         margin: 0,
