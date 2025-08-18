@@ -136,7 +136,7 @@ const JobDashboard = () => {
 
 
     const handleUpdateJob = async (updatedJobData) => {
-        console.log('🔄 Starting job update...', updatedJobData);
+        console.log('🔄 JobDashboard: Starting job update...', updatedJobData);
         try {
             const jobData = {
                 name: updatedJobData.name,
@@ -149,28 +149,46 @@ const JobDashboard = () => {
                 timeout: updatedJobData.timeout,
                 retry_count: updatedJobData.retry_count
             };
-            console.log('📤 Sending job data:', jobData);
-            console.log('🎯 API endpoint:', `/v2/jobs/${updatedJobData.id || updatedJobData.job_id}`);
+            console.log('📤 JobDashboard: Sending job data:', jobData);
+            console.log('🎯 JobDashboard: API endpoint:', `/v2/jobs/${updatedJobData.id || updatedJobData.job_id}`);
             
             const response = await authService.api.put(`/v2/jobs/${updatedJobData.id || updatedJobData.job_id}`, jobData);
-            console.log('✅ API response:', response);
+            console.log('✅ JobDashboard: API response status:', response.status);
+            console.log('✅ JobDashboard: API response data:', response.data);
             
-            const updatedJob = response.data;
-            // Update the job in the local state
-            setJobs(prevJobs => 
-                prevJobs.map(job => 
-                    job.id === updatedJob.id ? updatedJob : job
-                )
-            );
-            addAlert('Job updated successfully!', 'success');
-            fetchJobs(); // Refresh the job list to get latest data
-            return true;
+            if (response.status === 200 && response.data) {
+                const updatedJob = response.data;
+                // Update the job in the local state
+                setJobs(prevJobs => 
+                    prevJobs.map(job => 
+                        job.id === updatedJob.id ? updatedJob : job
+                    )
+                );
+                addAlert('Job updated successfully!', 'success');
+                fetchJobs(); // Refresh the job list to get latest data
+                console.log('✅ JobDashboard: Job update completed successfully');
+                return true;
+            } else {
+                console.log('❌ JobDashboard: Unexpected response status:', response.status);
+                addAlert(`Failed to update job: Unexpected response status ${response.status}`, 'error');
+                return false;
+            }
         } catch (error) {
-            console.error('❌ Job update failed:', error);
-            console.error('❌ Error response:', error.response);
-            console.error('❌ Error status:', error.response?.status);
-            console.error('❌ Error data:', error.response?.data);
-            addAlert(`Failed to update job: ${error.response?.data?.detail || error.message}`, 'error');
+            console.error('❌ JobDashboard: Job update failed:', error);
+            console.error('❌ JobDashboard: Error response:', error.response);
+            console.error('❌ JobDashboard: Error status:', error.response?.status);
+            console.error('❌ JobDashboard: Error data:', error.response?.data);
+            
+            let errorMessage = 'Unknown error occurred';
+            if (error.response?.data?.detail) {
+                errorMessage = error.response.data.detail;
+            } else if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            addAlert(`Failed to update job: ${errorMessage}`, 'error');
             return false;
         }
     };

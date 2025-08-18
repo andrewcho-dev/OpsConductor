@@ -399,6 +399,12 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
       // Prepare form data with proper datetime handling
       const submitData = { ...formData, id: job.id };
       
+      console.log('🔄 JobEditModal: Starting job update...', {
+        jobId: job.id,
+        originalScheduledAt: formData.scheduled_at,
+        formData: submitData
+      });
+      
       // Convert local datetime to UTC for backend
       if (submitData.scheduled_at) {
         // The datetime-local input gives us a string like "2025-08-11T14:30"
@@ -412,14 +418,29 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
         
         // Convert to ISO string (UTC) for backend
         submitData.scheduled_at = localDateTime.toISOString();
-
+        
+        console.log('🕐 JobEditModal: Datetime conversion', {
+          original: formData.scheduled_at,
+          localDateTime: localDateTime.toString(),
+          utcIsoString: submitData.scheduled_at
+        });
       }
       
+      console.log('📤 JobEditModal: Calling onSubmit with data:', submitData);
       const success = await onSubmit(submitData);
+      console.log('📥 JobEditModal: onSubmit returned:', success);
+      
       if (success) {
+        console.log('✅ JobEditModal: Update successful, closing modal');
         onClose();
         setErrors({});
+      } else {
+        console.log('❌ JobEditModal: Update failed, keeping modal open');
+        setErrors({ submit: 'Failed to update job. Please try again.' });
       }
+    } catch (error) {
+      console.error('❌ JobEditModal: Exception during submit:', error);
+      setErrors({ submit: `Update failed: ${error.message}` });
     } finally {
       setLoading(false);
     }
@@ -463,7 +484,12 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
       </DialogTitle>
 
       <DialogContent dividers>
-
+        {/* Submit Error Display */}
+        {errors.submit && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {errors.submit}
+          </Alert>
+        )}
         
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           
