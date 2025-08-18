@@ -73,46 +73,25 @@ const LoginScreen = () => {
         >
           <Box
             sx={{
-              width: 64,
-              height: 64,
+              width: 200,
+              height: 200,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              mb: 2,
+              mb: 3,
             }}
           >
             <Box
               component="img"
-              src="/logo.svg"
+              src="/OpsConductor dark on light 640.svg"
               alt="OpsConductor Logo"
               sx={{
                 width: '100%',
                 height: '100%',
+                objectFit: 'contain',
               }}
             />
           </Box>
-
-          <Typography 
-            component="h1" 
-            variant="h4" 
-            sx={{ 
-              fontWeight: 600,
-              color: '#003c82',
-              mb: 0.5,
-            }}
-          >
-            OpsConductor
-          </Typography>
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              color: '#666',
-              fontWeight: 300,
-              mb: 3,
-            }}
-          >
-            Lite
-          </Typography>
 
           {error && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>

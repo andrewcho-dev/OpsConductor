@@ -77,7 +77,7 @@ const TopHeader = () => {
             onClick={handleHomeClick}
             sx={{ mr: 2, p: 0.5 }}
           >
-            <Logo size={40} />
+            <Logo size={40} variant="hat" theme="dark" />
           </IconButton>
           
           <Typography 
@@ -163,7 +163,7 @@ const TopHeader = () => {
             <CloseIcon fontSize="small" />
           </IconButton>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
-            <Logo size={32} />
+            <Logo size={32} variant="hat" theme="light" />
             <Typography variant="h6" sx={{ ml: 1.5, fontWeight: 600, color: '#003c82' }}>
               OpsConductor
             </Typography>
