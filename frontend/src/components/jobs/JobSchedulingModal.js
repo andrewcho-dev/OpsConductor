@@ -106,7 +106,12 @@ const JobSchedulingModal = ({ open, onClose, job, onSchedule, token }) => {
 
   const fetchSystemTimezone = async () => {
     try {
-      const response = await fetch('/api/system/info');
+      const response = await fetch('/api/system/info', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         const timezoneInfo = data.timezone?.display_name || 'UTC';

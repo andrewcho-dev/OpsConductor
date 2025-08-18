@@ -28,7 +28,7 @@ from app.core.logging import get_structured_logger
 from app.core.config import settings
 from app.services.universal_target_service import UniversalTargetService
 from app.services.health_monitoring_service import HealthMonitoringService
-from app.services.serial_service import SerialService
+# SerialService removed - using database defaults
 from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 from app.schemas.target_schemas import (
     TargetCreate, TargetUpdate, TargetComprehensiveUpdate,

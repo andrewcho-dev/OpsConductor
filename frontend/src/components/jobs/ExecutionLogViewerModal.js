@@ -3,78 +3,62 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
   Typography,
   Box,
   Chip,
   IconButton,
   Tooltip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   LinearProgress,
   Alert,
   Paper,
-  Divider,
-  TextField,
-  InputAdornment,
-  FormControl,
-  InputLabel,
+
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Collapse,
+  Pagination,
   Select,
-  MenuItem,
-  Grid,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Collapse
+  MenuItem
 } from '@mui/material';
 import {
   Close as CloseIcon,
   Refresh as RefreshIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  Search as SearchIcon,
-  PlayArrow as PlayArrowIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   Schedule as ScheduleIcon,
   Cancel as CancelIcon,
   ContentCopy as CopyIcon,
   Computer as ComputerIcon,
-  Work as WorkIcon,
-  Timeline as TimelineIcon,
-  Assessment as AssessmentIcon,
-  Storage as StorageIcon,
-  Speed as SpeedIcon,
-  Info as InfoIcon,
-  UnfoldMore as ExpandAllIcon,
-  UnfoldLess as CollapseAllIcon,
-  ArrowBack as ArrowBackIcon
+  KeyboardArrowDown as ArrowDownIcon,
+  KeyboardArrowUp as ArrowUpIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { authService } from '../../services/authService';
 import { formatLocalDateTime } from '../../utils/timeUtils';
+import StandardDataTable from '../common/StandardDataTable';
+import '../../styles/dashboard.css';
 
 const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) => {
   const { token } = useAuth();
   
   // State management
-  const [results, setResults] = useState([]);
-  const [hierarchicalData, setHierarchicalData] = useState([]);
-  const [stats, setStats] = useState(null);
+  const [actions, setActions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   
-  // Expansion state
-  const [expandedBranches, setExpandedBranches] = useState(new Set());
-  const [expandedActions, setExpandedActions] = useState(new Set());
+  // Datatable state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [expandedRows, setExpandedRows] = useState(new Set());
   
-  // Filter state
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  // Page size options
+  const pageSizeOptions = [25, 50, 100, 200];
+  
+
 
   // API helper
   const apiCall = async (url, options = {}) => {
@@ -86,87 +70,68 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
     }
   };
 
-  // Transform flat results into hierarchical structure for this specific execution
-  const transformToHierarchical = (flatResults) => {
-    const branchMap = new Map();
-    
-    flatResults.forEach(action => {
-      const branchKey = action.branch_serial;
-      
-      // Initialize branch
-      if (!branchMap.has(branchKey)) {
-        branchMap.set(branchKey, {
-          id: branchKey,
-          branch_serial: action.branch_serial,
-          target_serial: action.target_serial,
-          target_name: action.target_name,
-          target_type: action.target_type,
-          actions: [],
-          stats: { total: 0, completed: 0, failed: 0, running: 0 }
-        });
-      }
-      
-      const branch = branchMap.get(branchKey);
-      branch.stats.total++;
-      if (action.status === 'completed') branch.stats.completed++;
-      else if (action.status === 'failed') branch.stats.failed++;
-      else if (action.status === 'running') branch.stats.running++;
-      
-      // Add action
-      branch.actions.push(action);
-    });
-    
-    // Convert to array and sort actions within each branch
-    return Array.from(branchMap.values()).map(branch => ({
-      ...branch,
-      actions: branch.actions.sort((a, b) => {
-        // Sort by action order if available, otherwise by started_at
-        if (a.action_serial && b.action_serial) {
-          const aOrder = parseInt(a.action_serial.split('.').pop());
-          const bOrder = parseInt(b.action_serial.split('.').pop());
-          return aOrder - bOrder;
-        }
-        return new Date(a.started_at) - new Date(b.started_at);
-      })
-    }));
+  // Helper functions for datatable
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'completed': return 'success';
+      case 'failed': return 'error';
+      case 'running': return 'warning';
+      case 'scheduled': return 'info';
+      default: return 'default';
+    }
   };
 
-  // Search function for this specific execution
-  const performSearch = useCallback(async (status = 'all') => {
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'completed': return <CheckCircleIcon fontSize="small" />;
+      case 'failed': return <ErrorIcon fontSize="small" />;
+      case 'running': return <ScheduleIcon fontSize="small" />;
+      default: return <CancelIcon fontSize="small" />;
+    }
+  };
+
+  // Fetch execution data
+  const fetchExecutionData = useCallback(async () => {
     if (!executionSerial) return;
     
     setLoading(true);
     setError(null);
     
     try {
+      // Parse executionSerial format: "jobId_executionNumber"
+      const [jobId, executionNumber] = executionSerial.split('_');
+      
       const params = new URLSearchParams({
-        pattern: executionSerial,
-        status,
+        job_id: jobId,
+        execution_number: executionNumber,
         limit: '1000', // Get all actions for this execution
         offset: '0'
       });
       
       const response = await apiCall(`/api/v2/log-viewer/search?${params}`);
-      const flatResults = response.results || [];
+      const actionResults = response.results || [];
       
-      setResults(flatResults);
-      setHierarchicalData(transformToHierarchical(flatResults));
+      // Sort actions by branch and action order
+      const sortedActions = actionResults.sort((a, b) => {
+        // First sort by branch_serial
+        if (a.branch_serial !== b.branch_serial) {
+          return a.branch_serial.localeCompare(b.branch_serial);
+        }
+        // Then by action order within branch
+        if (a.action_serial && b.action_serial) {
+          const aOrder = parseInt(a.action_serial.split('.').pop());
+          const bOrder = parseInt(b.action_serial.split('.').pop());
+          return aOrder - bOrder;
+        }
+        return new Date(a.started_at) - new Date(b.started_at);
+      });
+      
+      setActions(sortedActions);
       setLastUpdated(new Date());
-      
-      // Calculate stats for this execution
-      const executionStats = {
-        total_actions: flatResults.length,
-        completed: flatResults.filter(r => r.status === 'completed').length,
-        failed: flatResults.filter(r => r.status === 'failed').length,
-        running: flatResults.filter(r => r.status === 'running').length,
-        branches: new Set(flatResults.map(r => r.branch_serial)).size
-      };
-      setStats(executionStats);
       
     } catch (err) {
       setError(err.message || 'Failed to load execution logs');
-      setResults([]);
-      setStats(null);
+      setActions([]);
     } finally {
       setLoading(false);
     }
@@ -175,554 +140,349 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
   // Initialize when modal opens
   useEffect(() => {
     if (open && executionSerial) {
-      performSearch(statusFilter);
+      fetchExecutionData();
     }
-  }, [open, executionSerial, statusFilter, performSearch]);
+  }, [open, executionSerial, fetchExecutionData]);
 
   // Event handlers
   const handleRefresh = () => {
-    performSearch(statusFilter);
+    fetchExecutionData();
   };
 
-  const handleStatusFilterChange = (event) => {
-    setStatusFilter(event.target.value);
+  const handlePageSizeChange = (newPageSize) => {
+    setPageSize(newPageSize);
+    setPage(1); // Reset to first page when changing page size
   };
 
-  // Toggle functions (kept for individual action toggling)
-  const toggleBranch = (branchId) => {
-    handleBranchToggle(branchId);
-  };
 
-  const toggleAction = (actionId) => {
-    const newExpanded = new Set(expandedActions);
+
+  // Datatable functions
+  const toggleRowExpansion = (actionId) => {
+    const newExpanded = new Set(expandedRows);
     if (newExpanded.has(actionId)) {
       newExpanded.delete(actionId);
     } else {
       newExpanded.add(actionId);
     }
-    setExpandedActions(newExpanded);
-  };
-
-  // Expand/Collapse all functions
-  const expandAll = () => {
-    const allBranchIds = new Set(hierarchicalData.map(branch => branch.id));
-    const allActionIds = new Set();
-    hierarchicalData.forEach(branch => {
-      branch.actions.forEach(action => {
-        allActionIds.add(action.id);
-      });
-    });
-    setExpandedBranches(allBranchIds);
-    setExpandedActions(allActionIds);
-  };
-
-  // Auto-expand actions with results when branch is expanded
-  const handleBranchToggle = (branchId) => {
-    const newExpandedBranches = new Set(expandedBranches);
-    const isExpanding = !newExpandedBranches.has(branchId);
-    
-    if (isExpanding) {
-      newExpandedBranches.add(branchId);
-      
-      // Auto-expand actions that have output or errors
-      const branch = hierarchicalData.find(b => b.id === branchId);
-      if (branch) {
-        const newExpandedActions = new Set(expandedActions);
-        branch.actions.forEach(action => {
-          if (action.result_output || action.result_error) {
-            newExpandedActions.add(action.id);
-          }
-        });
-        setExpandedActions(newExpandedActions);
-      }
-    } else {
-      newExpandedBranches.delete(branchId);
-      
-      // Collapse all actions in this branch
-      const branch = hierarchicalData.find(b => b.id === branchId);
-      if (branch) {
-        const newExpandedActions = new Set(expandedActions);
-        branch.actions.forEach(action => {
-          newExpandedActions.delete(action.id);
-        });
-        setExpandedActions(newExpandedActions);
-      }
-    }
-    
-    setExpandedBranches(newExpandedBranches);
-  };
-
-  const collapseAll = () => {
-    setExpandedBranches(new Set());
-    setExpandedActions(new Set());
-  };
-
-  // Keyboard shortcuts - defined after expandAll and collapseAll
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (!open) return;
-      
-      // Ctrl/Cmd + E = Expand All
-      if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
-        event.preventDefault();
-        expandAll();
-      }
-      
-      // Ctrl/Cmd + Shift + E = Collapse All
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'E') {
-        event.preventDefault();
-        collapseAll();
-      }
-      
-      // Escape = Close modal
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-      }
-    };
-
-    if (open) {
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [open, onClose]); // Removed expandAll and collapseAll from dependencies to avoid stale closures
-
-  // Utility functions
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'completed': return 'success';
-      case 'failed': return 'error';
-      case 'running': return 'primary';
-      case 'scheduled': return 'info';
-      case 'cancelled': return 'secondary';
-      default: return 'default';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'completed': return <CheckCircleIcon fontSize="small" />;
-      case 'failed': return <ErrorIcon fontSize="small" />;
-      case 'running': return <PlayArrowIcon fontSize="small" />;
-      case 'scheduled': return <ScheduleIcon fontSize="small" />;
-      case 'cancelled': return <CancelIcon fontSize="small" />;
-      default: return <InfoIcon fontSize="small" />;
-    }
+    setExpandedRows(newExpanded);
   };
 
   const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).then(() => {
+      // Could add a toast notification here
+    });
   };
 
-  const formatDuration = (timeMs) => {
-    if (!timeMs) return 'N/A';
-    if (timeMs < 1000) return `${timeMs}ms`;
-    const seconds = Math.floor(timeMs / 1000);
+  // Pagination logic
+  const totalPages = Math.ceil(actions.length / pageSize);
+  const startIndex = (page - 1) * pageSize;
+  const paginatedActions = actions.slice(startIndex, startIndex + pageSize);
+
+  const formatDuration = (startTime, endTime) => {
+    if (!startTime || !endTime) return 'N/A';
+    const duration = new Date(endTime) - new Date(startTime);
+    if (duration < 1000) return `${duration}ms`;
+    const seconds = Math.floor(duration / 1000);
     const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
-    } else if (minutes > 0) {
+    if (minutes > 0) {
       return `${minutes}m ${seconds % 60}s`;
-    } else {
-      return `${seconds}s`;
     }
+    return `${seconds}s`;
   };
-
-  // Filter hierarchical data based on search term and status
-  const filteredData = hierarchicalData.filter(branch => {
-    const matchesSearch = !searchTerm || 
-      branch.target_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      branch.target_serial.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      branch.actions.some(action => 
-        action.action_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        action.command_executed?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    
-    const matchesStatus = statusFilter === 'all' || 
-      branch.actions.some(action => action.status === statusFilter);
-    
-    return matchesSearch && matchesStatus;
-  });
 
   return (
     <Dialog 
       open={open} 
       onClose={onClose} 
-      maxWidth="lg" 
+      maxWidth="xl" 
       fullWidth
       PaperProps={{
         sx: { height: '90vh', maxHeight: '90vh' }
       }}
     >
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Tooltip title="Back to Execution History">
-              <Button
-                startIcon={<ArrowBackIcon />}
-                onClick={onClose}
-                variant="outlined"
-                size="small"
-                sx={{ textTransform: 'none' }}
-              >
-                Back
-              </Button>
-            </Tooltip>
-            <Box>
-              <Typography variant="h6" component="div">
-                Execution Logs: {executionSerial}
-              </Typography>
-              {jobName && (
-                <Typography variant="body2" color="text.secondary">
-                  Job: {jobName}
-                </Typography>
-              )}
-            </Box>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Tooltip title="Expand All (Ctrl+E)">
-              <IconButton onClick={expandAll} disabled={loading || hierarchicalData.length === 0}>
-                <ExpandAllIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Collapse All (Ctrl+Shift+E)">
-              <IconButton onClick={collapseAll} disabled={loading || hierarchicalData.length === 0}>
-                <CollapseAllIcon />
-              </IconButton>
-            </Tooltip>
-            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
-            <Tooltip title="Refresh">
-              <IconButton onClick={handleRefresh} disabled={loading}>
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-            <IconButton onClick={onClose}>
-              <CloseIcon />
+      <DialogTitle className="page-header" sx={{ 
+        padding: '16px 24px !important',
+        paddingBottom: '16px !important'
+      }}>
+        <Typography variant="h4" className="page-title">
+          Execution Logs - {executionSerial}
+        </Typography>
+        {jobName && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Job: {jobName}
+          </Typography>
+        )}
+        <Box className="page-actions">
+          <Tooltip title={expandedRows.size === paginatedActions.length ? "Collapse All" : "Expand All"}>
+            <IconButton 
+              onClick={() => {
+                if (expandedRows.size === paginatedActions.length) {
+                  // Collapse all
+                  setExpandedRows(new Set());
+                } else {
+                  // Expand all
+                  const allIds = new Set(paginatedActions.map(action => action.id));
+                  setExpandedRows(allIds);
+                }
+              }}
+              disabled={loading || paginatedActions.length === 0}
+              size="small"
+            >
+              {expandedRows.size === paginatedActions.length ? 
+                <ArrowUpIcon fontSize="small" /> : 
+                <ArrowDownIcon fontSize="small" />
+              }
             </IconButton>
-          </Box>
+          </Tooltip>
+          <Tooltip title="Refresh">
+            <IconButton 
+              onClick={handleRefresh} 
+              disabled={loading}
+              size="small"
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Close">
+            <IconButton 
+              onClick={onClose}
+              size="small"
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Box>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ p: 0 }}>
-        {/* Controls */}
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Search actions, commands, targets..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={statusFilter}
-                  label="Status"
-                  onChange={handleStatusFilterChange}
-                >
-                  <MenuItem value="all">All Statuses</MenuItem>
-                  <MenuItem value="completed">Completed</MenuItem>
-                  <MenuItem value="failed">Failed</MenuItem>
-                  <MenuItem value="running">Running</MenuItem>
-                  <MenuItem value="scheduled">Scheduled</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={3}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {stats && (
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip 
-                      size="small" 
-                      label={`${stats.total_actions} actions`} 
-                      color="primary" 
-                      variant="outlined" 
-                    />
-                    <Chip 
-                      size="small" 
-                      label={`${stats.branches} branches`} 
-                      color="info" 
-                      variant="outlined" 
-                    />
-                  </Box>
-                )}
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                  Ctrl+E: Expand All • Ctrl+Shift+E: Collapse All
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
-        </Box>
+      <DialogContent sx={{ px: 3, pb: 3, pt: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {loading && <LinearProgress />}
+        
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
-        {/* Content */}
-        <Box sx={{ p: 2 }}>
-          {loading && <LinearProgress sx={{ mb: 2 }} />}
-          
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
 
-          {!loading && !error && filteredData.length === 0 && (
-            <Alert severity="info">
-              No execution logs found for {executionSerial}
-            </Alert>
-          )}
 
-          {!loading && !error && filteredData.length > 0 && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <strong>💡 Tip:</strong> Expand branches to see action results. Actions with output/errors will auto-expand and show "Output" or "Error" badges.
-            </Alert>
-          )}
-
-          {!loading && !error && filteredData.length > 0 && (
-            <Box>
-              {filteredData.map((branch) => (
-                <Accordion 
-                  key={branch.id}
-                  expanded={expandedBranches.has(branch.id)}
-                  onChange={() => toggleBranch(branch.id)}
-                  sx={{ mb: 1 }}
-                >
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                      <ComputerIcon color="primary" />
-                      <Box sx={{ flexGrow: 1 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                          {branch.target_name}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {branch.target_serial} • {branch.target_type}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Chip
-                          size="small"
-                          label={`${branch.stats.completed}/${branch.stats.total}`}
-                          color={branch.stats.failed > 0 ? 'error' : 'success'}
-                          variant="outlined"
-                        />
-                        {branch.stats.running > 0 && (
-                          <Chip
-                            size="small"
-                            label={`${branch.stats.running} running`}
-                            color="primary"
-                            variant="outlined"
-                          />
-                        )}
-                      </Box>
-                    </Box>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Box sx={{ pl: 2 }}>
-                      {branch.actions.map((action, index) => (
-                        <Accordion
-                          key={action.id}
-                          expanded={expandedActions.has(action.id)}
-                          onChange={() => toggleAction(action.id)}
-                          sx={{ mb: 1, boxShadow: 1 }}
-                        >
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                              <Chip
-                                icon={getStatusIcon(action.status)}
-                                label={action.status}
-                                color={getStatusColor(action.status)}
-                                size="small"
-                              />
-                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                {index + 1}. {action.action_name}
-                              </Typography>
-                              <Box sx={{ flexGrow: 1 }} />
-                              {/* Result indicators */}
-                              {action.result_output && (
-                                <Chip
-                                  label="Output"
-                                  size="small"
-                                  color="success"
-                                  variant="outlined"
-                                  sx={{ fontSize: '0.7rem', height: '20px' }}
-                                />
-                              )}
-                              {action.result_error && (
-                                <Chip
-                                  label="Error"
-                                  size="small"
-                                  color="error"
-                                  variant="outlined"
-                                  sx={{ fontSize: '0.7rem', height: '20px', ml: 0.5 }}
-                                />
-                              )}
-                              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                                {formatDuration(action.execution_time_ms)}
-                              </Typography>
-                              {action.exit_code !== null && (
-                                <Chip
-                                  label={`Exit: ${action.exit_code}`}
-                                  color={action.exit_code === 0 ? 'success' : 'error'}
-                                  size="small"
-                                  variant="outlined"
-                                />
-                              )}
-                            </Box>
-                          </AccordionSummary>
-                          <AccordionDetails>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              {/* Action Details */}
+        {/* Standard Datatable */}
+        <StandardDataTable
+          currentPage={page}
+          pageSize={pageSize}
+          totalItems={actions.length}
+          onPageChange={setPage}
+          onPageSizeChange={handlePageSizeChange}
+          itemLabel="actions"
+          className="execution-log-table"
+        >
+            <TableHead>
+              <TableRow className="standard-header-row">
+                <TableCell className="standard-table-header" sx={{ width: 40 }}>
+                  {/* Expand column */}
+                </TableCell>
+                <TableCell className="standard-table-header" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>IP Address</TableCell>
+                <TableCell className="standard-table-header" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>Target</TableCell>
+                <TableCell className="standard-table-header" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>Action</TableCell>
+                <TableCell className="standard-table-header" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>Status</TableCell>
+                <TableCell className="standard-table-header" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>Started</TableCell>
+                <TableCell className="standard-table-header" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>Duration</TableCell>
+                <TableCell className="standard-table-header" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>Exit Code</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {!loading && paginatedActions.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                    <Typography color="text.secondary">
+                      No execution logs found.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+              
+              {paginatedActions.map((action) => (
+                <React.Fragment key={action.id}>
+                  <TableRow 
+                    hover 
+                    className="standard-table-row"
+                    sx={{ 
+                      '&:hover': { backgroundColor: 'action.hover' },
+                      borderLeft: 3,
+                      borderLeftColor: `${getStatusColor(action.status)}.main`
+                    }}
+                  >
+                    <TableCell className="standard-table-cell">
+                      <IconButton
+                        size="small"
+                        onClick={() => toggleRowExpansion(action.id)}
+                        disabled={!action.result_output && !action.result_error && !action.command_executed}
+                      >
+                        {expandedRows.has(action.id) ? <ArrowUpIcon /> : <ArrowDownIcon />}
+                      </IconButton>
+                    </TableCell>
+                    <TableCell className="standard-table-cell">
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {action.target_ip || action.ip_address || action.host || 'N/A'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell className="standard-table-cell">
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                        {action.target_name}
+                      </Typography>
+                    </TableCell>
+                    <TableCell className="standard-table-cell">
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                        {action.action_name}
+                      </Typography>
+                    </TableCell>
+                    <TableCell className="standard-table-cell">
+                      <Chip 
+                        label={action.status} 
+                        size="small" 
+                        color={getStatusColor(action.status)} 
+                        icon={getStatusIcon(action.status)}
+                      />
+                    </TableCell>
+                    <TableCell className="standard-table-cell">
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {action.started_at ? formatLocalDateTime(action.started_at) : 'N/A'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell className="standard-table-cell">
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {formatDuration(action.started_at, action.finished_at)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell className="standard-table-cell">
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {(action.exit_code !== null && action.exit_code !== undefined) ? action.exit_code : 
+                         (action.return_code !== null && action.return_code !== undefined) ? action.return_code : 'N/A'}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                  
+                  {/* Expandable row for results */}
+                  <TableRow>
+                    <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
+                      <Collapse in={expandedRows.has(action.id)} timeout="auto" unmountOnExit>
+                        <Box sx={{ p: 2, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            
+                            {/* Command */}
+                            {action.command_executed && (
                               <Box>
-                                <Typography variant="body2" color="text.secondary" gutterBottom>
-                                  <strong>Started:</strong> {formatLocalDateTime(action.started_at)}
-                                  {action.completed_at && (
-                                    <>
-                                      {' • '}
-                                      <strong>Completed:</strong> {formatLocalDateTime(action.completed_at)}
-                                    </>
-                                  )}
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                                  Command:
                                 </Typography>
-                              </Box>
-
-                              {/* Command */}
-                              {action.command_executed && (
-                                <Box>
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                                    Command:
+                                <Paper variant="outlined" sx={{ p: 1, bgcolor: 'background.paper' }}>
+                                  <Typography 
+                                    variant="body2" 
+                                    component="pre" 
+                                    sx={{ 
+                                      fontFamily: 'monospace', 
+                                      margin: 0,
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-all'
+                                    }}
+                                  >
+                                    {action.command_executed}
                                   </Typography>
-                                  <Paper variant="outlined" sx={{ p: 1, bgcolor: 'grey.50', overflow: 'hidden' }}>
-                                    <Typography 
-                                      variant="body2" 
-                                      component="pre" 
-                                      sx={{ 
-                                        fontFamily: 'monospace', 
-                                        margin: 0,
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-all',
-                                        overflowWrap: 'break-word'
-                                      }}
-                                    >
-                                      {action.command_executed}
-                                    </Typography>
-                                  </Paper>
+                                </Paper>
+                              </Box>
+                            )}
+                            
+                            {/* Output */}
+                            {action.result_output && (
+                              <Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'success.main' }}>
+                                    Output:
+                                  </Typography>
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => copyToClipboard(action.result_output)}
+                                    title="Copy output"
+                                  >
+                                    <CopyIcon fontSize="small" />
+                                  </IconButton>
                                 </Box>
-                              )}
-                              
-                              {/* Output */}
-                              {action.result_output && (
-                                <Box>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'success.main' }}>
-                                      Output:
-                                    </Typography>
-                                    <IconButton 
-                                      size="small" 
-                                      onClick={() => copyToClipboard(action.result_output)}
-                                      title="Copy output"
-                                    >
-                                      <CopyIcon fontSize="small" />
-                                    </IconButton>
-                                  </Box>
-                                  <Paper 
-                                    variant="outlined" 
+                                <Paper 
+                                  variant="outlined" 
+                                  sx={{ 
+                                    p: 2, 
+                                    bgcolor: 'background.paper',
+                                    maxHeight: '300px',
+                                    overflow: 'auto'
+                                  }}
+                                >
+                                  <Typography 
+                                    variant="body2" 
+                                    component="pre" 
                                     sx={{ 
-                                      p: 2, 
-                                      bgcolor: 'background.paper',
-                                      maxHeight: '200px',
-                                      overflow: 'auto'
+                                      fontFamily: 'monospace',
+                                      fontSize: '0.875rem',
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-word',
+                                      margin: 0
                                     }}
                                   >
-                                    <Typography 
-                                      variant="body2" 
-                                      component="pre" 
-                                      sx={{ 
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.875rem',
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-word',
-                                        margin: 0
-                                      }}
-                                    >
-                                      {action.result_output}
-                                    </Typography>
-                                  </Paper>
-                                </Box>
-                              )}
+                                    {action.result_output}
+                                  </Typography>
+                                </Paper>
+                              </Box>
+                            )}
 
-                              {/* Error */}
-                              {action.result_error && (
-                                <Box>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'error.main' }}>
-                                      Error:
-                                    </Typography>
-                                    <IconButton 
-                                      size="small" 
-                                      onClick={() => copyToClipboard(action.result_error)}
-                                      title="Copy error"
-                                    >
-                                      <CopyIcon fontSize="small" />
-                                    </IconButton>
-                                  </Box>
-                                  <Paper 
-                                    variant="outlined" 
+                            {/* Error */}
+                            {action.result_error && (
+                              <Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'error.main' }}>
+                                    Error:
+                                  </Typography>
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => copyToClipboard(action.result_error)}
+                                    title="Copy error"
+                                  >
+                                    <CopyIcon fontSize="small" />
+                                  </IconButton>
+                                </Box>
+                                <Paper 
+                                  variant="outlined" 
+                                  sx={{ 
+                                    p: 2, 
+                                    bgcolor: 'error.light',
+                                    maxHeight: '300px',
+                                    overflow: 'auto'
+                                  }}
+                                >
+                                  <Typography 
+                                    variant="body2" 
+                                    component="pre" 
                                     sx={{ 
-                                      p: 2, 
-                                      bgcolor: 'error.50',
-                                      maxHeight: '200px',
-                                      overflow: 'auto'
+                                      fontFamily: 'monospace',
+                                      fontSize: '0.875rem',
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-word',
+                                      margin: 0,
+                                      color: 'error.main'
                                     }}
                                   >
-                                    <Typography 
-                                      variant="body2" 
-                                      component="pre" 
-                                      sx={{ 
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.875rem',
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-word',
-                                        margin: 0,
-                                        color: 'error.main'
-                                      }}
-                                    >
-                                      {action.result_error}
-                                    </Typography>
-                                  </Paper>
-                                </Box>
-                              )}
-                            </Box>
-                          </AccordionDetails>
-                        </Accordion>
-                      ))}
-                    </Box>
-                  </AccordionDetails>
-                </Accordion>
+                                    {action.result_error}
+                                  </Typography>
+                                </Paper>
+                              </Box>
+                            )}
+                          </Box>
+                        </Box>
+                      </Collapse>
+                    </TableCell>
+                  </TableRow>
+                </React.Fragment>
               ))}
-            </Box>
-          )}
-
-          {lastUpdated && (
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-              Last updated: {formatLocalDateTime(lastUpdated)}
-            </Typography>
-          )}
-        </Box>
+            </TableBody>
+        </StandardDataTable>
       </DialogContent>
-
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
     </Dialog>
   );
 };

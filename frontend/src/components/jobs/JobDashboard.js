@@ -16,6 +16,8 @@ import {
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   Pause as PauseIcon,
+  Autorenew as AutorenewIcon,
+  PauseCircleOutline as PauseAutoIcon,
 } from '@mui/icons-material';
 
 import JobCreateModal from './JobCreateModal';
@@ -32,6 +34,9 @@ const JobDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [workerStats, setWorkerStats] = useState({ active: 0, total: 0 });
+    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [refreshInterval, setRefreshInterval] = useState(30000); // 30 seconds
+    const [countdown, setCountdown] = useState(30); // Countdown in seconds
     const { token } = useAuth();
 
     useEffect(() => {
@@ -45,9 +50,9 @@ const JobDashboard = () => {
         try {
             setLoading(true);
             
-            const response = await authService.api.get('/v2/jobs/');
-            setJobs(response.data.jobs || []);
-            addAlert(`Loaded ${response.data.jobs?.length || 0} jobs successfully`, 'success', 3000);
+            const response = await authService.api.get('/v3/jobs/');
+            setJobs(response.data || []);
+            addAlert(`Loaded ${response.data?.length || 0} jobs successfully`, 'success', 3000);
         } catch (error) {
             console.error('Error fetching jobs:', error);
             if (error.response?.status === 401) {
@@ -73,10 +78,59 @@ const JobDashboard = () => {
         }
     };
 
+    // Gentle refresh - only updates changed data without showing loading state
+    const gentleRefresh = async () => {
+        try {
+            const response = await authService.api.get('/v3/jobs/');
+            const newJobs = response.data || [];
+            
+            // Only update if data has actually changed
+            setJobs(prevJobs => {
+                const hasChanges = JSON.stringify(prevJobs) !== JSON.stringify(newJobs);
+                return hasChanges ? newJobs : prevJobs;
+            });
+            
+            // Also refresh worker stats silently
+            fetchWorkerStats();
+        } catch (error) {
+            // Silently fail for gentle refresh - don't show error alerts
+            console.log('Gentle refresh failed:', error.message);
+        }
+    };
+
+    // Auto-refresh effect
+    useEffect(() => {
+        if (!autoRefresh || !token) {
+            setCountdown(0);
+            return;
+        }
+
+        // Reset countdown when autoRefresh starts
+        setCountdown(Math.floor(refreshInterval / 1000));
+
+        const refreshIntervalId = setInterval(() => {
+            gentleRefresh();
+            setCountdown(Math.floor(refreshInterval / 1000)); // Reset countdown after refresh
+        }, refreshInterval);
+
+        return () => clearInterval(refreshIntervalId);
+    }, [autoRefresh, refreshInterval, token]);
+
+    // Countdown effect - runs every second when autoRefresh is enabled
+    useEffect(() => {
+        if (!autoRefresh || countdown <= 0) return;
+
+        const countdownIntervalId = setInterval(() => {
+            setCountdown(prev => Math.max(0, prev - 1));
+        }, 1000);
+
+        return () => clearInterval(countdownIntervalId);
+    }, [autoRefresh, countdown]);
+
     const handleCreateJob = async (jobData, scheduleConfig) => {
         try {
             // First create the job
-            const response = await authService.api.post('/v2/jobs/', jobData);
+            const response = await authService.api.post('/v3/jobs/', jobData);
             const newJob = response.data;
             setJobs(prevJobs => [newJob, ...prevJobs]);
             
@@ -112,7 +166,7 @@ const JobDashboard = () => {
 
     const handleExecuteJob = async (jobId, targetIds = null) => {
         try {
-            const response = await authService.api.post(`/v2/jobs/${jobId}/execute`, { target_ids: targetIds });
+            const response = await authService.api.post(`/v3/jobs/${jobId}/execute`, { target_ids: targetIds });
             fetchJobs(); // Refresh job list
             addAlert(`Job execution started successfully`, 'success', 3000);
             return true;
@@ -124,7 +178,8 @@ const JobDashboard = () => {
 
     const handleScheduleJob = async (jobId, scheduledAt) => {
         try {
-            const response = await authService.api.post(`/v2/jobs/${jobId}/schedule`, { scheduled_at: scheduledAt });
+            // Note: Scheduling moved to separate schedule service in v3
+            const response = await authService.api.post(`/v3/jobs/${jobId}/schedule`, { scheduled_at: scheduledAt });
             fetchJobs(); // Refresh job list
             return true;
         } catch (error) {
@@ -138,41 +193,70 @@ const JobDashboard = () => {
     const handleUpdateJob = async (updatedJobData) => {
         console.log('🔄 JobDashboard: Starting job update...', updatedJobData);
         try {
+            // Separate basic job data from schedule data
             const jobData = {
                 name: updatedJobData.name,
                 description: updatedJobData.description,
-                job_type: updatedJobData.job_type,
                 actions: updatedJobData.actions,
                 target_ids: updatedJobData.target_ids,
-                scheduled_at: updatedJobData.scheduled_at,
-                schedule_type: updatedJobData.schedule_type,
-                recurring_type: updatedJobData.recurring_type,
-                interval: updatedJobData.interval,
-                time: updatedJobData.time,
-                days_of_week: updatedJobData.days_of_week,
-                day_of_month: updatedJobData.day_of_month,
-                max_executions: updatedJobData.max_executions,
-                cron_expression: updatedJobData.cron_expression,
-                priority: updatedJobData.priority,
-                timeout: updatedJobData.timeout,
-                retry_count: updatedJobData.retry_count
+                scheduled_at: updatedJobData.scheduled_at
             };
             console.log('📤 JobDashboard: Sending job data:', jobData);
-            console.log('🎯 JobDashboard: API endpoint:', `/v2/jobs/${updatedJobData.id || updatedJobData.job_id}`);
             
-            const response = await authService.api.put(`/v2/jobs/${updatedJobData.id || updatedJobData.job_id}`, jobData);
-            console.log('✅ JobDashboard: API response status:', response.status);
-            console.log('✅ JobDashboard: API response data:', response.data);
+            // Update the basic job first
+            const response = await authService.api.put(`/v3/jobs/${updatedJobData.id || updatedJobData.job_id}`, jobData);
+            console.log('✅ JobDashboard: Job API response:', response.status, response.data);
             
             if (response.status === 200 && response.data) {
                 const updatedJob = response.data;
+                
+                // Handle schedule configuration if present
+                const scheduleConfig = updatedJobData.schedule_config;
+                if (scheduleConfig && scheduleConfig.scheduleType !== 'once') {
+                    try {
+                        console.log('📅 JobDashboard: Processing schedule config:', scheduleConfig);
+                        
+                        // First, disable any existing schedules for this job
+                        try {
+                            const existingSchedulesResponse = await authService.api.get(`/api/schedules?job_id=${updatedJob.id}`);
+                            if (existingSchedulesResponse.data && existingSchedulesResponse.data.length > 0) {
+                                for (const existingSchedule of existingSchedulesResponse.data) {
+                                    await authService.api.delete(`/api/schedules/${existingSchedule.id}`);
+                                    console.log('🗑️ JobDashboard: Deleted existing schedule:', existingSchedule.id);
+                                }
+                            }
+                        } catch (deleteError) {
+                            console.log('⚠️ JobDashboard: No existing schedules to delete or delete failed:', deleteError.message);
+                        }
+                        
+                        // Create new schedule
+                        const scheduleData = {
+                            job_id: updatedJob.id,
+                            schedule_type: scheduleConfig.scheduleType,
+                            enabled: true,
+                            timezone: scheduleConfig.timezone || 'UTC',
+                            description: `Updated schedule for job: ${updatedJob.name}`,
+                            ...scheduleConfig
+                        };
+                        
+                        await authService.api.post('/api/schedules', scheduleData);
+                        console.log('✅ JobDashboard: Schedule created/updated successfully');
+                        addAlert(`Job "${updatedJob.name}" updated with ${scheduleConfig.scheduleType} schedule!`, 'success');
+                    } catch (scheduleError) {
+                        console.error('❌ JobDashboard: Failed to update schedule:', scheduleError);
+                        addAlert(`Job "${updatedJob.name}" updated, but schedule setup failed. You can configure it later.`, 'warning', 5000);
+                    }
+                } else {
+                    // No recurring schedule, just basic job update
+                    addAlert('Job updated successfully!', 'success');
+                }
+                
                 // Update the job in the local state
                 setJobs(prevJobs => 
                     prevJobs.map(job => 
                         job.id === updatedJob.id ? updatedJob : job
                     )
                 );
-                addAlert('Job updated successfully!', 'success');
                 fetchJobs(); // Refresh the job list to get latest data
                 console.log('✅ JobDashboard: Job update completed successfully');
                 return true;
@@ -203,7 +287,7 @@ const JobDashboard = () => {
 
     const handleDeleteJob = async (jobId) => {
         try {
-            await authService.api.delete(`/v2/jobs/${jobId}`);
+            await authService.api.delete(`/v3/jobs/${jobId}`);
             // Remove the job from the local state
             setJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
             addAlert(`Job deleted successfully`, 'success', 3000);
@@ -238,11 +322,49 @@ const JobDashboard = () => {
                     Job Management
                 </Typography>
                 <div className="page-actions">
-                    <Tooltip title="Refresh jobs">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Tooltip title={autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh"}>
+                            <IconButton 
+                                className="btn-icon" 
+                                onClick={() => setAutoRefresh(!autoRefresh)}
+                                size="small"
+                                sx={{ 
+                                    color: autoRefresh ? 'success.main' : 'text.secondary',
+                                    '&:hover': { 
+                                        backgroundColor: autoRefresh ? 'success.light' : 'action.hover',
+                                        opacity: 0.1
+                                    }
+                                }}
+                            >
+                                {autoRefresh ? <AutorenewIcon fontSize="small" /> : <PauseAutoIcon fontSize="small" />}
+                            </IconButton>
+                        </Tooltip>
+                        {autoRefresh && countdown > 0 && (
+                            <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                    color: 'success.main',
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.75rem',
+                                    minWidth: '20px',
+                                    textAlign: 'center'
+                                }}
+                            >
+                                {countdown}s
+                            </Typography>
+                        )}
+                    </Box>
+                    <Tooltip title="Manual refresh">
                         <span>
                             <IconButton 
                                 className="btn-icon" 
-                                onClick={() => { fetchJobs(); fetchWorkerStats(); }} 
+                                onClick={() => { 
+                                    fetchJobs(); 
+                                    fetchWorkerStats(); 
+                                    if (autoRefresh) {
+                                        setCountdown(Math.floor(refreshInterval / 1000)); // Reset countdown on manual refresh
+                                    }
+                                }} 
                                 disabled={loading}
                                 size="small"
                             >

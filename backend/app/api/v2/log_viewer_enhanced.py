@@ -23,8 +23,7 @@ from app.database.database import get_db
 from app.core.security import verify_token
 from app.core.logging import get_structured_logger, RequestLogger
 from app.models.job_models import (
-    Job, JobExecution, JobExecutionBranch, JobActionResult, 
-    JobExecutionLog, ExecutionStatus, LogLevel, LogPhase
+    Job, JobExecution, JobExecutionResult, ExecutionStatus, JobAction
 )
 from app.models.universal_target_models import UniversalTarget
 
@@ -179,8 +178,8 @@ def build_search_query(db: Session, pattern: Optional[str] = None, status_filter
     """Build search query for action results"""
     
     # Base query with all necessary joins
-    query = db.query(JobActionResult).join(
-        JobExecutionBranch, JobActionResult.branch_id == JobExecutionBranch.id
+    query = db.query(JobExecutionResult).join(
+        JobExecution, JobExecutionResult.execution_id == JobExecution.id
     ).join(
         JobExecution, JobExecutionBranch.job_execution_id == JobExecution.id
     ).join(

@@ -23,12 +23,7 @@ import {
   LinearProgress,
   CircularProgress,
   Divider,
-  TextField,
-  InputAdornment,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
+
   Grid,
   Alert,
   List,
@@ -41,13 +36,12 @@ import {
   Close as CloseIcon,
   Refresh as RefreshIcon,
   ExpandMore as ExpandMoreIcon,
-  Search as SearchIcon,
+
   PlayArrow as PlayArrowIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   Schedule as ScheduleIcon,
   Cancel as CancelIcon,
-  Timeline as TimelineIcon,
   Assessment as AssessmentIcon,
   ExpandLess,
   ExpandMore,
@@ -59,6 +53,7 @@ import { useNavigate } from 'react-router-dom';
 import { formatLocalDateTime } from '../../utils/timeUtils';
 import { getExecutionActionResults, formatExecutionTime, getActionStatusColor } from '../../services/jobService';
 import ExecutionLogViewerModal from './ExecutionLogViewerModal';
+import StandardDataTable from '../common/StandardDataTable';
 
 import './JobExecutionHistoryModal.css';
 
@@ -69,9 +64,11 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
   const navigate = useNavigate();
   const [executions, setExecutions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
   const [executionDetailsModal, setExecutionDetailsModal] = useState({ open: false, execution: null });
   const [selectedExecution, setSelectedExecution] = useState(null);
   const [expandedBranches, setExpandedBranches] = useState({});
@@ -88,7 +85,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/v2/jobs/${job.id}/executions`, {
+      const response = await fetch(`/api/v3/jobs/${job.id}/executions`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -97,7 +94,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
 
       if (response.ok) {
         const data = await response.json();
-        const executionsArray = data.executions || [];
+        const executionsArray = Array.isArray(data) ? data : (data.executions || []);
         setExecutions(executionsArray);
         if (executionsArray.length > 0 && !selectedExecution) {
           setSelectedExecution(executionsArray[0]);
@@ -184,26 +181,9 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
     return execution.status;
   };
 
+  // Show all executions, sorted by newest first
   const filteredExecutions = executions
-    .filter(execution => {
-      const matchesSearch = execution.execution_number.toString().includes(searchTerm) ||
-                           (execution.execution_serial && execution.execution_serial.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                           formatDate(execution.started_at).toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || getOverallStatus(execution) === statusFilter;
-      return matchesSearch && matchesStatus;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'newest':
-          return new Date(b.started_at) - new Date(a.started_at);
-        case 'oldest':
-          return new Date(a.started_at) - new Date(b.started_at);
-        case 'status':
-          return getOverallStatus(a).localeCompare(getOverallStatus(b));
-        default:
-          return 0;
-      }
-    });
+    .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
 
   const handleBranchToggle = (branchId) => {
     setExpandedBranches(prev => ({
@@ -616,35 +596,31 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
 
     return (
       <Box>
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small" className="compact-table">
+        <TableContainer component={Paper} variant="outlined" className="standard-table-container">
+          <Table size="small">
             <TableHead>
-              <TableRow className="table-header-row">
-                <TableCell className="table-header-cell">Execution ID</TableCell>
-                <TableCell className="table-header-cell">Target</TableCell>
-                <TableCell className="table-header-cell">Status</TableCell>
-                <TableCell className="table-header-cell">OS</TableCell>
-                <TableCell className="table-header-cell">Started</TableCell>
-                <TableCell className="table-header-cell">Duration</TableCell>
-                <TableCell className="table-header-cell">Exit Code</TableCell>
-                <TableCell className="table-header-cell" align="center">Actions</TableCell>
+              <TableRow className="standard-header-row">
+                <TableCell className="standard-table-header">Execution ID</TableCell>
+                <TableCell className="standard-table-header">Target</TableCell>
+                <TableCell className="standard-table-header">Status</TableCell>
+                <TableCell className="standard-table-header">OS</TableCell>
+                <TableCell className="standard-table-header">Started</TableCell>
+                <TableCell className="standard-table-header">Duration</TableCell>
+                <TableCell className="standard-table-header">Exit Code</TableCell>
+                <TableCell className="standard-table-header" align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {branches.map((branch) => (
                 <React.Fragment key={branch.id}>
-                  <TableRow className="table-row" hover>
-                    <TableCell className="table-cell">
-                      <Typography variant="body2" className="execution-serial" sx={{ fontWeight: 600, fontSize: '0.7rem' }}>
-                        {branch.branch_serial || `${branch.branch_id}`}
-                      </Typography>
+                  <TableRow hover>
+                    <TableCell className="standard-table-cell">
+                      {branch.branch_serial || `${branch.branch_id}`}
                     </TableCell>
-                    <TableCell className="table-cell">
-                      <Typography variant="body2" className="target-info" sx={{ fontWeight: 600, fontSize: '0.7rem' }}>
-                        {branch.ip_address ? `${branch.ip_address} - ${branch.target_name || `Target ${branch.target_id}`}` : (branch.target_name || `Target ${branch.target_id}`)}
-                      </Typography>
+                    <TableCell className="standard-table-cell">
+                      {branch.ip_address ? `${branch.ip_address} - ${branch.target_name || `Target ${branch.target_id}`}` : (branch.target_name || `Target ${branch.target_id}`)}
                     </TableCell>
-                    <TableCell className="table-cell">
+                    <TableCell className="standard-table-cell">
                       <Chip 
                         label={branch.status} 
                         color={getStatusColor(branch.status)}
@@ -652,27 +628,19 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
                         sx={{ fontSize: '0.65rem', height: '20px' }}
                       />
                     </TableCell>
-                    <TableCell className="table-cell">
-                      <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
-                        {branch.os_type || 'N/A'}
-                      </Typography>
+                    <TableCell className="standard-table-cell">
+                      {branch.os_type || 'N/A'}
                     </TableCell>
-                    <TableCell className="table-cell">
-                      <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
-                        {formatDate(branch.started_at)}
-                      </Typography>
+                    <TableCell className="standard-table-cell">
+                      {formatDate(branch.started_at)}
                     </TableCell>
-                    <TableCell className="table-cell">
-                      <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
-                        {formatDuration(branch.started_at, branch.completed_at)}
-                      </Typography>
+                    <TableCell className="standard-table-cell">
+                      {formatDuration(branch.started_at, branch.completed_at)}
                     </TableCell>
-                    <TableCell className="table-cell">
-                      <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
-                        {branch.exit_code !== null ? branch.exit_code : 'N/A'}
-                      </Typography>
+                    <TableCell className="standard-table-cell">
+                      {branch.exit_code !== null ? branch.exit_code : 'N/A'}
                     </TableCell>
-                    <TableCell className="table-cell" align="center">
+                    <TableCell className="standard-table-cell" align="center">
                       <IconButton 
                         className="btn-icon"
                         size="small" 
@@ -701,113 +669,112 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
     );
   };
 
-  const ExecutionList = () => (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {filteredExecutions.length === 0 ? (
+  // Calculate paginated executions
+  const totalExecutions = filteredExecutions.length;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedExecutions = filteredExecutions.slice(startIndex, endIndex);
+
+  const ExecutionList = () => {
+    if (filteredExecutions.length === 0) {
+      return (
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'center', 
           alignItems: 'center', 
           flex: 1,
-          textAlign: 'center'
+          textAlign: 'center',
+          p: 4
         }}>
           <Box>
             <AssessmentIcon sx={{ fontSize: '4rem', color: 'text.disabled', mb: 2 }} />
             <Typography variant="h6" color="text.secondary" gutterBottom>
-              {executions.length === 0 ? 'No Executions Found' : 'No Matching Executions'}
+              No Executions Found
             </Typography>
             <Typography variant="body2" color="text.disabled">
-              {executions.length === 0 
-                ? 'This job has not been executed yet.' 
-                : 'Try adjusting your search or filter criteria.'}
+              This job has not been executed yet.
             </Typography>
           </Box>
         </Box>
-      ) : (
-        <TableContainer 
-          component={Paper} 
-          variant="outlined"
-          sx={{ 
-            flex: 1,
-            borderRadius: 2,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            border: '1px solid',
-            borderColor: 'divider'
-          }}
-        >
-          <Table size="small" className="compact-table" stickyHeader>
-            <TableHead>
-              <TableRow className="table-header-row">
-                <TableCell className="table-header-cell">Execution</TableCell>
-                <TableCell className="table-header-cell">Status</TableCell>
-                <TableCell className="table-header-cell">Started</TableCell>
-                <TableCell className="table-header-cell">Duration</TableCell>
-                <TableCell className="table-header-cell">Targets</TableCell>
-                <TableCell className="table-header-cell" align="center">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredExecutions.map((execution) => {
-                const overallStatus = getOverallStatus(execution);
-                const duration = formatDuration(execution.started_at, execution.completed_at);
-                
-                return (
-                  <TableRow 
-                    key={execution.id} 
-                    className="table-row"
-                    sx={{ cursor: 'pointer' }}
+      );
+    }
+
+    return (
+      <StandardDataTable
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalItems={totalExecutions}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+        itemLabel="executions"
+      >
+        <TableHead>
+          <TableRow className="standard-header-row">
+            <TableCell className="standard-table-header">Execution</TableCell>
+            <TableCell className="standard-table-header">Status</TableCell>
+            <TableCell className="standard-table-header">Started</TableCell>
+            <TableCell className="standard-table-header">Duration</TableCell>
+            <TableCell className="standard-table-header">Targets</TableCell>
+            <TableCell className="standard-table-header" align="center">Actions</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {paginatedExecutions.map((execution) => {
+            const overallStatus = getOverallStatus(execution);
+            // Use duration_seconds from API if available, otherwise calculate from timestamps
+            const duration = execution.duration_seconds 
+              ? `${execution.duration_seconds.toFixed(2)}s`
+              : formatDuration(execution.started_at, execution.completed_at);
+            
+            // Show target count only, not names
+            const targetsDisplay = execution.target_names && execution.target_names.length > 0
+              ? execution.target_names.length
+              : (execution.total_targets || execution.branches?.length || 0);
+            
+            return (
+              <TableRow 
+                key={execution.id} 
+                hover
+                sx={{ cursor: 'pointer' }}
+              >
+                <TableCell className="standard-table-cell">
+                  {execution.execution_serial || `#${execution.execution_number}`}
+                </TableCell>
+                <TableCell className="standard-table-cell">
+                  <Chip 
+                    label={overallStatus} 
+                    color={getStatusColor(overallStatus)}
+                    size="small"
+                    sx={{ fontSize: '0.65rem', height: '20px' }}
+                  />
+                </TableCell>
+                <TableCell className="standard-table-cell">
+                  {formatDate(execution.started_at)}
+                </TableCell>
+                <TableCell className="standard-table-cell">
+                  {duration}
+                </TableCell>
+                <TableCell className="standard-table-cell">
+                  {targetsDisplay}
+                </TableCell>
+                <TableCell className="standard-table-cell" align="center">
+                  <IconButton
+                    className="btn-icon"
+                    size="small"
+                    onClick={() => openInLogViewer(`${job.id}_${execution.execution_number}`)}
+                    title="View in Log Viewer"
+                    sx={{ color: 'secondary.main' }}
                   >
-                    <TableCell className="table-cell">
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {getStatusIcon(overallStatus)}
-                        <Typography variant="body2" className="execution-serial" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
-                          {execution.execution_serial || `#${execution.execution_number}`}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell className="table-cell">
-                      <Chip 
-                        label={overallStatus} 
-                        color={getStatusColor(overallStatus)}
-                        size="small"
-                        sx={{ fontSize: '0.65rem', height: '20px' }}
-                      />
-                    </TableCell>
-                    <TableCell className="table-cell">
-                      <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
-                        {formatDate(execution.started_at)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell className="table-cell">
-                      <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
-                        {duration}
-                      </Typography>
-                    </TableCell>
-                    <TableCell className="table-cell">
-                      <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>
-                        {execution.branches?.length || 0}
-                      </Typography>
-                    </TableCell>
-                    <TableCell className="table-cell" align="center">
-                      <IconButton
-                        className="btn-icon"
-                        size="small"
-                        onClick={() => openInLogViewer(execution.execution_serial)}
-                        title="View in Log Viewer"
-                        sx={{ color: 'secondary.main' }}
-                      >
-                        <FindInPageIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </Box>
-  );
+                    <FindInPageIcon fontSize="small" />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </StandardDataTable>
+    );
+  };
 
   const ExecutionDetailsModal = ({ open, onClose, execution }) => {
     const [expandedBranches, setExpandedBranches] = useState({});
@@ -929,190 +896,54 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
           height: '85vh',
           maxHeight: '900px',
           borderRadius: 2,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.12)'
+          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          m: 2  // Add margin around the modal
         }
       }}
     >
-      <DialogTitle sx={{ 
-        p: 3, 
-        pb: 2,
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        bgcolor: 'grey.50'
+      <DialogTitle className="page-header" sx={{ 
+        padding: '16px 24px !important',  // Override the CSS !important rule
+        paddingBottom: '16px !important'
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{ 
-              p: 1.5, 
-              borderRadius: 2, 
-              bgcolor: 'primary.50',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <TimelineIcon sx={{ color: 'primary.main', fontSize: '1.5rem' }} />
-            </Box>
-            <Box>
-              <Typography variant="h5" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.5 }}>
-                Execution History
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                {job.name}
-              </Typography>
-            </Box>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Tooltip title="Refresh executions">
-              <IconButton 
-                onClick={fetchExecutions} 
-                disabled={loading}
-                sx={{ 
-                  bgcolor: 'background.paper',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  '&:hover': { bgcolor: 'grey.100' }
-                }}
-              >
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Close">
-              <IconButton 
-                onClick={onClose}
-                sx={{ 
-                  bgcolor: 'background.paper',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  '&:hover': { bgcolor: 'grey.100' }
-                }}
-              >
-                <CloseIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
+        <Typography variant="h4" className="page-title">
+          Execution History - {job.name}
+        </Typography>
+        <Box className="page-actions">
+          <Tooltip title="Refresh executions">
+            <IconButton 
+              onClick={fetchExecutions} 
+              disabled={loading}
+              size="small"
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Close">
+            <IconButton 
+              onClick={onClose}
+              size="small"
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Box>
       </DialogTitle>
 
-      <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Search and Filter Controls */}
-        <Box sx={{ 
-          p: 3, 
-          pb: 2,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          bgcolor: 'background.paper'
-        }}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-            <TextField
-              size="small"
-              placeholder="Search executions..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ 
-                flexGrow: 1, 
-                minWidth: '300px',
-                '& .MuiOutlinedInput-root': {
-                  bgcolor: 'background.paper',
-                  '&:hover': {
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'primary.main',
-                    },
-                  },
-                }
-              }}
-            />
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <InputLabel>Status Filter</InputLabel>
-              <Select
-                value={statusFilter}
-                label="Status Filter"
-                onChange={(e) => setStatusFilter(e.target.value)}
-                sx={{ bgcolor: 'background.paper' }}
-              >
-                <MenuItem value="all">All Status</MenuItem>
-                <MenuItem value="scheduled">Scheduled</MenuItem>
-                <MenuItem value="running">Running</MenuItem>
-                <MenuItem value="completed">Completed</MenuItem>
-                <MenuItem value="failed">Failed</MenuItem>
-                <MenuItem value="cancelled">Cancelled</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <InputLabel>Sort By</InputLabel>
-              <Select
-                value={sortBy}
-                label="Sort By"
-                onChange={(e) => setSortBy(e.target.value)}
-                sx={{ bgcolor: 'background.paper' }}
-              >
-                <MenuItem value="newest">Newest First</MenuItem>
-                <MenuItem value="oldest">Oldest First</MenuItem>
-                <MenuItem value="status">By Status</MenuItem>
-              </Select>
-            </FormControl>
+      <DialogContent sx={{ px: 3, pb: 3, pt: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Loading executions...
+            </Typography>
           </Box>
-        </Box>
-
-        {/* Main Content Area */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Loading executions...
-              </Typography>
-            </Box>
-          ) : (
-            <>
-              {/* Results Header */}
-              <Box sx={{ 
-                px: 3, 
-                py: 2, 
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-                bgcolor: 'grey.25'
-              }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                  {filteredExecutions.length} Execution{filteredExecutions.length !== 1 ? 's' : ''}
-                </Typography>
-              </Box>
-              
-              {/* Executions Table */}
-              <Box sx={{ flex: 1, overflow: 'hidden', p: 3 }}>
-                <ExecutionList />
-              </Box>
-            </>
-          )}
-        </Box>
+        ) : (
+          <Box className="table-content-area" sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <ExecutionList />
+          </Box>
+        )}
       </DialogContent>
 
-      <DialogActions sx={{ 
-        px: 3, 
-        py: 2,
-        borderTop: '1px solid',
-        borderColor: 'divider',
-        bgcolor: 'grey.50'
-      }}>
-        <Button 
-          onClick={onClose} 
-          variant="contained"
-          sx={{ 
-            px: 3,
-            py: 1,
-            borderRadius: 2,
-            textTransform: 'none',
-            fontWeight: 600
-          }}
-        >
-          Close
-        </Button>
-      </DialogActions>
+
     </Dialog>
 
     {/* Execution Details Modal */}

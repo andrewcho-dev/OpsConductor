@@ -103,8 +103,8 @@ class JobCreateRequest(BaseModel):
 class JobResponse(BaseModel):
     """Enhanced response model for job information"""
     id: int = Field(..., description="Job ID")
-    job_uuid: Optional[str] = Field(None, description="Permanent job UUID")
-    job_serial: Optional[str] = Field(None, description="Human-readable job serial (e.g., J20250000001)")
+    # job_uuid removed - simplified system uses only IDs
+    # job_serial removed - simplified system uses only IDs
     name: str = Field(..., description="Job name")
     job_type: str = Field(..., description="Job type")
     description: Optional[str] = Field(None, description="Job description")

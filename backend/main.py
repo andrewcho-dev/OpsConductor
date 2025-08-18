@@ -143,10 +143,15 @@ from app.api.v2 import (
     system_enhanced as system_v2,
     discovery_enhanced as discovery_v2,
     notifications_enhanced as notifications_v2,
-    log_viewer_enhanced as log_viewer_v2
+    log_viewer_simple as log_viewer_v2
 )
 from app.api.v1 import (
     celery_monitor
+)
+from app.api import system_info
+from app.api.v3 import (
+    jobs_simple as jobs_v3,
+    schedules as schedules_v3
 )
 # Include enhanced V2 routers (routers already have their own prefixes)
 app.include_router(websocket_v2.router, tags=["WebSocket API v2"])
@@ -161,8 +166,15 @@ app.include_router(discovery_v2.router, tags=["Network Discovery v2"])
 app.include_router(notifications_v2.router, tags=["Notifications & Alerts v2"])
 app.include_router(log_viewer_v2.router, tags=["Log Viewer v2"])
 
+# Include V3 simplified APIs
+app.include_router(jobs_v3.router, tags=["Jobs v3 - Simplified"])
+app.include_router(schedules_v3.router, tags=["Schedules v3"])
+
 # Include V1 compatibility routers
 app.include_router(celery_monitor.router, tags=["Celery Monitoring"])
+
+# Include system info router for frontend compatibility
+app.include_router(system_info.router, tags=["System Info"])
 
 @app.get("/")
 async def root():

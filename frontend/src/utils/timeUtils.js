@@ -265,11 +265,20 @@ export const isDateTimeInFuture = (localDateTimeValue) => {
 
 /**
  * Get timezone display name from system info
+ * @param {string} token - Authentication token (optional)
  * @returns {Promise<string>} - Timezone display name
  */
-export const getSystemTimezone = async () => {
+export const getSystemTimezone = async (token = null) => {
   try {
-    const response = await fetch('/api/system/info');
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const response = await fetch('/api/system/info', { headers });
     if (response.ok) {
       const data = await response.json();
       return data.timezone?.display_name || 'Local Time';

@@ -1,5 +1,5 @@
 /**
- * Jobs API endpoints using RTK Query
+ * Jobs API endpoints using RTK Query - SIMPLIFIED v3
  */
 import { apiSlice } from './apiSlice';
 
@@ -8,173 +8,82 @@ export const jobsApi = apiSlice.injectEndpoints({
     // Get jobs with pagination and filtering
     getJobs: builder.query({
       query: ({ 
-        page = 1, 
-        pageSize = 25, 
-        status = '', 
-        type = '', 
-        search = '',
-        dateRange = null 
+        skip = 0, 
+        limit = 100
       } = {}) => ({
-        url: '/api/v2/jobs/',
+        url: '/api/v3/jobs/',
         params: {
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
-          ...(status && { status }),
-          ...(type && { job_type: type }),
-          ...(search && { search }),
-          ...(dateRange && { 
-            start_date: dateRange.start,
-            end_date: dateRange.end 
-          }),
+          skip,
+          limit
         },
       }),
       providesTags: ['Job'],
-      transformResponse: (response) => response.data || response,
     }),
 
     // Get job by ID
     getJobById: builder.query({
-      query: (id) => `/api/v2/jobs/${id}`,
+      query: (id) => `/api/v3/jobs/${id}`,
       providesTags: (result, error, id) => [{ type: 'Job', id }],
-      transformResponse: (response) => response.data || response,
     }),
 
     // Get job executions
     getJobExecutions: builder.query({
-      query: ({ 
-        jobId = null, 
-        page = 1, 
-        pageSize = 25, 
-        status = '' 
-      } = {}) => ({
-        url: '/api/v2/jobs/executions/',
-        params: {
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
-          ...(jobId && { job_id: jobId }),
-          ...(status && { status }),
-        },
+      query: (jobId) => `/api/v3/jobs/${jobId}/executions`,
+      providesTags: (result, error, jobId) => [{ type: 'JobExecution', jobId }],
+    }),
+
+    // Get execution results
+    getExecutionResults: builder.query({
+      query: ({ jobId, executionNumber, targetId }) => ({
+        url: `/api/v3/jobs/${jobId}/executions/${executionNumber}/results`,
+        params: targetId ? { target_id: targetId } : {}
       }),
-      providesTags: ['JobExecution'],
-      transformResponse: (response) => response.data || response,
+      providesTags: (result, error, { jobId, executionNumber }) => [
+        { type: 'ExecutionResult', jobId, executionNumber }
+      ],
     }),
 
-    // Get job execution by ID
-    getJobExecutionById: builder.query({
-      query: (id) => `/api/v2/jobs/executions/${id}`,
-      providesTags: (result, error, id) => [{ type: 'JobExecution', id }],
-      transformResponse: (response) => response.data || response,
+    // Get target results
+    getTargetResults: builder.query({
+      query: ({ targetId, limit = 100 }) => ({
+        url: `/api/v3/jobs/targets/${targetId}/results`,
+        params: { limit }
+      }),
+      providesTags: (result, error, { targetId }) => [
+        { type: 'TargetResult', targetId }
+      ],
     }),
 
-    // Create new job
+    // Create job
     createJob: builder.mutation({
       query: (jobData) => ({
-        url: '/api/v2/jobs/',
+        url: '/api/v3/jobs/',
         method: 'POST',
         body: jobData,
       }),
       invalidatesTags: ['Job'],
-      transformResponse: (response) => response.data || response,
-    }),
-
-    // Update job
-    updateJob: builder.mutation({
-      query: ({ id, ...jobData }) => ({
-        url: `/api/v2/jobs/${id}`,
-        method: 'PUT',
-        body: jobData,
-      }),
-      invalidatesTags: (result, error, { id }) => [
-        { type: 'Job', id },
-        'Job',
-      ],
-      transformResponse: (response) => response.data || response,
     }),
 
     // Execute job
     executeJob: builder.mutation({
-      query: ({ id, params = {} }) => ({
-        url: `/api/v2/jobs/${id}/execute`,
+      query: ({ id, target_ids }) => ({
+        url: `/api/v3/jobs/${id}/execute`,
         method: 'POST',
-        body: { execution_params: params },
+        body: { target_ids },
       }),
-      invalidatesTags: ['JobExecution'],
-      transformResponse: (response) => response.data || response,
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Job', id },
+        { type: 'JobExecution', jobId: id }
+      ],
     }),
 
     // Delete job
     deleteJob: builder.mutation({
       query: (id) => ({
-        url: `/api/v2/jobs/${id}`,
+        url: `/api/v3/jobs/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Job'],
-    }),
-
-    // Get job statistics
-    getJobStatistics: builder.query({
-      query: () => '/api/v2/jobs/statistics',
-      providesTags: ['JobStats'],
-      transformResponse: (response) => response.data || response,
-    }),
-
-    // Get running executions
-    getRunningExecutions: builder.query({
-      query: () => '/api/v2/jobs/executions/running',
-      providesTags: ['JobExecution'],
-      transformResponse: (response) => response.data || response,
-    }),
-
-    // Stop job execution
-    stopJobExecution: builder.mutation({
-      query: (executionId) => ({
-        url: `/api/v2/jobs/executions/${executionId}/stop`,
-        method: 'POST',
-      }),
-      invalidatesTags: (result, error, executionId) => [
-        { type: 'JobExecution', id: executionId },
-        'JobExecution',
-      ],
-    }),
-
-    // Get job execution logs
-    getJobExecutionLogs: builder.query({
-      query: ({ executionId, page = 1, pageSize = 100 }) => ({
-        url: `/api/v2/jobs/executions/${executionId}/logs`,
-        params: {
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
-        },
-      }),
-      providesTags: (result, error, { executionId }) => [
-        { type: 'JobExecutionLogs', id: executionId }
-      ],
-      transformResponse: (response) => response.data || response,
-    }),
-
-    // Schedule job
-    scheduleJob: builder.mutation({
-      query: ({ id, scheduleConfig }) => ({
-        url: `/api/v2/jobs/${id}/schedule`,
-        method: 'POST',
-        body: { schedule_config: scheduleConfig },
-      }),
-      invalidatesTags: (result, error, { id }) => [
-        { type: 'Job', id },
-        'Job',
-      ],
-    }),
-
-    // Unschedule job
-    unscheduleJob: builder.mutation({
-      query: (id) => ({
-        url: `/api/v2/jobs/${id}/unschedule`,
-        method: 'POST',
-      }),
-      invalidatesTags: (result, error, id) => [
-        { type: 'Job', id },
-        'Job',
-      ],
     }),
   }),
 });
@@ -183,15 +92,9 @@ export const {
   useGetJobsQuery,
   useGetJobByIdQuery,
   useGetJobExecutionsQuery,
-  useGetJobExecutionByIdQuery,
+  useGetExecutionResultsQuery,
+  useGetTargetResultsQuery,
   useCreateJobMutation,
-  useUpdateJobMutation,
   useExecuteJobMutation,
   useDeleteJobMutation,
-  useGetJobStatisticsQuery,
-  useGetRunningExecutionsQuery,
-  useStopJobExecutionMutation,
-  useGetJobExecutionLogsQuery,
-  useScheduleJobMutation,
-  useUnscheduleJobMutation,
 } = jobsApi;

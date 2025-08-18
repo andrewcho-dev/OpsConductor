@@ -86,7 +86,12 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
 
   const fetchSystemTimezone = async () => {
     try {
-      const response = await fetch('/api/system/info');
+      const response = await fetch('/api/system/info', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setSystemTimezone(data.timezone?.display_name || 'UTC');

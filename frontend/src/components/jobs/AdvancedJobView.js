@@ -242,7 +242,6 @@ const AdvancedJobView = ({ jobs, onRefresh, stats, celeryStats }) => {
               />
             </TableCell>
             <TableCell>Name</TableCell>
-            <TableCell>Type</TableCell>
             <TableCell>Status</TableCell>
             <TableCell>Priority</TableCell>
             <TableCell>Queue</TableCell>
@@ -276,9 +275,6 @@ const AdvancedJobView = ({ jobs, onRefresh, stats, celeryStats }) => {
                     ID: {job.id}
                   </Typography>
                 </Box>
-              </TableCell>
-              <TableCell>
-                <Chip label={job.job_type} size="small" variant="outlined" />
               </TableCell>
               <TableCell>
                 <Chip 

@@ -341,10 +341,32 @@ const JobList = ({
         setShowEditModal(true);
     }, []);
 
-    const handleEditSubmit = useCallback(async (updatedJob) => {
-        await onUpdateJob(updatedJob);
-        setShowEditModal(false);
-        setJobToEdit(null);
+    const handleEditSubmit = useCallback(async (jobId, submitData, scheduleConfig) => {
+        // Combine the data in the format expected by onUpdateJob
+        const updatedJob = {
+            id: jobId,
+            ...submitData,
+            // Add schedule config fields if present
+            ...(scheduleConfig && {
+                schedule_config: scheduleConfig,
+                schedule_type: scheduleConfig.scheduleType || 'once',
+                recurring_type: scheduleConfig.recurringType || 'daily',
+                interval: scheduleConfig.interval || 1,
+                time: scheduleConfig.time || '09:00',
+                days_of_week: scheduleConfig.daysOfWeek || [],
+                day_of_month: scheduleConfig.dayOfMonth || 1,
+                max_executions: scheduleConfig.maxExecutions || null,
+                cron_expression: scheduleConfig.cronExpression || ''
+            })
+        };
+        
+        const success = await onUpdateJob(updatedJob);
+        if (success !== false) {
+            setShowEditModal(false);
+            setJobToEdit(null);
+            return true;
+        }
+        return false;
     }, [onUpdateJob]);
 
     const handleDeleteClick = useCallback(async (job, e) => {
@@ -379,7 +401,7 @@ const JobList = ({
 
         for (const job of jobsToTerminate) {
             try {
-                const response = await fetch(`/api/v2/jobs/${job.id}/terminate`, {
+                const response = await fetch(`/api/v3/jobs/${job.id}/terminate`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -403,7 +425,6 @@ const JobList = ({
         setTerminateLoading(false);
         setShowTerminateDialog(false);
         setJobsToTerminate([]);
-        setSelectedJobs(new Set());
 
         // Show results
         if (successCount > 0) {
@@ -482,7 +503,6 @@ const JobList = ({
                         <TableRow sx={{ backgroundColor: 'grey.100' }}>
                             <SortableHeader field="name" className="standard-table-header">Job Name</SortableHeader>
                             <SortableHeader field="job_serial" className="standard-table-header">Job Serial</SortableHeader>
-                            <SortableHeader field="job_type" className="standard-table-header">Type</SortableHeader>
                             <SortableHeader field="status" className="standard-table-header">Status</SortableHeader>
                             <SortableHeader field="created_at" className="standard-table-header">Created</SortableHeader>
                             <SortableHeader field="last_execution" className="standard-table-header">Last Run</SortableHeader>
@@ -509,42 +529,6 @@ const JobList = ({
                                     onChange={(e) => handleColumnFilterChange('job_serial', e.target.value)}
                                     className="standard-filter-input"
                                 />
-                            </TableCell>
-                            <TableCell className="standard-filter-cell">
-                                <FormControl size="small" fullWidth>
-                                    <Select
-                                        value={columnFilters.job_type || ''}
-                                        onChange={(e) => handleColumnFilterChange('job_type', e.target.value)}
-                                        displayEmpty
-                                        sx={{
-                                            '& .MuiSelect-select': {
-                                                padding: '2px 4px',
-                                                fontFamily: 'monospace',
-                                                fontSize: '0.75rem'
-                                            }
-                                        }}
-                                        MenuProps={{
-                                            PaperProps: {
-                                                sx: {
-                                                    '& .MuiMenuItem-root': {
-                                                        fontFamily: 'monospace',
-                                                        fontSize: '0.75rem',
-                                                        minHeight: 'auto',
-                                                        padding: '4px 8px'
-                                                    }
-                                                }
-                                            }
-                                        }}
-                                    >
-                                        <MenuItem value="">
-                                            <em>All Types</em>
-                                        </MenuItem>
-                                        <MenuItem value="command">Command</MenuItem>
-                                        <MenuItem value="script">Script</MenuItem>
-                                        <MenuItem value="file_transfer">File Transfer</MenuItem>
-                                        <MenuItem value="composite">Composite</MenuItem>
-                                    </Select>
-                                </FormControl>
                             </TableCell>
                             <TableCell className="standard-filter-cell">
                                 <FormControl size="small" fullWidth>
@@ -652,11 +636,6 @@ const JobList = ({
                                         {/* Job Serial */}
                                         <TableCell className="standard-table-cell">
                                             {job.job_serial || `ID-${job.id}`}
-                                        </TableCell>
-                                        
-                                        {/* Type */}
-                                        <TableCell className="standard-table-cell">
-                                            {getJobTypeLabel(job.job_type)}
                                         </TableCell>
                                         
                                         {/* Status */}

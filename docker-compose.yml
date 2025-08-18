@@ -122,14 +122,14 @@ services:
       retries: 3
 
   # =============================================================================
-  # CELERY WORKER - Background Tasks
+  # CELERY WORKER - Background Tasks (SIMPLIFIED)
   # =============================================================================
   celery-worker:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
     container_name: opsconductor-celery-worker
-    command: celery -A app.celery worker --loglevel=info
+    command: celery -A app.celery worker --loglevel=info --concurrency=2
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
@@ -140,15 +140,8 @@ services:
       - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
       - ENVIRONMENT=${ENVIRONMENT}
       - CORS_ORIGINS=${CORS_ORIGINS}
-      - MAX_CONCURRENT_TARGETS=${MAX_CONCURRENT_TARGETS}
-      - CONNECTION_TIMEOUT=${CONNECTION_TIMEOUT}
-      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT}
-      - ENABLE_RETRY=${ENABLE_RETRY}
-      - MAX_RETRIES=${MAX_RETRIES}
-      - RETRY_BACKOFF_BASE=${RETRY_BACKOFF_BASE}
     volumes:
       - ./backend:/app
-      - ./backend/uploads:/app/uploads
     networks:
       - opsconductor-network
     depends_on:
@@ -158,14 +151,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.celery inspect ping -d celery@$$HOSTNAME"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "celery -A app.celery inspect ping"]
+      interval: 60s
+      timeout: 30s
       retries: 3
-      start_period: 30s
+      start_period: 60s
 
   # =============================================================================
-  # CELERY SCHEDULER - Scheduled Tasks
+  # CELERY SCHEDULER - Scheduled Tasks (SIMPLIFIED)
   # =============================================================================
   scheduler:
     build:
@@ -183,12 +176,6 @@ services:
       - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
       - ENVIRONMENT=${ENVIRONMENT}
       - CORS_ORIGINS=${CORS_ORIGINS}
-      - MAX_CONCURRENT_TARGETS=${MAX_CONCURRENT_TARGETS}
-      - CONNECTION_TIMEOUT=${CONNECTION_TIMEOUT}
-      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT}
-      - ENABLE_RETRY=${ENABLE_RETRY}
-      - MAX_RETRIES=${MAX_RETRIES}
-      - RETRY_BACKOFF_BASE=${RETRY_BACKOFF_BASE}
     volumes:
       - ./backend:/app
     networks:
@@ -200,11 +187,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "test -f /proc/1/cmdline && grep -q celery /proc/1/cmdline"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "test -f /proc/1/cmdline && grep -q beat /proc/1/cmdline"]
+      interval: 60s
+      timeout: 30s
       retries: 3
-      start_period: 30s
+      start_period: 60s
 
   # =============================================================================
   # NGINX REVERSE PROXY - HTTPS ONLY & SSL TERMINATION

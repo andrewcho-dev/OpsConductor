@@ -1117,8 +1117,6 @@ class JobsManagementService:
         
         enhanced_data = {
             "id": job.id,
-            "job_uuid": str(getattr(job, "job_uuid", None)) if getattr(job, "job_uuid", None) else None,
-            "job_serial": getattr(job, "job_serial", None),
             "name": job.name,
             "job_type": job.job_type,
             "description": getattr(job, "description", ""),
