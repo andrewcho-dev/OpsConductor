@@ -294,23 +294,161 @@ class JobExecutionService:
         branch: JobExecutionBranch,
         action_order: int
     ) -> Dict[str, Any]:
-        """Execute a single action via SSH"""
-        # Support both 'command' and 'script_content' parameters
-        command = action.action_parameters.get("command") or action.action_parameters.get("script_content", "")
+        """Execute a single action via SSH - handles ALL action types"""
         started_at = datetime.now(timezone.utc)
+        action_type = action.action_type.value if hasattr(action.action_type, 'value') else str(action.action_type)
         
-        # Log action execution
+        try:
+            # Route to appropriate handler based on action type
+            if action_type == "command":
+                return await self._execute_command_action(ssh, action, execution, branch, action_order, started_at)
+            elif action_type == "script":
+                return await self._execute_script_action(ssh, action, execution, branch, action_order, started_at)
+            elif action_type == "file_transfer":
+                return await self._execute_file_transfer_action(ssh, action, execution, branch, action_order, started_at)
+            else:
+                # Handle unknown action types gracefully
+                return await self._execute_unknown_action(ssh, action, execution, branch, action_order, started_at)
+                
+        except Exception as e:
+            completed_at = datetime.now(timezone.utc)
+            execution_time_ms = int((completed_at - started_at).total_seconds() * 1000)
+            
+            return {
+                "action_id": action.id,
+                "action_order": action_order,
+                "action_name": action.action_name,
+                "action_type": action_type,
+                "command": str(action.action_parameters),
+                "output": "",
+                "error": f"Action execution failed: {str(e)}",
+                "exit_code": -1,
+                "success": False,
+                "started_at": started_at,
+                "completed_at": completed_at,
+                "execution_time_ms": execution_time_ms
+            }
+
+    async def _execute_command_action(
+        self,
+        ssh: paramiko.SSHClient,
+        action: Any,
+        execution: JobExecution,
+        branch: JobExecutionBranch,
+        action_order: int,
+        started_at: datetime
+    ) -> Dict[str, Any]:
+        """Execute a command action"""
+        command = action.action_parameters.get("command", "")
+        
         await self._log_execution_event(
             execution.id, branch.id, LogPhase.ACTION_EXECUTION,
             LogLevel.INFO, LogCategory.COMMAND_EXECUTION,
-            f"Executing action {action_order}: {command[:50]}..."
+            f"Executing command {action_order}: {command[:50]}..."
+        )
+
+        stdin, stdout, stderr = ssh.exec_command(command, timeout=300)
+        output = stdout.read().decode('utf-8')
+        error = stderr.read().decode('utf-8')
+        exit_code = stdout.channel.recv_exit_status()
+        completed_at = datetime.now(timezone.utc)
+        execution_time_ms = int((completed_at - started_at).total_seconds() * 1000)
+
+        return {
+            "action_id": action.id,
+            "action_order": action_order,
+            "action_name": action.action_name,
+            "action_type": "command",
+            "command": command,
+            "output": output,
+            "error": error,
+            "exit_code": exit_code,
+            "success": exit_code == 0,
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "execution_time_ms": execution_time_ms
+        }
+
+    async def _execute_script_action(
+        self,
+        ssh: paramiko.SSHClient,
+        action: Any,
+        execution: JobExecution,
+        branch: JobExecutionBranch,
+        action_order: int,
+        started_at: datetime
+    ) -> Dict[str, Any]:
+        """Execute a script action"""
+        script_content = action.action_parameters.get("script_content", "")
+        
+        await self._log_execution_event(
+            execution.id, branch.id, LogPhase.ACTION_EXECUTION,
+            LogLevel.INFO, LogCategory.COMMAND_EXECUTION,
+            f"Executing script {action_order}: {script_content[:50]}..."
+        )
+
+        stdin, stdout, stderr = ssh.exec_command(script_content, timeout=300)
+        output = stdout.read().decode('utf-8')
+        error = stderr.read().decode('utf-8')
+        exit_code = stdout.channel.recv_exit_status()
+        completed_at = datetime.now(timezone.utc)
+        execution_time_ms = int((completed_at - started_at).total_seconds() * 1000)
+
+        return {
+            "action_id": action.id,
+            "action_order": action_order,
+            "action_name": action.action_name,
+            "action_type": "script",
+            "command": script_content,
+            "output": output,
+            "error": error,
+            "exit_code": exit_code,
+            "success": exit_code == 0,
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "execution_time_ms": execution_time_ms
+        }
+
+    async def _execute_file_transfer_action(
+        self,
+        ssh: paramiko.SSHClient,
+        action: Any,
+        execution: JobExecution,
+        branch: JobExecutionBranch,
+        action_order: int,
+        started_at: datetime
+    ) -> Dict[str, Any]:
+        """Execute a file transfer action"""
+        params = action.action_parameters
+        operation = params.get("operation", "unknown")
+        source_path = params.get("source_path", "")
+        destination_path = params.get("destination_path", "")
+        content = params.get("content", "")
+        
+        await self._log_execution_event(
+            execution.id, branch.id, LogPhase.ACTION_EXECUTION,
+            LogLevel.INFO, LogCategory.FILE_TRANSFER,
+            f"Executing file transfer {action_order}: {operation} operation"
         )
 
         try:
-            # Execute command
+            if operation == "create":
+                # Create file with content
+                command = f'mkdir -p "$(dirname "{destination_path}")" && echo "{content}" > "{destination_path}" && echo "File created: {destination_path}" && ls -la "{destination_path}"'
+            elif operation == "copy":
+                # Copy file/directory
+                command = f'mkdir -p "$(dirname "{destination_path}")" && cp -r "{source_path}" "{destination_path}" && echo "Copied: {source_path} -> {destination_path}" && ls -la "{destination_path}"'
+            elif operation == "move":
+                # Move file/directory
+                command = f'mkdir -p "$(dirname "{destination_path}")" && mv "{source_path}" "{destination_path}" && echo "Moved: {source_path} -> {destination_path}" && ls -la "{destination_path}"'
+            elif operation == "delete":
+                # Delete file/directory
+                command = f'rm -rf "{source_path}" && echo "Deleted: {source_path}"'
+            else:
+                # Unknown operation - still try to execute if there's a command
+                command = params.get("command", f"echo 'Unknown file operation: {operation}'")
+
             stdin, stdout, stderr = ssh.exec_command(command, timeout=300)
-            
-            # Get output
             output = stdout.read().decode('utf-8')
             error = stderr.read().decode('utf-8')
             exit_code = stdout.channel.recv_exit_status()
@@ -321,7 +459,7 @@ class JobExecutionService:
                 "action_id": action.id,
                 "action_order": action_order,
                 "action_name": action.action_name,
-                "action_type": action.action_type.value,
+                "action_type": "file_transfer",
                 "command": command,
                 "output": output,
                 "error": error,
@@ -340,10 +478,77 @@ class JobExecutionService:
                 "action_id": action.id,
                 "action_order": action_order,
                 "action_name": action.action_name,
-                "action_type": action.action_type.value,
+                "action_type": "file_transfer",
+                "command": f"File transfer operation: {operation}",
+                "output": "",
+                "error": f"File transfer failed: {str(e)}",
+                "exit_code": -1,
+                "success": False,
+                "started_at": started_at,
+                "completed_at": completed_at,
+                "execution_time_ms": execution_time_ms
+            }
+
+    async def _execute_unknown_action(
+        self,
+        ssh: paramiko.SSHClient,
+        action: Any,
+        execution: JobExecution,
+        branch: JobExecutionBranch,
+        action_order: int,
+        started_at: datetime
+    ) -> Dict[str, Any]:
+        """Handle unknown action types gracefully"""
+        action_type = action.action_type.value if hasattr(action.action_type, 'value') else str(action.action_type)
+        params = action.action_parameters
+        
+        await self._log_execution_event(
+            execution.id, branch.id, LogPhase.ACTION_EXECUTION,
+            LogLevel.WARNING, LogCategory.COMMAND_EXECUTION,
+            f"Unknown action type {action_order}: {action_type}"
+        )
+
+        # Try to find any executable content in the parameters
+        command = (params.get("command") or 
+                  params.get("script_content") or 
+                  params.get("script") or
+                  f"echo 'Executed unknown action type: {action_type}'")
+
+        try:
+            stdin, stdout, stderr = ssh.exec_command(command, timeout=300)
+            output = stdout.read().decode('utf-8')
+            error = stderr.read().decode('utf-8')
+            exit_code = stdout.channel.recv_exit_status()
+            completed_at = datetime.now(timezone.utc)
+            execution_time_ms = int((completed_at - started_at).total_seconds() * 1000)
+
+            return {
+                "action_id": action.id,
+                "action_order": action_order,
+                "action_name": action.action_name,
+                "action_type": action_type,
+                "command": command,
+                "output": output + f"\n[WARNING: Unknown action type '{action_type}' - executed as command]",
+                "error": error,
+                "exit_code": exit_code,
+                "success": exit_code == 0,
+                "started_at": started_at,
+                "completed_at": completed_at,
+                "execution_time_ms": execution_time_ms
+            }
+
+        except Exception as e:
+            completed_at = datetime.now(timezone.utc)
+            execution_time_ms = int((completed_at - started_at).total_seconds() * 1000)
+            
+            return {
+                "action_id": action.id,
+                "action_order": action_order,
+                "action_name": action.action_name,
+                "action_type": action_type,
                 "command": command,
                 "output": "",
-                "error": str(e),
+                "error": f"Unknown action type execution failed: {str(e)}",
                 "exit_code": -1,
                 "success": False,
                 "started_at": started_at,
@@ -413,21 +618,59 @@ class JobExecutionService:
                 f"WinRM connection established to {ip_address}"
             )
 
-            # Execute each action
+            # Execute each action - HANDLE ALL ACTION TYPES
             for i, action in enumerate(job_actions, 1):
-                if action.action_type == "command":
-                    command = action.action_parameters.get("command", "")
-                    started_at = datetime.now(timezone.utc)
+                started_at = datetime.now(timezone.utc)
+                action_type = action.action_type.value if hasattr(action.action_type, 'value') else str(action.action_type)
+                
+                try:
+                    # Determine command based on action type
+                    if action_type == "command":
+                        command = action.action_parameters.get("command", "")
+                    elif action_type == "script":
+                        command = action.action_parameters.get("script_content", "")
+                    elif action_type == "file_transfer":
+                        # Handle file transfer operations for Windows
+                        params = action.action_parameters
+                        operation = params.get("operation", "unknown")
+                        source_path = params.get("source_path", "")
+                        destination_path = params.get("destination_path", "")
+                        content = params.get("content", "")
+                        
+                        if operation == "create":
+                            # Create file with content (Windows PowerShell)
+                            command = f'New-Item -Path "{destination_path}" -ItemType File -Force; Set-Content -Path "{destination_path}" -Value "{content}"; Get-Item "{destination_path}"'
+                        elif operation == "copy":
+                            # Copy file/directory (Windows)
+                            command = f'Copy-Item -Path "{source_path}" -Destination "{destination_path}" -Recurse -Force; Get-Item "{destination_path}"'
+                        elif operation == "move":
+                            # Move file/directory (Windows)
+                            command = f'Move-Item -Path "{source_path}" -Destination "{destination_path}" -Force; Get-Item "{destination_path}"'
+                        elif operation == "delete":
+                            # Delete file/directory (Windows)
+                            command = f'Remove-Item -Path "{source_path}" -Recurse -Force; Write-Output "Deleted: {source_path}"'
+                        else:
+                            command = params.get("command", f'Write-Output "Unknown file operation: {operation}"')
+                    else:
+                        # Handle unknown action types - try to find executable content
+                        command = (action.action_parameters.get("command") or 
+                                  action.action_parameters.get("script_content") or 
+                                  action.action_parameters.get("script") or
+                                  f'Write-Output "Executed unknown action type: {action_type}"')
                     
-                    # Log command execution
+                    # Log action execution
                     await self._log_execution_event(
                         execution.id, branch.id, LogPhase.ACTION_EXECUTION,
                         LogLevel.INFO, LogCategory.COMMAND_EXECUTION,
-                        f"Executing action {i}: {command}"
+                        f"Executing {action_type} action {i}: {command[:50]}..."
                     )
                     
-                    # Execute command via WinRM
-                    response = session.run_cmd(command)
+                    # Execute command via WinRM (use PowerShell for better compatibility)
+                    if action_type == "file_transfer" or "New-Item" in command or "Copy-Item" in command:
+                        response = session.run_ps(command)  # Use PowerShell for file operations
+                    else:
+                        response = session.run_cmd(command)  # Use CMD for simple commands
+                        
                     completed_at = datetime.now(timezone.utc)
                     execution_time_ms = int((completed_at - started_at).total_seconds() * 1000)
                     
@@ -435,7 +678,7 @@ class JobExecutionService:
                         "action_id": action.id,
                         "action_order": i,
                         "action_name": action.action_name,
-                        "action_type": action.action_type.value,
+                        "action_type": action_type,
                         "command": command,
                         "output": response.std_out.decode('utf-8', errors='ignore') if response.std_out else "",
                         "error": response.std_err.decode('utf-8', errors='ignore') if response.std_err else "",
@@ -446,11 +689,36 @@ class JobExecutionService:
                         "execution_time_ms": execution_time_ms
                     })
                     
-                    # Log command completion
+                    # Log action completion
                     await self._log_execution_event(
                         execution.id, branch.id, LogPhase.COMPLETION,
                         LogLevel.INFO, LogCategory.COMMAND_EXECUTION,
-                        f"Command completed with exit code: {response.status_code}"
+                        f"{action_type.title()} action completed with exit code: {response.status_code}"
+                    )
+                    
+                except Exception as action_error:
+                    completed_at = datetime.now(timezone.utc)
+                    execution_time_ms = int((completed_at - started_at).total_seconds() * 1000)
+                    
+                    results.append({
+                        "action_id": action.id,
+                        "action_order": i,
+                        "action_name": action.action_name,
+                        "action_type": action_type,
+                        "command": command if 'command' in locals() else str(action.action_parameters),
+                        "output": "",
+                        "error": f"{action_type.title()} action failed: {str(action_error)}",
+                        "exit_code": -1,
+                        "success": False,
+                        "started_at": started_at,
+                        "completed_at": completed_at,
+                        "execution_time_ms": execution_time_ms
+                    })
+                    
+                    await self._log_execution_event(
+                        execution.id, branch.id, LogPhase.ACTION_EXECUTION,
+                        LogLevel.ERROR, LogCategory.COMMAND_EXECUTION,
+                        f"{action_type.title()} action failed: {str(action_error)}"
                     )
 
         except Exception as e:
