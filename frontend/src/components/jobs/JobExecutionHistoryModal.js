@@ -58,6 +58,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { formatLocalDateTime } from '../../utils/timeUtils';
 import { getExecutionActionResults, formatExecutionTime, getActionStatusColor } from '../../services/jobService';
+import ExecutionLogViewerModal from './ExecutionLogViewerModal';
 
 import './JobExecutionHistoryModal.css';
 
@@ -77,6 +78,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
   const [testExpanded, setTestExpanded] = useState(false);
   const [actionResults, setActionResults] = useState({});
   const [loadingActionResults, setLoadingActionResults] = useState({});
+  const [logViewerModal, setLogViewerModal] = useState({ open: false, executionSerial: null });
 
   
   console.log('Current expandedBranches state in render:', expandedBranches);
@@ -215,9 +217,8 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
   };
 
   const openInLogViewer = (serial) => {
-    // Close current modal and navigate to Log Viewer with the serial pre-filled
-    onClose();
-    navigate('/log-viewer', { state: { searchPattern: serial } });
+    // Open the execution log viewer modal instead of navigating away
+    setLogViewerModal({ open: true, executionSerial: serial });
   };
 
   const fetchActionResults = async (executionId) => {
@@ -1121,6 +1122,13 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
       execution={executionDetailsModal.execution}
     />
 
+    {/* Execution Log Viewer Modal */}
+    <ExecutionLogViewerModal
+      open={logViewerModal.open}
+      onClose={() => setLogViewerModal({ open: false, executionSerial: null })}
+      executionSerial={logViewerModal.executionSerial}
+      jobName={job?.name}
+    />
 
     </>
   );
