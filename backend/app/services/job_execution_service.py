@@ -295,7 +295,8 @@ class JobExecutionService:
         action_order: int
     ) -> Dict[str, Any]:
         """Execute a single action via SSH"""
-        command = action.action_parameters.get("command", "")
+        # Support both 'command' and 'script_content' parameters
+        command = action.action_parameters.get("command") or action.action_parameters.get("script_content", "")
         started_at = datetime.now(timezone.utc)
         
         # Log action execution
