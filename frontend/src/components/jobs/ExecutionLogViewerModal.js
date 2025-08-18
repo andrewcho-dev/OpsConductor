@@ -188,15 +188,9 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
     setStatusFilter(event.target.value);
   };
 
-  // Toggle functions
+  // Toggle functions (kept for individual action toggling)
   const toggleBranch = (branchId) => {
-    const newExpanded = new Set(expandedBranches);
-    if (newExpanded.has(branchId)) {
-      newExpanded.delete(branchId);
-    } else {
-      newExpanded.add(branchId);
-    }
-    setExpandedBranches(newExpanded);
+    handleBranchToggle(branchId);
   };
 
   const toggleAction = (actionId) => {
@@ -220,6 +214,42 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
     });
     setExpandedBranches(allBranchIds);
     setExpandedActions(allActionIds);
+  };
+
+  // Auto-expand actions with results when branch is expanded
+  const handleBranchToggle = (branchId) => {
+    const newExpandedBranches = new Set(expandedBranches);
+    const isExpanding = !newExpandedBranches.has(branchId);
+    
+    if (isExpanding) {
+      newExpandedBranches.add(branchId);
+      
+      // Auto-expand actions that have output or errors
+      const branch = hierarchicalData.find(b => b.id === branchId);
+      if (branch) {
+        const newExpandedActions = new Set(expandedActions);
+        branch.actions.forEach(action => {
+          if (action.result_output || action.result_error) {
+            newExpandedActions.add(action.id);
+          }
+        });
+        setExpandedActions(newExpandedActions);
+      }
+    } else {
+      newExpandedBranches.delete(branchId);
+      
+      // Collapse all actions in this branch
+      const branch = hierarchicalData.find(b => b.id === branchId);
+      if (branch) {
+        const newExpandedActions = new Set(expandedActions);
+        branch.actions.forEach(action => {
+          newExpandedActions.delete(action.id);
+        });
+        setExpandedActions(newExpandedActions);
+      }
+    }
+    
+    setExpandedBranches(newExpandedBranches);
   };
 
   const collapseAll = () => {
@@ -454,6 +484,12 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
           )}
 
           {!loading && !error && filteredData.length > 0 && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <strong>💡 Tip:</strong> Expand branches to see action results. Actions with output/errors will auto-expand and show "Output" or "Error" badges.
+            </Alert>
+          )}
+
+          {!loading && !error && filteredData.length > 0 && (
             <Box>
               {filteredData.map((branch) => (
                 <Accordion 
@@ -512,7 +548,26 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
                                 {index + 1}. {action.action_name}
                               </Typography>
                               <Box sx={{ flexGrow: 1 }} />
-                              <Typography variant="caption" color="text.secondary">
+                              {/* Result indicators */}
+                              {action.result_output && (
+                                <Chip
+                                  label="Output"
+                                  size="small"
+                                  color="success"
+                                  variant="outlined"
+                                  sx={{ fontSize: '0.7rem', height: '20px' }}
+                                />
+                              )}
+                              {action.result_error && (
+                                <Chip
+                                  label="Error"
+                                  size="small"
+                                  color="error"
+                                  variant="outlined"
+                                  sx={{ fontSize: '0.7rem', height: '20px', ml: 0.5 }}
+                                />
+                              )}
+                              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                                 {formatDuration(action.execution_time_ms)}
                               </Typography>
                               {action.exit_code !== null && (
