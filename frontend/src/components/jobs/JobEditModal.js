@@ -52,6 +52,14 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
     actions: [],
     target_ids: [],
     scheduled_at: null,
+    schedule_type: 'once',
+    recurring_type: 'daily',
+    interval: 1,
+    time: '09:00',
+    days_of_week: [],
+    day_of_month: 1,
+    max_executions: null,
+    cron_expression: '',
     priority: 5,
     timeout: null,
     retry_count: 0
@@ -155,6 +163,14 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
         actions: jobActions,
         target_ids: targetIds,
         scheduled_at: initialScheduledAt,
+        schedule_type: job.schedule_type || (initialScheduledAt ? 'once' : 'once'),
+        recurring_type: job.recurring_type || 'daily',
+        interval: job.interval || 1,
+        time: job.time || '09:00',
+        days_of_week: job.days_of_week || [],
+        day_of_month: job.day_of_month || 1,
+        max_executions: job.max_executions || null,
+        cron_expression: job.cron_expression || '',
         priority: job.priority || 5,
         timeout: job.timeout || null,
         retry_count: job.retry_count || 0
@@ -267,6 +283,14 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
           }],
           target_ids: apiTargetIds,
           scheduled_at: localScheduledAt,
+          schedule_type: jobData.schedule_type || (localScheduledAt ? 'once' : 'once'),
+          recurring_type: jobData.recurring_type || 'daily',
+          interval: jobData.interval || 1,
+          time: jobData.time || '09:00',
+          days_of_week: jobData.days_of_week || [],
+          day_of_month: jobData.day_of_month || 1,
+          max_executions: jobData.max_executions || null,
+          cron_expression: jobData.cron_expression || '',
           priority: jobData.priority || 5,
           timeout: jobData.timeout || null,
           retry_count: jobData.retry_count || 0
@@ -690,35 +714,214 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
           <Divider />
 
-          {/* Schedule - Compact */}
+          {/* Schedule - Enhanced with Recurring Options */}
           <Box>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, fontSize: '0.8rem', color: 'text.secondary' }}>
               SCHEDULE (OPTIONAL)
             </Typography>
-            <TextField
-              size="small"
-              type="datetime-local"
-              label={`Schedule Time (${systemTimezone})`}
-              value={formData.scheduled_at || ''}
-              onChange={(e) => handleInputChange('scheduled_at', e.target.value || null)}
-              InputLabelProps={{ shrink: true }}
-              helperText={`Leave empty to keep as draft. Time will be in ${systemTimezone}`}
-              inputProps={{
-                min: (() => {
-                  // Get current local time for min attribute
-                  const now = new Date();
-                  // Add 1 minute to avoid immediate past time issues
-                  now.setMinutes(now.getMinutes() + 1);
-                  // Format as local datetime string for datetime-local input
-                  const year = now.getFullYear();
-                  const month = String(now.getMonth() + 1).padStart(2, '0');
-                  const day = String(now.getDate()).padStart(2, '0');
-                  const hours = String(now.getHours()).padStart(2, '0');
-                  const minutes = String(now.getMinutes()).padStart(2, '0');
-                  return `${year}-${month}-${day}T${hours}:${minutes}`;
-                })()
-              }}
-            />
+            
+            {/* Schedule Type Selection */}
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Schedule Type</InputLabel>
+                  <Select
+                    value={formData.schedule_type || 'once'}
+                    onChange={(e) => handleInputChange('schedule_type', e.target.value)}
+                    label="Schedule Type"
+                  >
+                    <MenuItem value="once">Run Once</MenuItem>
+                    <MenuItem value="recurring">Recurring</MenuItem>
+                    <MenuItem value="cron">Advanced (Cron)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* One-time Schedule */}
+              {(!formData.schedule_type || formData.schedule_type === 'once') && (
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="datetime-local"
+                    label={`Schedule Time (${systemTimezone})`}
+                    value={formData.scheduled_at || ''}
+                    onChange={(e) => handleInputChange('scheduled_at', e.target.value || null)}
+                    InputLabelProps={{ shrink: true }}
+                    inputProps={{
+                      min: (() => {
+                        const now = new Date();
+                        now.setMinutes(now.getMinutes() + 1);
+                        const year = now.getFullYear();
+                        const month = String(now.getMonth() + 1).padStart(2, '0');
+                        const day = String(now.getDate()).padStart(2, '0');
+                        const hours = String(now.getHours()).padStart(2, '0');
+                        const minutes = String(now.getMinutes()).padStart(2, '0');
+                        return `${year}-${month}-${day}T${hours}:${minutes}`;
+                      })()
+                    }}
+                  />
+                </Grid>
+              )}
+            </Grid>
+            
+            {/* Recurring Schedule Options */}
+            {formData.schedule_type === 'recurring' && (
+              <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} sm={4}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Repeat Every</InputLabel>
+                    <Select
+                      value={formData.recurring_type || 'daily'}
+                      onChange={(e) => handleInputChange('recurring_type', e.target.value)}
+                      label="Repeat Every"
+                    >
+                      <MenuItem value="hourly">Hour</MenuItem>
+                      <MenuItem value="daily">Day</MenuItem>
+                      <MenuItem value="weekly">Week</MenuItem>
+                      <MenuItem value="monthly">Month</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="number"
+                    label="Interval"
+                    value={formData.interval || 1}
+                    onChange={(e) => handleInputChange('interval', parseInt(e.target.value) || 1)}
+                    inputProps={{ min: 1, max: 365 }}
+                    helperText="Every N units"
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="time"
+                    label="Time"
+                    value={formData.time || '09:00'}
+                    onChange={(e) => handleInputChange('time', e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                
+                {/* Days of Week for Weekly */}
+                {formData.recurring_type === 'weekly' && (
+                  <Grid item xs={12}>
+                    <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>
+                      Days of Week:
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => (
+                        <Chip
+                          key={day}
+                          label={day}
+                          variant={formData.days_of_week?.includes(index + 1) ? 'filled' : 'outlined'}
+                          color={formData.days_of_week?.includes(index + 1) ? 'primary' : 'default'}
+                          size="small"
+                          onClick={() => {
+                            const currentDays = formData.days_of_week || [];
+                            const dayNum = index + 1;
+                            const newDays = currentDays.includes(dayNum)
+                              ? currentDays.filter(d => d !== dayNum)
+                              : [...currentDays, dayNum].sort();
+                            handleInputChange('days_of_week', newDays);
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  </Grid>
+                )}
+                
+                {/* Day of Month for Monthly */}
+                {formData.recurring_type === 'monthly' && (
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="number"
+                      label="Day of Month"
+                      value={formData.day_of_month || 1}
+                      onChange={(e) => handleInputChange('day_of_month', parseInt(e.target.value) || 1)}
+                      inputProps={{ min: 1, max: 31 }}
+                      helperText="1-31 (or last day of month)"
+                    />
+                  </Grid>
+                )}
+                
+                {/* Max Executions */}
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="number"
+                    label="Max Executions (Optional)"
+                    value={formData.max_executions || ''}
+                    onChange={(e) => handleInputChange('max_executions', e.target.value ? parseInt(e.target.value) : null)}
+                    inputProps={{ min: 1 }}
+                    helperText="Leave empty for unlimited"
+                  />
+                </Grid>
+              </Grid>
+            )}
+            
+            {/* Cron Expression */}
+            {formData.schedule_type === 'cron' && (
+              <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Cron Expression"
+                    value={formData.cron_expression || ''}
+                    onChange={(e) => handleInputChange('cron_expression', e.target.value)}
+                    placeholder="0 9 * * 1-5"
+                    helperText="Format: minute hour day month day-of-week (e.g., '0 9 * * 1-5' = 9 AM weekdays)"
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ p: 1, bgcolor: 'background.default', borderRadius: 1, fontSize: '0.75rem' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>Common Examples:</Typography><br />
+                    <Typography variant="caption">• 0 9 * * * = Every day at 9:00 AM</Typography><br />
+                    <Typography variant="caption">• 0 9 * * 1-5 = Weekdays at 9:00 AM</Typography><br />
+                    <Typography variant="caption">• 0 */6 * * * = Every 6 hours</Typography><br />
+                    <Typography variant="caption">• 0 9 1 * * = First day of every month at 9:00 AM</Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            )}
+            
+            {/* Schedule Preview */}
+            {(formData.scheduled_at || formData.schedule_type === 'recurring' || formData.schedule_type === 'cron') && (
+              <Alert severity="info" sx={{ fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>Schedule Preview:</Typography><br />
+                {formData.schedule_type === 'recurring' && formData.recurring_type && (
+                  <Typography variant="caption">
+                    Runs {formData.recurring_type} at {formData.time || '09:00'}
+                    {formData.interval > 1 && ` (every ${formData.interval} ${formData.recurring_type.slice(0, -2)}s)`}
+                    {formData.max_executions && ` for maximum ${formData.max_executions} executions`}
+                  </Typography>
+                )}
+                {formData.schedule_type === 'cron' && formData.cron_expression && (
+                  <Typography variant="caption">
+                    Cron: {formData.cron_expression}
+                  </Typography>
+                )}
+                {(!formData.schedule_type || formData.schedule_type === 'once') && formData.scheduled_at && (
+                  <Typography variant="caption">
+                    One-time execution: {new Date(formData.scheduled_at).toLocaleString()}
+                  </Typography>
+                )}
+              </Alert>
+            )}
+            
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+              Leave schedule empty to keep job as draft. All times are in {systemTimezone}.
+            </Typography>
           </Box>
 
           <Divider />
