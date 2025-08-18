@@ -546,8 +546,18 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
                                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                                     Command:
                                   </Typography>
-                                  <Paper variant="outlined" sx={{ p: 1, bgcolor: 'grey.50' }}>
-                                    <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', margin: 0 }}>
+                                  <Paper variant="outlined" sx={{ p: 1, bgcolor: 'grey.50', overflow: 'hidden' }}>
+                                    <Typography 
+                                      variant="body2" 
+                                      component="pre" 
+                                      sx={{ 
+                                        fontFamily: 'monospace', 
+                                        margin: 0,
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-all',
+                                        overflowWrap: 'break-word'
+                                      }}
+                                    >
                                       {action.command_executed}
                                     </Typography>
                                   </Paper>
