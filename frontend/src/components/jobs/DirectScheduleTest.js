@@ -97,13 +97,13 @@ const DirectScheduleTest = () => {
       
       // Update the job status to show it's scheduled
       try {
-        const jobResponse = await api.get(`/v3/jobs/${jobId}`);
+        const jobResponse = await api.get(`/jobs/${jobId}`);
         const jobData = jobResponse.data;
         
         console.log('📋 Current job data:', jobData);
         
         // Update the job to show it's scheduled
-        const updateResponse = await api.put(`/v3/jobs/${jobId}`, {
+        const updateResponse = await api.put(`/jobs/${jobId}`, {
           ...jobData,
           status: 'scheduled'
         });
