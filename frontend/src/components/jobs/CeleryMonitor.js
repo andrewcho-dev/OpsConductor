@@ -88,7 +88,7 @@ const CeleryMonitor = ({ celeryStats, queueStats, workerStats, onRefresh, refres
     setLoadingMetrics(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/celery/metrics/history?hours=24', {
+      const response = await fetch('/api/v3/celery/metrics/history?hours=24', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

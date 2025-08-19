@@ -59,7 +59,7 @@ const JobControlCenter = ({ jobs, onRefresh, token }) => {
 
   const fetchCeleryTasks = async () => {
     try {
-      const response = await fetch('/api/celery/active-tasks', {
+      const response = await fetch('/api/v3/celery/active-tasks', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

@@ -123,7 +123,7 @@ const EnhancedJobDashboard = () => {
 
   const fetchCeleryStats = async () => {
     try {
-      const response = await apiService.get('/api/celery/stats');
+      const response = await apiService.get('/api/v3/celery/stats');
       if (response.ok) {
         const data = await response.json();
         setCeleryStats(data);
@@ -135,7 +135,7 @@ const EnhancedJobDashboard = () => {
 
   const fetchQueueStats = async () => {
     try {
-      const response = await apiService.get('/api/celery/queues');
+      const response = await apiService.get('/api/v3/celery/queues');
       if (response.ok) {
         const data = await response.json();
         setQueueStats(data);
@@ -147,7 +147,7 @@ const EnhancedJobDashboard = () => {
 
   const fetchWorkerStats = async () => {
     try {
-      const response = await apiService.get('/api/celery/workers');
+      const response = await apiService.get('/api/v3/celery/workers');
       if (response.ok) {
         const data = await response.json();
         setWorkerStats(data);

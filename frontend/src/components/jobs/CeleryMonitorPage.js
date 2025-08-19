@@ -102,19 +102,19 @@ const CeleryMonitorPage = () => {
 
       // Fetch all monitoring data in parallel
       const [celeryResponse, queueResponse, workerResponse] = await Promise.all([
-        fetch('/api/celery/stats', {
+        fetch('/api/v3/celery/stats', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         }),
-        fetch('/api/celery/queues', {
+        fetch('/api/v3/celery/queues', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         }),
-        fetch('/api/celery/workers', {
+        fetch('/api/v3/celery/workers', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -163,7 +163,7 @@ const CeleryMonitorPage = () => {
   const fetchMetricsHistory = async () => {
     setLoadingMetrics(true);
     try {
-      const response = await fetch('/api/celery/metrics/history?hours=24', {
+      const response = await fetch('/api/v3/celery/metrics/history?hours=24', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
