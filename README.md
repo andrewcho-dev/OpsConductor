@@ -166,6 +166,13 @@ docker-compose -f docker-compose.prod.yml up -d
 - **[Testing Guide](docs/TESTING_GUIDE.md)** - Testing procedures and automation
 - **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
 
+### Technical Documentation
+- **[API Documentation](docs/api/API_CONSOLIDATION_SUMMARY.md)** - API consolidation and versioning
+- **[Database Documentation](docs/database/DATABASE_SUMMARY.md)** - Database schema and migrations
+- **[System Health](docs/system/SYSTEM_HEALTH_SUMMARY.md)** - System health monitoring
+- **[Development Summary](docs/development/DEVELOPMENT_SUMMARY.md)** - Development practices and workflows
+- **[Component Summary](docs/development/COMPONENT_SUMMARY.md)** - Key component documentation
+
 ### Testing
 - **[Test Suite](tests/)** - Comprehensive E2E and API tests
 - **[Test Documentation](tests/README.md)** - Testing setup and execution guide
