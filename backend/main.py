@@ -21,7 +21,8 @@ from app.routers import users, universal_targets, audit, auth_session
 # Legacy routers removed - consolidated into V2 APIs
 # Legacy system_health and system_management removed - consolidated into V2 APIs
 from app.core.config import settings
-from app.core.session_security import verify_session_token
+# Import centralized authentication
+from app.core.auth_dependencies import get_current_user
 
 # Import models to ensure they are registered with SQLAlchemy
 from app.models import notification_models, user_models, job_models, analytics_models, job_schedule_models, discovery_models
@@ -98,27 +99,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Security
-security = HTTPBearer()
-
-# Dependency to verify session token
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    token = credentials.credentials
-    user = await verify_session_token(token)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user
+# Authentication is now handled by centralized auth_dependencies module
 
 # Include routers
 app.include_router(auth_session.router, prefix="/auth", tags=["Authentication"])

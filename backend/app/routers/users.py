@@ -8,42 +8,10 @@ from app.schemas.user_schemas import (
     UserCreate, UserUpdate, UserResponse, UserSessionResponse
 )
 from app.services.user_service import UserService
-from app.core.security import verify_token
 from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
+from app.core.auth_dependencies import get_current_user, require_admin_role
 
 router = APIRouter()
-security = HTTPBearer()
-
-
-def get_current_user(credentials: HTTPBearer = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user."""
-    token = credentials.credentials
-    payload = verify_token(token)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-    
-    user_id = payload.get("user_id")
-    user = UserService.get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    return user
-
-
-def require_admin_role(current_user = Depends(get_current_user)):
-    """Require administrator role for access."""
-    if current_user.role != "administrator":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Administrator access required"
-        )
-    return current_user
 
 
 @router.post("/", response_model=UserResponse)
