@@ -75,7 +75,8 @@ class SessionService {
       }
       
       // Make API call to get session status
-      fetch('/auth/session/status', {
+      const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      fetch(`${apiUrl}/auth/session/status`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -178,7 +179,8 @@ class SessionService {
       }
       
       // Make API call to log activity
-      fetch('/auth/session/activity', {
+      const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      fetch(`${apiUrl}/auth/session/activity`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -315,7 +317,8 @@ class SessionService {
       this.notifyListeners('extend');
       
       // Call server endpoint to extend session
-      fetch('/auth/session/extend', {
+      const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      fetch(`${apiUrl}/auth/session/extend`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

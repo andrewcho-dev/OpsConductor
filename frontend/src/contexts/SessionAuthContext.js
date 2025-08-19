@@ -27,7 +27,8 @@ export const SessionAuthProvider = ({ children }) => {
       const token = localStorage.getItem('access_token');
       if (token) {
         try {
-          const response = await fetch('/auth/me', {
+          const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
+          const response = await fetch(`${apiUrl}/auth/me`, {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -90,7 +91,8 @@ export const SessionAuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      const response = await fetch('/auth/login', {
+      const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${apiUrl}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -115,7 +117,7 @@ export const SessionAuthProvider = ({ children }) => {
       sessionService.setSessionId(data.session_id);
       
       // Get user data
-      const userResponse = await fetch('/auth/me', {
+      const userResponse = await fetch(`${apiUrl}/auth/me`, {
         headers: {
           'Authorization': `Bearer ${data.access_token}`,
           'Content-Type': 'application/json'
@@ -144,7 +146,8 @@ export const SessionAuthProvider = ({ children }) => {
     try {
       const token = localStorage.getItem('access_token');
       if (token) {
-        await fetch('/auth/logout', {
+        const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
+        await fetch(`${apiUrl}/auth/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

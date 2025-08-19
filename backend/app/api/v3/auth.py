@@ -275,6 +275,33 @@ async def extend_session(
     return {"message": "Session extended successfully"}
 
 
+@router.post("/session/activity")
+async def log_session_activity(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Log user activity to extend session."""
+    session_id = current_user.get("session_id")
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No active session"
+        )
+    
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    # Extend the session based on activity
+    extended_session = extend_user_session(session_id, client_ip, user_agent)
+    if not extended_session:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to log activity"
+        )
+    
+    return {"message": "Activity logged successfully"}
+
+
 @router.get("/me")
 async def get_current_user_info(
     current_user: Dict[str, Any] = Depends(get_current_user)
