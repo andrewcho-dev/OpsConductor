@@ -23,6 +23,7 @@ import {
   Settings as SettingsIcon,
   MonitorHeart as MonitorHeartIcon,
   CloudQueue as CloudQueueIcon,
+  Stop as StopIcon,
 } from '@mui/icons-material';
 import { useAlert } from '../layout/BottomStatusBar';
 import '../../styles/dashboard.css';
@@ -93,9 +94,43 @@ const SystemHealthDashboard = () => {
     }
   };
 
+  const handlePruneVolumes = async () => {
+    try {
+      setRefreshing(true);
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        addAlert('Authentication required', 'error', 5000);
+        return;
+      }
+      
+      const response = await fetch('/api/v2/health/volumes/prune', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        addAlert(data.message || 'Volumes pruned successfully', 'success', 3000);
+        // Refresh health data to show updated volumes
+        fetchAllHealthData();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to prune volumes');
+      }
+    } catch (error) {
+      console.error('Error pruning volumes:', error);
+      addAlert(error.message || 'Failed to prune volumes', 'error', 5000);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+  
   const handleServiceAction = async (serviceName, action) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       if (!token) {
         addAlert('Authentication required', 'error', 5000);
         return;
@@ -390,55 +425,64 @@ const SystemHealthDashboard = () => {
           
           <div className="content-card-body">
             {healthData?.health_checks?.docker_containers?.details?.containers ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', maxHeight: '300px', overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
                 {Object.entries(healthData.health_checks.docker_containers.details.containers).map(([name, container]) => (
                   <div key={name} style={{ 
                     border: `1px solid ${container.healthy ? '#4caf50' : '#f44336'}`,
-                    borderRadius: '6px',
-                    padding: '12px',
+                    borderRadius: '4px',
+                    padding: '6px',
                     backgroundColor: container.healthy ? 'rgba(76, 175, 80, 0.05)' : 'rgba(244, 67, 54, 0.05)'
                   }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <Box 
-                        sx={{ 
-                          width: 8, 
-                          height: 8, 
-                          borderRadius: '50%', 
-                          backgroundColor: container.healthy ? '#4caf50' : '#f44336',
-                          mr: 1 
-                        }} 
-                      />
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
-                        {name.replace('opsconductor-', '')}
-                      </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', maxWidth: '75%' }}>
+                        <Box 
+                          sx={{ 
+                            width: 6, 
+                            height: 6, 
+                            borderRadius: '50%', 
+                            backgroundColor: container.healthy ? '#4caf50' : '#f44336',
+                            mr: 0.5,
+                            flexShrink: 0
+                          }} 
+                        />
+                        <Tooltip title={name.replace('opsconductor-', '')}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {name.replace('opsconductor-', '')}
+                          </Typography>
+                        </Tooltip>
+                      </Box>
                     </Box>
-                    <Typography variant="body2" sx={{ fontSize: '0.7rem', mb: 0.5 }}>
-                      Status: <strong>{container.status}</strong>
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: '0.7rem', mb: 1 }}>
-                      Health: <strong>{container.health_status}</strong>
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                      <Button
-                        className="btn-compact"
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                        onClick={() => handleServiceAction(name, 'restart')}
-                        sx={{ fontSize: '0.7rem', minWidth: 'auto', px: 1 }}
-                      >
-                        Restart
-                      </Button>
-                      <Button
-                        className="btn-compact"
-                        size="small"
-                        variant="outlined"
-                        color="warning"
-                        onClick={() => handleServiceAction(name, 'stop')}
-                        sx={{ fontSize: '0.7rem', minWidth: 'auto', px: 1 }}
-                      >
-                        Stop
-                      </Button>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontSize: '0.65rem', lineHeight: 1.1 }}>
+                          {container.status}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontSize: '0.65rem', lineHeight: 1.1 }}>
+                          {container.health_status}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Tooltip title="Restart container">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => handleServiceAction(name, 'restart')}
+                            sx={{ p: 0.3 }}
+                          >
+                            <RefreshIcon sx={{ fontSize: '0.8rem' }} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Stop container">
+                          <IconButton
+                            size="small"
+                            color="warning"
+                            onClick={() => handleServiceAction(name, 'stop')}
+                            sx={{ p: 0.3 }}
+                          >
+                            <StopIcon sx={{ fontSize: '0.8rem' }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </Box>
                   </div>
                 ))}
@@ -452,9 +496,8 @@ const SystemHealthDashboard = () => {
         </div>
       </div>
 
-      {/* System Information & Service Status - Side by Side */}
+      {/* System Information & Docker Volumes - Side by Side */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 3fr', gap: '16px', marginBottom: '16px' }}>
-        
         {/* System Information Card */}
         <div className="main-content-card fade-in">
           <div className="content-card-header">
@@ -550,7 +593,177 @@ const SystemHealthDashboard = () => {
             </div>
           </div>
         </div>
+        
+        {/* Docker Volumes Card */}
+        <div className="main-content-card fade-in">
+          <div className="content-card-header">
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+              <StorageIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+              DOCKER VOLUMES
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Button 
+                size="small" 
+                variant="outlined" 
+                color="primary" 
+                onClick={handlePruneVolumes}
+                disabled={refreshing}
+                sx={{ fontSize: '0.7rem', py: 0.3, px: 1, minWidth: 'auto' }}
+              >
+                {refreshing ? <CircularProgress size={16} /> : 'Prune'}
+              </Button>
+              {healthData?.health_checks?.volumes && (
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                  {healthData.health_checks.volumes.details?.volumes_count || 0} volumes, 
+                  {healthData.health_checks.volumes.healthy ? ' all healthy' : ' issues detected'}
+                </Typography>
+              )}
+            </Box>
+          </div>
+          
+          <div className="content-card-body">
+            {healthData?.health_checks?.volumes?.details?.volumes ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+                {Object.entries(healthData.health_checks.volumes.details.volumes).map(([name, volume]) => {
+                  // All volumes are considered healthy unless the overall volumes check is unhealthy
+                  const isHealthy = healthData.health_checks.volumes.healthy !== false;
+                  
+                  return (
+                    <div key={name} style={{ 
+                      border: `1px solid ${isHealthy ? '#4caf50' : '#f44336'}`,
+                      borderRadius: '4px',
+                      padding: '6px',
+                      backgroundColor: isHealthy ? 'rgba(76, 175, 80, 0.05)' : 'rgba(244, 67, 54, 0.05)'
+                    }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                        <Box 
+                          sx={{ 
+                            width: 6, 
+                            height: 6, 
+                            borderRadius: '50%', 
+                            backgroundColor: isHealthy ? '#4caf50' : '#f44336',
+                            mr: 0.5 
+                          }} 
+                        />
+                        <Tooltip title={name}>
+                          <Typography variant="subtitle2" sx={{ 
+                            fontWeight: 600, 
+                            fontSize: '0.7rem', 
+                            whiteSpace: 'nowrap', 
+                            overflow: 'hidden', 
+                            textOverflow: 'ellipsis',
+                            width: '160px' // Wider to show more of the name
+                          }}>
+                            {name.length > 30 ? name.substring(0, 30) + '...' : name}
+                          </Typography>
+                        </Tooltip>
+                      </Box>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px', mt: 1 }}>
+                        <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                          {volume.stats || `${volume.size_mb || 0}MB / ${volume.used_mb || 0}MB / ${volume.percent || 0}%`}
+                        </Typography>
+                      </Box>
+                    </div>
+                  );
+                })}
+            </div>
+            ) : (
+              <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                No volume data available
+              </Typography>
+            )}
+          </div>
+        </div>
+      </div>
 
+      {/* Application Status & Service Status - Side by Side (SWITCHED ORDER) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 3fr', gap: '16px', marginBottom: '16px' }}>
+        
+        {/* Application Status Card */}
+        <div className="main-content-card fade-in">
+          <div className="content-card-header">
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+              <ComputerIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+              APPLICATION STATUS
+            </Typography>
+            {applicationData && (
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                Application health monitoring
+              </Typography>
+            )}
+          </div>
+          
+          <div className="content-card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+              {/* API Status */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <ComputerIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  API Status
+                </Typography>
+                {applicationData ? (
+                  <>
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 0.5 }}>
+                      Status: <strong>{applicationData.status || 'Unknown'}</strong>
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 0.5 }}>
+                      Response Time: <strong>{applicationData.response_time_ms || 'N/A'} ms</strong>
+                    </Typography>
+                  </>
+                ) : (
+                  <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                    No API data available
+                  </Typography>
+                )}
+              </div>
+              
+              {/* Database Status */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <StorageIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Database Status
+                </Typography>
+                {databaseData ? (
+                  <>
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 0.5 }}>
+                      Status: <strong>{databaseData.status || 'Unknown'}</strong>
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 0.5 }}>
+                      Connections: <strong>{databaseData.connections || 'N/A'}</strong>
+                    </Typography>
+                  </>
+                ) : (
+                  <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                    No database data available
+                  </Typography>
+                )}
+              </div>
+              
+              {/* Cache Status */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <MemoryIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Cache Status
+                </Typography>
+                {applicationData?.cache ? (
+                  <>
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 0.5 }}>
+                      Status: <strong>{applicationData.cache?.status || 'Unknown'}</strong>
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', mb: 0.5 }}>
+                      Hit Rate: <strong>{applicationData.cache?.hit_rate || 'N/A'}%</strong>
+                    </Typography>
+                  </>
+                ) : (
+                  <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                    No cache data available
+                  </Typography>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        
         {/* Service Status Card */}
         <div className="main-content-card fade-in">
           <div className="content-card-header">
@@ -558,32 +771,77 @@ const SystemHealthDashboard = () => {
               <SecurityIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
               SERVICE STATUS
             </Typography>
+            {healthData?.health_checks && (
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                Specific service health monitoring
+              </Typography>
+            )}
           </div>
           
           <div className="content-card-body">
             {healthData?.health_checks ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                {Object.entries(healthData.health_checks).map(([service, status]) => (
-                  <div key={service} style={{ 
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '6px',
-                    padding: '12px',
-                    textAlign: 'center',
-                    backgroundColor: status.healthy ? 'rgba(76, 175, 80, 0.05)' : 'rgba(244, 67, 54, 0.05)'
-                  }}>
-                    <SecurityIcon 
-                      color={status.healthy ? 'success' : 'error'} 
-                      fontSize="small" 
-                      sx={{ mb: 0.5 }}
-                    />
-                    <Typography variant="caption" sx={{ fontWeight: 500, textTransform: 'capitalize', display: 'block', fontSize: '0.7rem' }}>
-                      {service}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
-                      {status.status}
-                    </Typography>
-                  </div>
-                ))}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+                {/* Core Services */}
+                {[
+                  { id: 'api', name: 'API Service', icon: <ComputerIcon fontSize="small" /> },
+                  { id: 'scheduler', name: 'Job Scheduler', icon: <AccessTimeIcon fontSize="small" /> },
+                  { id: 'worker', name: 'Task Worker', icon: <MemoryIcon fontSize="small" /> },
+                  { id: 'database', name: 'PostgreSQL', icon: <StorageIcon fontSize="small" /> },
+                  { id: 'redis', name: 'Redis Cache', icon: <StorageIcon fontSize="small" /> },
+                  { id: 'nginx', name: 'Nginx Proxy', icon: <CloudQueueIcon fontSize="small" /> },
+                  { id: 'auth', name: 'Auth Service', icon: <SecurityIcon fontSize="small" /> },
+                  { id: 'monitoring', name: 'Prometheus', icon: <MonitorHeartIcon fontSize="small" /> }
+                ].map((service) => {
+                  // Use the actual health data from the API
+                  // If no data is available for a service, assume it's healthy until proven otherwise
+                  const serviceData = healthData.health_checks[service.id] || 
+                                     (healthData.health_checks.services?.details?.services && 
+                                      healthData.health_checks.services.details.services[service.id]);
+                  
+                  const isHealthy = serviceData?.healthy !== false; // Only show as unhealthy if explicitly set to false
+                  const status = serviceData?.status || 'running';
+                  
+                  return (
+                    <div key={service.id} style={{ 
+                      border: `1px solid ${isHealthy ? '#4caf50' : '#f44336'}`,
+                      borderRadius: '4px',
+                      padding: '6px',
+                      backgroundColor: isHealthy ? 'rgba(76, 175, 80, 0.05)' : 'rgba(244, 67, 54, 0.05)'
+                    }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                        <Box 
+                          sx={{ 
+                            width: 6, 
+                            height: 6, 
+                            borderRadius: '50%', 
+                            backgroundColor: isHealthy ? '#4caf50' : '#f44336',
+                            mr: 0.5 
+                          }} 
+                        />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.7rem' }}>
+                          {service.name}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', textTransform: 'capitalize' }}>
+                          {status}
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Tooltip title="Restart service">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleServiceAction(service.id, 'restart')}
+                              sx={{ p: 0.3 }}
+                            >
+                              <RefreshIcon sx={{ fontSize: '0.8rem' }} />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </Box>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>

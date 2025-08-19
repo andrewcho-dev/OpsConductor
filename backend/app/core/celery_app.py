@@ -44,6 +44,10 @@ celery_app.conf.beat_schedule = {
         'task': 'app.tasks.job_tasks.check_scheduled_jobs',
         'schedule': 30.0,  # Every 30 seconds to check for scheduled jobs
     },
+    'process-recurring-schedules': {
+        'task': 'app.tasks.periodic_tasks.process_recurring_schedules_task',
+        'schedule': 30.0,  # Every 30 seconds to check for recurring schedules
+    },
 }
 
 if __name__ == "__main__":

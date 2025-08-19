@@ -19,6 +19,8 @@ class ScheduleType(enum.Enum):
 
 
 class RecurringType(enum.Enum):
+    MINUTES = "minutes"
+    HOURS = "hours"
     DAILY = "daily"
     WEEKLY = "weekly"
     MONTHLY = "monthly"

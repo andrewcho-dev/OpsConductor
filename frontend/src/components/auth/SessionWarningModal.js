@@ -28,6 +28,8 @@ const SessionWarningModal = ({
   const [extending, setExtending] = useState(false);
 
   useEffect(() => {
+    // timeRemaining is already in seconds from the session service
+    console.log(`Modal received timeRemaining: ${timeRemaining} seconds`);
     setCountdown(timeRemaining);
   }, [timeRemaining]);
 
@@ -63,8 +65,13 @@ const SessionWarningModal = ({
   };
 
   const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    // Make sure we have a valid number
+    const validSeconds = Math.max(0, Math.round(seconds));
+    
+    const mins = Math.floor(validSeconds / 60);
+    const secs = validSeconds % 60;
+    
+    // Format as MM:SS
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 

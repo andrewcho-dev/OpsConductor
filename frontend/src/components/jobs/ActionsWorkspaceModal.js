@@ -266,20 +266,31 @@ const ActionsWorkspaceModal = ({
   };
 
   const handleActionUpdate = (updatedAction) => {
-    setActions(prev => prev.map(action => 
-      action.id === updatedAction.id ? updatedAction : action
-    ));
+    console.log('Action update received:', updatedAction);
+    setActions(prev => {
+      const newActions = prev.map(action => 
+        action.id === updatedAction.id ? updatedAction : action
+      );
+      console.log('Updated actions array:', newActions);
+      return newActions;
+    });
   };
 
   const handleSaveActions = () => {
-    const processedActions = actions.map((action, index) => ({
-      ...action,
-      action_order: index + 1,
-      action_type: action.type,
-      action_name: action.name,
-      action_parameters: action.parameters
-    }));
+    console.log('Saving actions, current state:', actions);
+    const processedActions = actions.map((action, index) => {
+      const processed = {
+        ...action,
+        action_order: index + 1,
+        action_type: action.type,
+        action_name: action.name,
+        action_parameters: action.parameters
+      };
+      console.log(`Processing action ${index}:`, processed);
+      return processed;
+    });
     
+    console.log('Final processed actions:', processedActions);
     onActionsConfigured(processedActions);
   };
 
@@ -604,40 +615,68 @@ const ActionsWorkspaceModal = ({
 
 // Action Configuration Panel Component
 const ActionConfigurationPanel = ({ action, onUpdate, selectedTargets }) => {
-  const [localAction, setLocalAction] = useState(action);
-
-  useEffect(() => {
-    // Initialize action with default parameters if they don't exist
-    const initializedAction = {
-      ...action,
-      parameters: {
-        ...action.parameters,
-        // Set default captureOutput to true for backward compatibility if not set
-        captureOutput: action.parameters?.captureOutput !== undefined ? action.parameters.captureOutput : true
-      }
-    };
-    setLocalAction(initializedAction);
+  // Initialize with a deep copy to avoid reference issues
+  const [localAction, setLocalAction] = useState(() => {
+    // Create a deep copy of the action
+    const actionCopy = JSON.parse(JSON.stringify(action));
     
-    // If we added default parameters, update the parent
-    if (action.parameters?.captureOutput === undefined) {
-      onUpdate(initializedAction);
+    // Initialize with default parameters if needed
+    if (!actionCopy.parameters) {
+      actionCopy.parameters = {};
     }
-  }, [action, onUpdate]);
+    
+    // Set default captureOutput for backward compatibility
+    if (actionCopy.parameters.captureOutput === undefined) {
+      actionCopy.parameters.captureOutput = true;
+    }
+    
+    return actionCopy;
+  });
+
+  // Only initialize once when the component mounts or when action ID changes
+  useEffect(() => {
+    console.log('ActionConfigurationPanel initializing with action:', action);
+    
+    // Create a deep copy to avoid reference issues
+    const actionCopy = JSON.parse(JSON.stringify(action));
+    
+    // Initialize with default parameters if needed
+    if (!actionCopy.parameters) {
+      actionCopy.parameters = {};
+    }
+    
+    // Set default captureOutput for backward compatibility
+    if (actionCopy.parameters.captureOutput === undefined) {
+      actionCopy.parameters.captureOutput = true;
+      // If we added default parameters, update the parent
+      onUpdate(actionCopy);
+    }
+    
+    setLocalAction(actionCopy);
+    console.log('ActionConfigurationPanel initialized localAction:', actionCopy);
+  }, [action.id]); // Only re-initialize when the action ID changes
 
   const handleParameterChange = (key, value) => {
-    const updatedAction = {
-      ...localAction,
-      parameters: {
-        ...localAction.parameters,
-        [key]: value
-      }
-    };
+    console.log(`Changing parameter ${key} to:`, value);
+    
+    // Create a deep copy of the local action
+    const updatedAction = JSON.parse(JSON.stringify(localAction));
+    
+    // Update the parameter
+    if (!updatedAction.parameters) {
+      updatedAction.parameters = {};
+    }
+    updatedAction.parameters[key] = value;
+    
+    console.log('Updated action after parameter change:', updatedAction);
+    
+    // Update local state and parent component
     setLocalAction(updatedAction);
     onUpdate(updatedAction);
   };
 
   const renderParameterFields = () => {
-    switch (action.type) {
+    switch (localAction.type) {
       case 'command':
         return (
           <>
@@ -967,7 +1006,7 @@ const ActionConfigurationPanel = ({ action, onUpdate, selectedTargets }) => {
       default:
         return (
           <Alert severity="info">
-            Configuration panel for {action.type} actions is ready for use.
+            Configuration panel for {localAction.type} actions is ready for use.
           </Alert>
         );
     }
@@ -979,7 +1018,21 @@ const ActionConfigurationPanel = ({ action, onUpdate, selectedTargets }) => {
         fullWidth
         label="Action Name"
         value={localAction.name}
-        onChange={(e) => setLocalAction(prev => ({ ...prev, name: e.target.value }))}
+        onChange={(e) => {
+          console.log('Changing action name to:', e.target.value);
+          
+          // Create a deep copy of the local action
+          const updatedAction = JSON.parse(JSON.stringify(localAction));
+          
+          // Update the name
+          updatedAction.name = e.target.value;
+          
+          console.log('Updated action after name change:', updatedAction);
+          
+          // Update local state and parent component
+          setLocalAction(updatedAction);
+          onUpdate(updatedAction);
+        }}
         sx={{ mb: 2 }}
       />
       
@@ -987,7 +1040,21 @@ const ActionConfigurationPanel = ({ action, onUpdate, selectedTargets }) => {
         control={
           <Switch
             checked={localAction.enabled}
-            onChange={(e) => setLocalAction(prev => ({ ...prev, enabled: e.target.checked }))}
+            onChange={(e) => {
+              console.log('Changing enabled to:', e.target.checked);
+              
+              // Create a deep copy of the local action
+              const updatedAction = JSON.parse(JSON.stringify(localAction));
+              
+              // Update the enabled property
+              updatedAction.enabled = e.target.checked;
+              
+              console.log('Updated action after enabled change:', updatedAction);
+              
+              // Update local state and parent component
+              setLocalAction(updatedAction);
+              onUpdate(updatedAction);
+            }}
           />
         }
         label="Enabled"
@@ -1001,7 +1068,21 @@ const ActionConfigurationPanel = ({ action, onUpdate, selectedTargets }) => {
         type="number"
         label="Timeout (seconds)"
         value={localAction.timeout || 30}
-        onChange={(e) => setLocalAction(prev => ({ ...prev, timeout: parseInt(e.target.value) }))}
+        onChange={(e) => {
+          console.log('Changing timeout to:', parseInt(e.target.value));
+          
+          // Create a deep copy of the local action
+          const updatedAction = JSON.parse(JSON.stringify(localAction));
+          
+          // Update the timeout property
+          updatedAction.timeout = parseInt(e.target.value);
+          
+          console.log('Updated action after timeout change:', updatedAction);
+          
+          // Update local state and parent component
+          setLocalAction(updatedAction);
+          onUpdate(updatedAction);
+        }}
         sx={{ mb: 2 }}
       />
       
@@ -1009,7 +1090,21 @@ const ActionConfigurationPanel = ({ action, onUpdate, selectedTargets }) => {
         control={
           <Switch
             checked={localAction.continueOnError}
-            onChange={(e) => setLocalAction(prev => ({ ...prev, continueOnError: e.target.checked }))}
+            onChange={(e) => {
+              console.log('Changing continueOnError to:', e.target.checked);
+              
+              // Create a deep copy of the local action
+              const updatedAction = JSON.parse(JSON.stringify(localAction));
+              
+              // Update the continueOnError property
+              updatedAction.continueOnError = e.target.checked;
+              
+              console.log('Updated action after continueOnError change:', updatedAction);
+              
+              // Update local state and parent component
+              setLocalAction(updatedAction);
+              onUpdate(updatedAction);
+            }}
           />
         }
         label="Continue on Error"

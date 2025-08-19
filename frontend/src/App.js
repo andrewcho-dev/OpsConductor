@@ -7,11 +7,16 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AlertProvider } from './components/layout/BottomStatusBar';
 import AppLayout from './components/layout/AppLayout';
 import LoginScreen from './components/auth/LoginScreen';
+
+
 import Dashboard from './components/dashboard/Dashboard';
 import UserManagementSimplified from './components/users/UserManagementSimplified';
 import UniversalTargetDashboard from './components/targets/UniversalTargetDashboard';
 import JobDashboard from './components/jobs/JobDashboard';
 import CeleryMonitorPage from './components/jobs/CeleryMonitorPage';
+import TestMinutesSchedule from './components/jobs/TestMinutesSchedule';
+import DirectScheduleTest from './components/jobs/DirectScheduleTest';
+import DebugTools from './components/debug/DebugTools';
 import LogViewer from './components/LogViewer';
 import LogViewerTest from './components/LogViewerTest';
 import SystemSettings from './components/system/SystemSettings';
@@ -73,6 +78,32 @@ function AppContent() {
                 element={
                   <ProtectedRoute>
                     <CeleryMonitorPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/test-minutes-schedule" 
+                element={
+                  <ProtectedRoute>
+                    <TestMinutesSchedule />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/direct-schedule" 
+                element={
+                  <ProtectedRoute>
+                    <DirectScheduleTest />
+                  </ProtectedRoute>
+                } 
+              />
+
+
+              <Route 
+                path="/debug-tools" 
+                element={
+                  <ProtectedRoute>
+                    <DebugTools />
                   </ProtectedRoute>
                 } 
               />

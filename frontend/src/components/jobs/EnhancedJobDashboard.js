@@ -107,10 +107,10 @@ const EnhancedJobDashboard = () => {
 
   const fetchJobs = async () => {
     try {
-      const response = await apiService.get('/v3/jobs/');
+      const response = await apiService.get('/api/v3/jobs/');
       if (response.ok) {
         const data = await response.json();
-        setJobs(data.jobs || []);
+        setJobs(data || []);
       } else {
         console.error('Failed to fetch jobs:', response.status, response.statusText);
       }

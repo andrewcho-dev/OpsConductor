@@ -167,8 +167,14 @@ const JobList = ({
                             }
                         case 'scheduled_at':
                             try {
-                                const scheduledTime = job.scheduled_at ? formatDateWithBothTimezones(job.scheduled_at).local : 'Not scheduled';
-                                return scheduledTime.toLowerCase().includes(filterValue.toLowerCase());
+                                // Check both schedule_config.next_run and scheduled_at
+                                const nextRunTime = job.schedule_config?.next_run 
+                                    ? formatDateWithBothTimezones(job.schedule_config.next_run).local 
+                                    : job.scheduled_at 
+                                        ? formatDateWithBothTimezones(job.scheduled_at).local 
+                                        : 'Not scheduled';
+                                
+                                return nextRunTime.toLowerCase().includes(filterValue.toLowerCase());
                             } catch (e) {
                                 return true;
                             }
@@ -342,25 +348,11 @@ const JobList = ({
     }, []);
 
     const handleEditSubmit = useCallback(async (jobId, submitData, scheduleConfig) => {
-        // Combine the data in the format expected by onUpdateJob
-        const updatedJob = {
-            id: jobId,
-            ...submitData,
-            // Add schedule config fields if present
-            ...(scheduleConfig && {
-                schedule_config: scheduleConfig,
-                schedule_type: scheduleConfig.scheduleType || 'once',
-                recurring_type: scheduleConfig.recurringType || 'daily',
-                interval: scheduleConfig.interval || 1,
-                time: scheduleConfig.time || '09:00',
-                days_of_week: scheduleConfig.daysOfWeek || [],
-                day_of_month: scheduleConfig.dayOfMonth || 1,
-                max_executions: scheduleConfig.maxExecutions || null,
-                cron_expression: scheduleConfig.cronExpression || ''
-            })
-        };
+        console.log('🔄 JobList: handleEditSubmit called with:', { jobId, submitData, scheduleConfig });
         
-        const success = await onUpdateJob(updatedJob);
+        // Pass the parameters directly to onUpdateJob
+        const success = await onUpdateJob(jobId, submitData, scheduleConfig);
+        
         if (success !== false) {
             setShowEditModal(false);
             setJobToEdit(null);
@@ -501,8 +493,8 @@ const JobList = ({
                     <TableHead>
                         {/* Column Headers Row */}
                         <TableRow sx={{ backgroundColor: 'grey.100' }}>
-                            <SortableHeader field="name" className="standard-table-header">Job Name</SortableHeader>
                             <SortableHeader field="job_serial" className="standard-table-header">Job Serial</SortableHeader>
+                            <SortableHeader field="name" className="standard-table-header">Job Name</SortableHeader>
                             <SortableHeader field="status" className="standard-table-header">Status</SortableHeader>
                             <SortableHeader field="created_at" className="standard-table-header">Created</SortableHeader>
                             <SortableHeader field="last_execution" className="standard-table-header">Last Run</SortableHeader>
@@ -515,18 +507,18 @@ const JobList = ({
                             <TableCell className="standard-filter-cell">
                                 <TextField
                                     size="small"
-                                    placeholder="Filter name..."
-                                    value={columnFilters.name || ''}
-                                    onChange={(e) => handleColumnFilterChange('name', e.target.value)}
+                                    placeholder="Filter serial..."
+                                    value={columnFilters.job_serial || ''}
+                                    onChange={(e) => handleColumnFilterChange('job_serial', e.target.value)}
                                     className="standard-filter-input"
                                 />
                             </TableCell>
                             <TableCell className="standard-filter-cell">
                                 <TextField
                                     size="small"
-                                    placeholder="Filter serial..."
-                                    value={columnFilters.job_serial || ''}
-                                    onChange={(e) => handleColumnFilterChange('job_serial', e.target.value)}
+                                    placeholder="Filter name..."
+                                    value={columnFilters.name || ''}
+                                    onChange={(e) => handleColumnFilterChange('name', e.target.value)}
                                     className="standard-filter-input"
                                 />
                             </TableCell>
@@ -628,14 +620,14 @@ const JobList = ({
                                             }
                                         }}
                                     >
+                                        {/* Job Serial */}
+                                        <TableCell className="standard-table-cell" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                            {job.job_serial || `ID-${job.id}`}
+                                        </TableCell>
+                                        
                                         {/* Job Name */}
                                         <TableCell className="standard-table-cell" sx={{ fontWeight: 'bold' }}>
                                             {job.name}
-                                        </TableCell>
-                                        
-                                        {/* Job Serial */}
-                                        <TableCell className="standard-table-cell">
-                                            {job.job_serial || `ID-${job.id}`}
                                         </TableCell>
                                         
                                         {/* Status */}
@@ -655,7 +647,11 @@ const JobList = ({
                                         
                                         {/* Next Scheduled */}
                                         <TableCell className="standard-table-cell">
-                                            {job.scheduled_at ? formatDateWithBothTimezones(job.scheduled_at).local : 'Not scheduled'}
+                                            {job.schedule_config?.next_run 
+                                                ? formatDateWithBothTimezones(job.schedule_config.next_run).local 
+                                                : job.scheduled_at 
+                                                    ? formatDateWithBothTimezones(job.scheduled_at).local 
+                                                    : 'Not scheduled'}
                                         </TableCell>
                                         
                                         {/* Actions */}

@@ -56,6 +56,15 @@ const SystemSettings = () => {
   const [selectedEmailTarget, setSelectedEmailTarget] = useState('');
   const [testEmailAddress, setTestEmailAddress] = useState('');
   
+  // Log rotation settings
+  const [maxLogFileSize, setMaxLogFileSize] = useState(100); // MB
+  const [logCompression, setLogCompression] = useState('enabled');
+  const [jobHistoryRetention, setJobHistoryRetention] = useState(90); // days
+  const [jobResultRetention, setJobResultRetention] = useState(30); // days
+  const [archiveOldJobs, setArchiveOldJobs] = useState('enabled');
+  const [auditLogRetention, setAuditLogRetention] = useState(365); // days
+  const [auditLogExport, setAuditLogExport] = useState('monthly');
+  
   // Track if settings have been modified
   const [originalSettings, setOriginalSettings] = useState({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -77,7 +86,14 @@ const SystemSettings = () => {
         inactivityTimeout: inactivityTimeout,
         warningTime: warningTime,
         maxJobs: maxJobs,
-        logRetention: logRetention
+        logRetention: logRetention,
+        maxLogFileSize: maxLogFileSize,
+        logCompression: logCompression,
+        jobHistoryRetention: jobHistoryRetention,
+        jobResultRetention: jobResultRetention,
+        archiveOldJobs: archiveOldJobs,
+        auditLogRetention: auditLogRetention,
+        auditLogExport: auditLogExport
       };
       
       const hasChanges = JSON.stringify(currentSettings) !== JSON.stringify(originalSettings);
@@ -88,7 +104,11 @@ const SystemSettings = () => {
       });
       setHasUnsavedChanges(hasChanges);
     }
-  }, [selectedTimezone, inactivityTimeout, warningTime, maxJobs, logRetention, originalSettings]);
+  }, [
+    selectedTimezone, inactivityTimeout, warningTime, maxJobs, logRetention, 
+    maxLogFileSize, logCompression, jobHistoryRetention, jobResultRetention, 
+    archiveOldJobs, auditLogRetention, auditLogExport, originalSettings
+  ]);
 
   const loadAllSystemData = async () => {
     setLoading(true);
@@ -124,19 +144,45 @@ const SystemSettings = () => {
       const newMaxJobs = response.data.max_concurrent_jobs || 50;
       const newLogRetention = response.data.log_retention_days || 30;
       
+      // Extract log rotation settings with fallbacks
+      const newMaxLogFileSize = response.data.max_log_file_size_mb || 100;
+      const newLogCompression = response.data.log_compression || 'enabled';
+      const newJobHistoryRetention = response.data.job_history_retention_days || 90;
+      const newJobResultRetention = response.data.job_result_retention_days || 30;
+      const newArchiveOldJobs = response.data.archive_old_jobs || 'enabled';
+      const newAuditLogRetention = response.data.audit_log_retention_days || 365;
+      const newAuditLogExport = response.data.audit_log_export || 'monthly';
+      
       console.log('Loading saved settings from API:', {
         timezone: newTimezone,
         inactivityTimeout: newInactivityTimeout,
         warningTime: newWarningTime,
         maxJobs: newMaxJobs,
-        logRetention: newLogRetention
+        logRetention: newLogRetention,
+        maxLogFileSize: newMaxLogFileSize,
+        logCompression: newLogCompression,
+        jobHistoryRetention: newJobHistoryRetention,
+        jobResultRetention: newJobResultRetention,
+        archiveOldJobs: newArchiveOldJobs,
+        auditLogRetention: newAuditLogRetention,
+        auditLogExport: newAuditLogExport
       });
       
+      // Set core settings
       setSelectedTimezone(newTimezone);
       setInactivityTimeout(newInactivityTimeout);
       setWarningTime(newWarningTime);
       setMaxJobs(newMaxJobs);
       setLogRetention(newLogRetention);
+      
+      // Set log rotation settings
+      setMaxLogFileSize(newMaxLogFileSize);
+      setLogCompression(newLogCompression);
+      setJobHistoryRetention(newJobHistoryRetention);
+      setJobResultRetention(newJobResultRetention);
+      setArchiveOldJobs(newArchiveOldJobs);
+      setAuditLogRetention(newAuditLogRetention);
+      setAuditLogExport(newAuditLogExport);
       
       // Store original settings for change detection
       const originalSettings = {
@@ -144,7 +190,14 @@ const SystemSettings = () => {
         inactivityTimeout: newInactivityTimeout,
         warningTime: newWarningTime,
         maxJobs: newMaxJobs,
-        logRetention: newLogRetention
+        logRetention: newLogRetention,
+        maxLogFileSize: newMaxLogFileSize,
+        logCompression: newLogCompression,
+        jobHistoryRetention: newJobHistoryRetention,
+        jobResultRetention: newJobResultRetention,
+        archiveOldJobs: newArchiveOldJobs,
+        auditLogRetention: newAuditLogRetention,
+        auditLogExport: newAuditLogExport
       };
       setOriginalSettings(originalSettings);
       setHasUnsavedChanges(false);
@@ -160,13 +213,29 @@ const SystemSettings = () => {
       setMaxJobs(50);
       setLogRetention(30);
       
+      // Set default log rotation settings
+      setMaxLogFileSize(100);
+      setLogCompression('enabled');
+      setJobHistoryRetention(90);
+      setJobResultRetention(30);
+      setArchiveOldJobs('enabled');
+      setAuditLogRetention(365);
+      setAuditLogExport('monthly');
+      
       // Also set original settings so change detection works
       const defaultSettings = {
         timezone: 'UTC',
         inactivityTimeout: 60,
         warningTime: 2,
         maxJobs: 50,
-        logRetention: 30
+        logRetention: 30,
+        maxLogFileSize: 100,
+        logCompression: 'enabled',
+        jobHistoryRetention: 90,
+        jobResultRetention: 30,
+        archiveOldJobs: 'enabled',
+        auditLogRetention: 365,
+        auditLogExport: 'monthly'
       };
       setOriginalSettings(defaultSettings);
       setHasUnsavedChanges(false);
@@ -341,9 +410,44 @@ const SystemSettings = () => {
           data: { max_jobs: maxJobs }
         },
         {
-          name: 'Log Retention',
+          name: 'System Log Retention',
           endpoint: '/v2/system/log-retention',
           data: { retention_days: logRetention }
+        },
+        {
+          name: 'Max Log File Size',
+          endpoint: '/v2/system/log-file-size',
+          data: { max_size_mb: maxLogFileSize }
+        },
+        {
+          name: 'Log Compression',
+          endpoint: '/v2/system/log-compression',
+          data: { compression: logCompression }
+        },
+        {
+          name: 'Job History Retention',
+          endpoint: '/v2/system/job-history-retention',
+          data: { retention_days: jobHistoryRetention }
+        },
+        {
+          name: 'Job Result Retention',
+          endpoint: '/v2/system/job-result-retention',
+          data: { retention_days: jobResultRetention }
+        },
+        {
+          name: 'Archive Old Jobs',
+          endpoint: '/v2/system/archive-old-jobs',
+          data: { archive: archiveOldJobs }
+        },
+        {
+          name: 'Audit Log Retention',
+          endpoint: '/v2/system/audit-log-retention',
+          data: { retention_days: auditLogRetention }
+        },
+        {
+          name: 'Audit Log Export',
+          endpoint: '/v2/system/audit-log-export',
+          data: { export_schedule: auditLogExport }
         }
       ];
 
@@ -653,24 +757,13 @@ const SystemSettings = () => {
                 onChange={(e) => setMaxJobs(parseInt(e.target.value))}
                 inputProps={{ min: 1, max: 1000 }}
                 sx={{ 
-                  mb: 1,
                   '& .MuiInputLabel-root': { fontSize: '0.8rem' },
                   '& .MuiInputBase-input': { fontSize: '0.8rem' }
                 }}
               />
-              <TextField
-                fullWidth
-                size="small"
-                label="Log Retention (days)"
-                type="number"
-                value={logRetention}
-                onChange={(e) => setLogRetention(parseInt(e.target.value))}
-                inputProps={{ min: 1, max: 3650 }}
-                sx={{ 
-                  '& .MuiInputLabel-root': { fontSize: '0.8rem' },
-                  '& .MuiInputBase-input': { fontSize: '0.8rem' }
-                }}
-              />
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', mt: 1, display: 'block' }}>
+                Job history retention settings are in Log Rotation Settings
+              </Typography>
             </div>
             </div>
           </div>
@@ -832,18 +925,17 @@ const SystemSettings = () => {
               </Typography>
             </div>
 
-            {/* Logging Configuration */}
+            {/* Advanced Logging */}
             <div>
               <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
                 <SettingsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Logging Configuration
+                Advanced Logging
               </Typography>
               <FormControl fullWidth size="small" sx={{ mb: 1 }}>
                 <InputLabel sx={{ fontSize: '0.8rem' }}>Log Level</InputLabel>
                 <Select
                   defaultValue="INFO"
                   label="Log Level"
-                  disabled
                   sx={{ 
                     fontSize: '0.8rem',
                     '& .MuiSelect-select': { fontSize: '0.8rem' }
@@ -855,21 +947,8 @@ const SystemSettings = () => {
                   <MenuItem value="ERROR" sx={{ fontSize: '0.8rem' }}>ERROR</MenuItem>
                 </Select>
               </FormControl>
-              <TextField
-                fullWidth
-                size="small"
-                label="Max Log File Size (MB)"
-                type="number"
-                defaultValue={100}
-                inputProps={{ min: 10, max: 1000 }}
-                sx={{ 
-                  '& .MuiInputLabel-root': { fontSize: '0.8rem' },
-                  '& .MuiInputBase-input': { fontSize: '0.8rem' }
-                }}
-                disabled
-              />
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                Advanced logging settings
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', mt: 1, display: 'block' }}>
+                Log rotation settings are available in the dedicated Log Rotation & History Settings section below
               </Typography>
             </div>
             </div>
@@ -951,8 +1030,174 @@ const SystemSettings = () => {
         </div>
       </div>
 
-      {/* Notification Configuration - 3 Column Wide Section */}
+      {/* Log Rotation & Notification Configuration - Side by Side */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 3fr', gap: '16px', marginBottom: '16px' }}>
+        {/* Log Rotation Settings Card */}
+        <div className="main-content-card fade-in">
+          <div className="content-card-header">
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+              <SettingsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+              LOG ROTATION & HISTORY SETTINGS
+            </Typography>
+          </div>
+          
+          <div className="content-card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+              
+              {/* System Logs */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <SettingsIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  System Logs
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="System Log Retention (days)"
+                  type="number"
+                  value={logRetention}
+                  onChange={(e) => setLogRetention(parseInt(e.target.value))}
+                  inputProps={{ min: 1, max: 3650 }}
+                  sx={{ 
+                    mb: 1,
+                    '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+                    '& .MuiInputBase-input': { fontSize: '0.8rem' }
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Max Log File Size (MB)"
+                  type="number"
+                  value={maxLogFileSize}
+                  onChange={(e) => setMaxLogFileSize(parseInt(e.target.value))}
+                  inputProps={{ min: 10, max: 1000 }}
+                  sx={{ 
+                    mb: 1,
+                    '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+                    '& .MuiInputBase-input': { fontSize: '0.8rem' }
+                  }}
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel sx={{ fontSize: '0.8rem' }}>Log Compression</InputLabel>
+                  <Select
+                    value={logCompression}
+                    onChange={(e) => setLogCompression(e.target.value)}
+                    label="Log Compression"
+                    sx={{ 
+                      fontSize: '0.8rem',
+                      '& .MuiSelect-select': { fontSize: '0.8rem' }
+                    }}
+                  >
+                    <MenuItem value="enabled" sx={{ fontSize: '0.8rem' }}>Enabled</MenuItem>
+                    <MenuItem value="disabled" sx={{ fontSize: '0.8rem' }}>Disabled</MenuItem>
+                  </Select>
+                </FormControl>
+              </div>
+              
+              {/* Job History */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <ScheduleIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Job History
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Job History Retention (days)"
+                  type="number"
+                  value={jobHistoryRetention}
+                  onChange={(e) => setJobHistoryRetention(parseInt(e.target.value))}
+                  inputProps={{ min: 1, max: 3650 }}
+                  sx={{ 
+                    mb: 1,
+                    '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+                    '& .MuiInputBase-input': { fontSize: '0.8rem' }
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Job Result Retention (days)"
+                  type="number"
+                  value={jobResultRetention}
+                  onChange={(e) => setJobResultRetention(parseInt(e.target.value))}
+                  inputProps={{ min: 1, max: 3650 }}
+                  sx={{ 
+                    mb: 1,
+                    '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+                    '& .MuiInputBase-input': { fontSize: '0.8rem' }
+                  }}
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel sx={{ fontSize: '0.8rem' }}>Archive Old Jobs</InputLabel>
+                  <Select
+                    value={archiveOldJobs}
+                    onChange={(e) => setArchiveOldJobs(e.target.value)}
+                    label="Archive Old Jobs"
+                    sx={{ 
+                      fontSize: '0.8rem',
+                      '& .MuiSelect-select': { fontSize: '0.8rem' }
+                    }}
+                  >
+                    <MenuItem value="enabled" sx={{ fontSize: '0.8rem' }}>Enabled</MenuItem>
+                    <MenuItem value="disabled" sx={{ fontSize: '0.8rem' }}>Disabled</MenuItem>
+                  </Select>
+                </FormControl>
+              </div>
+              
+              {/* Audit Logs */}
+              <div>
+                <Typography variant="subtitle2" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>
+                  <SecurityIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Audit Logs
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Audit Log Retention (days)"
+                  type="number"
+                  value={auditLogRetention}
+                  onChange={(e) => setAuditLogRetention(parseInt(e.target.value))}
+                  inputProps={{ min: 30, max: 3650 }}
+                  sx={{ 
+                    mb: 1,
+                    '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+                    '& .MuiInputBase-input': { fontSize: '0.8rem' }
+                  }}
+                />
+                <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                  <InputLabel sx={{ fontSize: '0.8rem' }}>Audit Log Export</InputLabel>
+                  <Select
+                    value={auditLogExport}
+                    onChange={(e) => setAuditLogExport(e.target.value)}
+                    label="Audit Log Export"
+                    sx={{ 
+                      fontSize: '0.8rem',
+                      '& .MuiSelect-select': { fontSize: '0.8rem' }
+                    }}
+                  >
+                    <MenuItem value="disabled" sx={{ fontSize: '0.8rem' }}>Disabled</MenuItem>
+                    <MenuItem value="daily" sx={{ fontSize: '0.8rem' }}>Daily</MenuItem>
+                    <MenuItem value="weekly" sx={{ fontSize: '0.8rem' }}>Weekly</MenuItem>
+                    <MenuItem value="monthly" sx={{ fontSize: '0.8rem' }}>Monthly</MenuItem>
+                  </Select>
+                </FormControl>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<StorageIcon fontSize="small" />}
+                  size="small"
+                  sx={{ height: '32px', fontSize: '0.75rem' }}
+                >
+                  Export Audit Logs
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Notification Configuration Card */}
         <div className="main-content-card fade-in">
           <div className="content-card-header">
             <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>

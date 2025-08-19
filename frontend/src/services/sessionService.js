@@ -5,9 +5,10 @@
 
 class SessionService {
   constructor() {
-    this.activityTimeout = 60 * 60 * 1000; // 1 hour in milliseconds
-    this.warningThreshold = 2 * 60 * 1000; // 2 minutes in milliseconds
-    this.checkInterval = 30 * 1000; // Check every 30 seconds
+    // Use system settings values (will be updated from server)
+    this.activityTimeout = 5 * 60 * 1000; // 5 minutes in milliseconds (minimum)
+    this.warningThreshold = 2 * 60 * 1000; // 2 minutes warning before timeout (default)
+    this.checkInterval = 5 * 1000; // Check every 5 seconds
     
     this.lastActivity = Date.now();
     this.sessionCheckTimer = null;
@@ -20,33 +21,182 @@ class SessionService {
       extend: []
     };
     
+    console.log('🔧 SessionService initialized with:');
+    console.log(`⏱️ Activity timeout: ${this.activityTimeout / 60000} minutes`);
+    console.log(`⚠️ Warning threshold: ${this.warningThreshold / 60000} minutes before timeout`);
+    console.log(`🔄 Check interval: ${this.checkInterval / 1000} seconds`);
+    
     this.init();
   }
   
   init() {
+    console.log('🚀 Initializing session service...');
+    
     // Track various user activities
     const activityEvents = [
       'mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'
     ];
     
+    // Bind the updateActivity method once to avoid memory leaks
+    this._boundUpdateActivity = this.updateActivity.bind(this);
+    
     activityEvents.forEach(event => {
-      document.addEventListener(event, this.updateActivity.bind(this), true);
+      document.addEventListener(event, this._boundUpdateActivity, true);
     });
     
-    // Start session monitoring
-    this.startSessionMonitoring();
+    // Fetch session settings from server immediately
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      console.log('🔑 Token found, fetching session settings...');
+      this.fetchSessionSettings();
+      
+      // Start session monitoring
+      this.startSessionMonitoring();
+    } else {
+      console.log('🔑 No token found, session service in standby mode');
+    }
+    
+    // Set up a periodic refresh of session settings (every 5 minutes)
+    this._settingsRefreshTimer = setInterval(() => {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        console.log('⏰ Periodic refresh of session settings');
+        this.fetchSessionSettings();
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+  }
+  
+  // Fetch session settings from server
+  fetchSessionSettings() {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        return;
+      }
+      
+      // Make API call to get session status
+      fetch('/auth/session/status', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        } else {
+          console.warn('⚠️ Failed to fetch session settings:', response.status);
+          throw new Error('Failed to fetch session settings');
+        }
+      })
+      .then(data => {
+        console.log('✅ Received session settings from server:', data);
+        
+        // Update warning threshold from server
+        if (data.warning_threshold) {
+          this.warningThreshold = data.warning_threshold * 1000; // Convert seconds to ms
+          console.log(`⚠️ Updated warning threshold to ${this.warningThreshold / 60000} minutes`);
+        }
+        
+        // Update total timeout based on time remaining
+        if (data.time_remaining) {
+          // Get the full timeout value, not just remaining time
+          // The server sends the full timeout value when session is fresh
+          this.activityTimeout = data.time_remaining * 1000; // Convert seconds to ms
+          console.log(`⏱️ Updated activity timeout to ${this.activityTimeout / 60000} minutes`);
+          
+          // Force update activity to reset the timer
+          this.lastActivity = Date.now();
+          console.log(`🔄 Reset activity timer at ${new Date(this.lastActivity).toLocaleTimeString()}`);
+        }
+        
+        // Debug log current state
+        console.log(`🔍 Current session state:
+          - Activity timeout: ${this.activityTimeout / 60000} minutes
+          - Warning threshold: ${this.warningThreshold / 60000} minutes
+          - Time until warning: ${(this.activityTimeout - this.warningThreshold) / 60000} minutes
+          - Check interval: ${this.checkInterval / 1000} seconds
+        `);
+      })
+      .catch(error => {
+        console.error('❌ Error fetching session settings:', error);
+      });
+    } catch (error) {
+      console.error('❌ Error in fetchSessionSettings:', error);
+    }
   }
   
   updateActivity() {
     const now = Date.now();
-    const wasInactive = (now - this.lastActivity) > this.warningThreshold;
+    const timeSinceLastActivity = now - this.lastActivity;
     
+    // Only log if it's been more than 5 seconds since the last activity
+    // to avoid flooding the console with messages
+    if (timeSinceLastActivity > 5000) {
+      console.log('🔄 Activity detected, updating last activity timestamp');
+      console.log(`⏱️ Time since last activity: ${Math.round(timeSinceLastActivity / 1000)} seconds`);
+    }
+    
+    const wasInactive = timeSinceLastActivity > (this.activityTimeout - this.warningThreshold);
+    
+    // Update the timestamp
     this.lastActivity = now;
-    this.warningShown = false;
     
-    // If user was inactive and now active, notify listeners
-    if (wasInactive) {
+    // If warning was shown, clear it
+    if (this.warningShown) {
+      console.log('✅ User is active again, clearing warning');
+      this.warningShown = false;
       this.notifyListeners('extend');
+    }
+    
+    // If user was inactive and now active, notify listeners and extend session
+    if (wasInactive) {
+      console.log('🔄 User was inactive and is now active, extending session');
+      this.extendSession(); // Actively extend the session on server
+    } else {
+      // Log activity to server periodically (every 30 seconds)
+      // to avoid too many requests
+      if (this._lastServerActivity === undefined || (now - this._lastServerActivity) > 30000) {
+        this._lastServerActivity = now;
+        this.logActivity();
+      }
+    }
+  }
+  
+  // Log activity to server
+  logActivity() {
+    // Update the timestamp locally
+    this.lastActivity = Date.now();
+    console.log(`🔄 Activity logged locally at ${new Date(this.lastActivity).toLocaleTimeString()}`);
+    
+    // Call server endpoint to log activity
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        return;
+      }
+      
+      // Make API call to log activity
+      fetch('/auth/session/activity', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      .then(response => {
+        if (response.ok) {
+          console.log('✅ Activity logged to server');
+        } else {
+          console.warn('⚠️ Failed to log activity to server:', response.status);
+        }
+      })
+      .catch(error => {
+        console.error('❌ Error logging activity to server:', error);
+      });
+    } catch (error) {
+      console.error('❌ Error in logActivity:', error);
     }
   }
   
@@ -67,75 +217,125 @@ class SessionService {
     }
   }
   
-  async checkSessionStatus() {
+  // Client-side only session status check - no server dependency
+  checkSessionStatus() {
     try {
       const token = localStorage.getItem('access_token');
       if (!token) {
+        console.log('🔑 No token found, cannot check session status');
         return;
       }
       
-      const response = await fetch('/auth/session/status', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Check time since last activity
+      const now = Date.now();
+      const inactiveTime = now - this.lastActivity;
       
-      if (!response.ok) {
-        if (response.status === 401) {
-          this.handleSessionExpired();
-        }
-        return;
+      // Only log every 30 seconds to reduce console spam
+      if (Math.round(inactiveTime / 1000) % 30 === 0 || inactiveTime < 5000) {
+        console.log(`⏱️ Time since last activity: ${Math.round(inactiveTime / 1000)} seconds`);
+        console.log(`⏱️ Time until warning: ${Math.round((this.activityTimeout - this.warningThreshold - inactiveTime) / 1000)} seconds`);
+        console.log(`⏱️ Time until timeout: ${Math.round((this.activityTimeout - inactiveTime) / 1000)} seconds`);
       }
       
-      const status = await response.json();
-      
-      if (status.expired) {
+      // If inactive for longer than timeout, force logout
+      if (inactiveTime > this.activityTimeout) {
+        console.log('⚠️ User inactive for too long, forcing logout');
+        console.log(`⏱️ Inactive time: ${Math.round(inactiveTime / 1000)} seconds`);
+        console.log(`⏱️ Timeout: ${Math.round(this.activityTimeout / 1000)} seconds`);
         this.handleSessionExpired();
-      } else if (status.warning && !this.warningShown) {
-        this.handleSessionWarning(status.time_remaining);
+        return;
+      }
+      
+      // If approaching timeout, show warning
+      const warningTime = this.activityTimeout - this.warningThreshold;
+      if (inactiveTime > warningTime && !this.warningShown) {
+        console.log('⚠️ User approaching inactivity timeout, showing warning');
+        console.log(`⏱️ Inactive time: ${Math.round(inactiveTime / 1000)} seconds`);
+        console.log(`⏱️ Warning threshold: ${Math.round(warningTime / 1000)} seconds`);
+        
+        const timeRemaining = this.activityTimeout - inactiveTime;
+        console.log(`⏱️ Time remaining: ${Math.round(timeRemaining / 1000)} seconds`);
+        
+        this.handleSessionWarning(timeRemaining);
+        return;
+      }
+      
+      // If warning was shown but user is now active again, clear warning
+      if (this.warningShown && inactiveTime < warningTime) {
+        console.log('✅ User is active again, clearing warning');
+        this.warningShown = false;
+        this.notifyListeners('extend');
       }
       
     } catch (error) {
-      console.error('Session status check failed:', error);
+      console.error('❌ Session status check failed:', error);
     }
   }
   
   handleSessionWarning(timeRemaining) {
+    // Convert milliseconds to seconds for the UI
+    const timeRemainingSeconds = Math.round(timeRemaining / 1000);
+    
+    console.log(`⏱️ Showing warning with ${timeRemainingSeconds} seconds remaining`);
+    
     this.warningShown = true;
-    this.notifyListeners('warning', { timeRemaining });
+    this.notifyListeners('warning', { timeRemaining: timeRemainingSeconds });
   }
   
   handleSessionExpired() {
+    console.log('🔒 Session expired, logging out user');
     this.stopSessionMonitoring();
+    
+    // Clear token and session data
+    localStorage.removeItem('access_token');
+    this.sessionId = null;
+    
+    // Notify listeners
     this.notifyListeners('timeout');
+    
+    // Force page reload to ensure user is logged out
+    setTimeout(() => {
+      console.log('🔄 Forcing page reload to ensure logout');
+      window.location.href = '/login';
+    }, 500);
   }
   
-  async extendSession() {
+  // Extend session on server
+  extendSession() {
     try {
       const token = localStorage.getItem('access_token');
       if (!token) {
         return false;
       }
       
-      const response = await fetch('/auth/session/extend', {
+      // Update locally
+      console.log('🔄 Extending session locally');
+      this.lastActivity = Date.now();
+      this.warningShown = false;
+      this.notifyListeners('extend');
+      
+      // Call server endpoint to extend session
+      fetch('/auth/session/extend', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
+      })
+      .then(response => {
+        if (response.ok) {
+          console.log('✅ Session extended on server');
+        } else {
+          console.warn('⚠️ Failed to extend session on server:', response.status);
+        }
+      })
+      .catch(error => {
+        console.error('❌ Error extending session on server:', error);
       });
       
-      if (response.ok) {
-        this.warningShown = false;
-        this.updateActivity();
-        this.notifyListeners('extend');
-        return true;
-      }
-      
-      return false;
+      return true;
     } catch (error) {
-      console.error('Session extend failed:', error);
+      console.error('❌ Session extend failed:', error);
       return false;
     }
   }
@@ -170,7 +370,34 @@ class SessionService {
   
   // Public methods
   setSessionId(sessionId) {
+    console.log(`🔑 Setting session ID: ${sessionId}`);
     this.sessionId = sessionId;
+  }
+  
+  destroy() {
+    console.log('🧹 Destroying session service');
+    this.stopSessionMonitoring();
+    
+    // Remove all event listeners
+    const activityEvents = [
+      'mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'
+    ];
+    
+    activityEvents.forEach(event => {
+      document.removeEventListener(event, this.updateActivity.bind(this), true);
+    });
+    
+    // Clear all data
+    this.sessionId = null;
+    this.lastActivity = null;
+    this.warningShown = false;
+    
+    // Clear listeners
+    this.listeners = {
+      warning: [],
+      timeout: [],
+      extend: []
+    };
   }
   
   getTimeUntilWarning() {
@@ -191,19 +418,38 @@ class SessionService {
   }
   
   destroy() {
+    console.log('🧹 Destroying session service...');
+    
+    // Stop all timers
     this.stopSessionMonitoring();
     
-    // Remove event listeners
+    if (this._settingsRefreshTimer) {
+      clearInterval(this._settingsRefreshTimer);
+      this._settingsRefreshTimer = null;
+    }
+    
+    // Remove event listeners using the bound function reference
     const activityEvents = [
       'mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'
     ];
     
-    activityEvents.forEach(event => {
-      document.removeEventListener(event, this.updateActivity.bind(this), true);
-    });
+    if (this._boundUpdateActivity) {
+      activityEvents.forEach(event => {
+        document.removeEventListener(event, this._boundUpdateActivity, true);
+      });
+      this._boundUpdateActivity = null;
+    }
+    
+    // Clear all state
+    this.sessionId = null;
+    this.lastActivity = null;
+    this.warningShown = false;
+    this._lastServerActivity = null;
     
     // Clear listeners
     this.listeners = { warning: [], timeout: [], extend: [] };
+    
+    console.log('✅ Session service destroyed');
   }
 }
 

@@ -17,5 +17,11 @@ try:
 except Exception as e:
     print(f"❌ Failed to import job_tasks: {e}")
 
+try:
+    from app.tasks import periodic_tasks
+    print("✅ Successfully imported periodic_tasks")
+except Exception as e:
+    print(f"❌ Failed to import periodic_tasks: {e}")
+
 # Export the celery app so it can be found by workers
 __all__ = ['celery_app']

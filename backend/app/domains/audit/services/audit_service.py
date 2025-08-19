@@ -16,29 +16,90 @@ from app.models.user_models import User
 
 class AuditEventType(Enum):
     """Types of audit events."""
+    # Authentication Events
     USER_LOGIN = "user_login"
     LOGIN_SUCCESS = "login_success"
     LOGIN_FAILED = "login_failed"
     LOGOUT = "logout"
     USER_LOGOUT = "user_logout"
+    PASSWORD_CHANGED = "password_changed"
+    PASSWORD_RESET_REQUESTED = "password_reset_requested"
+    PASSWORD_RESET_COMPLETED = "password_reset_completed"
+    ACCOUNT_LOCKED = "account_locked"
+    
+    # User Management Events
     USER_CREATED = "user_created"
     USER_UPDATED = "user_updated"
     USER_DELETED = "user_deleted"
+    USER_ROLE_CHANGED = "user_role_changed"
+    USER_ACTIVATED = "user_activated"
+    USER_DEACTIVATED = "user_deactivated"
+    
+    # Session Events
+    SESSION_CREATED = "session_created"
+    SESSION_EXPIRED = "session_expired"
+    SESSION_EXTENDED = "session_extended"
+    SESSION_TERMINATED = "session_terminated"
+    
+    # Target Management Events
     TARGET_CREATED = "target_created"
     TARGET_UPDATED = "target_updated"
     TARGET_DELETED = "target_deleted"
     TARGET_CONNECTION_TEST = "target_connection_test"
+    TARGET_CONNECTION_SUCCESS = "target_connection_success"
+    TARGET_CONNECTION_FAILURE = "target_connection_failure"
+    TARGET_STATUS_CHANGED = "target_status_changed"
+    TARGET_CREDENTIALS_UPDATED = "target_credentials_updated"
+    
+    # Job Management Events
     JOB_CREATED = "job_created"
     JOB_UPDATED = "job_updated"
     JOB_DELETED = "job_deleted"
     JOB_EXECUTED = "job_executed"
-    BULK_OPERATION = "bulk_operation"
+    JOB_EXECUTION_STARTED = "job_execution_started"
+    JOB_EXECUTION_COMPLETED = "job_execution_completed"
+    JOB_EXECUTION_FAILED = "job_execution_failed"
+    JOB_SCHEDULED = "job_scheduled"
+    JOB_SCHEDULE_UPDATED = "job_schedule_updated"
+    JOB_SCHEDULE_DELETED = "job_schedule_deleted"
+    
+    # System Events
+    SYSTEM_STARTUP = "system_startup"
+    SYSTEM_SHUTDOWN = "system_shutdown"
     SYSTEM_CONFIG_CHANGED = "system_config_changed"
-    SECURITY_VIOLATION = "security_violation"
-    DATA_EXPORT = "data_export"
-    PERMISSION_CHANGED = "permission_changed"
-    DISCOVERY_JOB_CREATED = "discovery_job_created"
     SYSTEM_MAINTENANCE = "system_maintenance"
+    SYSTEM_BACKUP = "system_backup"
+    SYSTEM_RESTORE = "system_restore"
+    SYSTEM_UPDATE = "system_update"
+    
+    # Security Events
+    SECURITY_VIOLATION = "security_violation"
+    PERMISSION_CHANGED = "permission_changed"
+    UNAUTHORIZED_ACCESS_ATTEMPT = "unauthorized_access_attempt"
+    SUSPICIOUS_ACTIVITY = "suspicious_activity"
+    
+    # Data Events
+    DATA_EXPORT = "data_export"
+    DATA_IMPORT = "data_import"
+    DATA_DELETED = "data_deleted"
+    DATA_ACCESSED = "data_accessed"
+    
+    # API Events
+    API_ACCESS = "api_access"
+    API_ERROR = "api_error"
+    
+    # Discovery Events
+    DISCOVERY_JOB_CREATED = "discovery_job_created"
+    DISCOVERY_JOB_EXECUTED = "discovery_job_executed"
+    DISCOVERY_JOB_COMPLETED = "discovery_job_completed"
+    DISCOVERY_TARGET_FOUND = "discovery_target_found"
+    
+    # Bulk Operations
+    BULK_OPERATION = "bulk_operation"
+    BULK_IMPORT = "bulk_import"
+    BULK_EXPORT = "bulk_export"
+    BULK_DELETE = "bulk_delete"
+    BULK_UPDATE = "bulk_update"
 
 
 class AuditSeverity(Enum):

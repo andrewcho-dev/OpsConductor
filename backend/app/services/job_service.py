@@ -14,6 +14,8 @@ from app.schemas.job_schemas import (
 from app.models.universal_target_models import UniversalTarget
 from app.services.notification_service import NotificationService
 from app.models.job_models import JobTarget
+from app.core.audit_utils import log_audit_event_sync
+from app.domains.audit.services.audit_service import AuditEventType, AuditSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,19 @@ class JobService:
         self.notification_service = NotificationService(db)
 
     def create_job(self, job_data: JobCreate, created_by: int) -> Job:
-        """Create a new job with actions and target associations - SIMPLIFIED"""
+        """
+        Create a new job with actions and target associations.
+        
+        Args:
+            job_data: Job data to create
+            created_by: ID of the user creating the job
+            
+        Returns:
+            Created job object
+            
+        Raises:
+            Exception: If job creation fails
+        """
         try:
             # Create the main job - NO SERIALIZATION
             job = Job(
@@ -39,6 +53,7 @@ class JobService:
             self.db.flush()  # Get the job ID
 
             # Create job actions
+            actions = []
             for i, action_data in enumerate(job_data.actions, 1):
                 action = JobAction(
                     job_id=job.id,
@@ -49,17 +64,46 @@ class JobService:
                     action_config=action_data.action_config
                 )
                 self.db.add(action)
+                actions.append({
+                    "action_order": i,
+                    "action_name": action_data.action_name,
+                    "action_type": action_data.action_type.value if hasattr(action_data.action_type, 'value') else str(action_data.action_type)
+                })
 
             # Create target associations
+            target_ids = []
             for target_id in job_data.target_ids:
                 job_target = JobTarget(
                     job_id=job.id,
                     target_id=target_id
                 )
                 self.db.add(job_target)
+                target_ids.append(target_id)
 
             self.db.commit()
             logger.info(f"✅ Created job '{job.name}' (ID: {job.id}) with {len(job_data.actions)} actions and {len(job_data.target_ids)} targets")
+            
+            # Log audit event
+            log_audit_event_sync(
+                db=self.db,
+                event_type=AuditEventType.JOB_CREATED,
+                user_id=created_by,
+                resource_type="job",
+                resource_id=str(job.id),
+                action="create",
+                details={
+                    "job_name": job.name,
+                    "job_type": job.job_type,
+                    "status": job.status.value if hasattr(job.status, 'value') else str(job.status),
+                    "scheduled_at": job.scheduled_at.isoformat() if job.scheduled_at else None,
+                    "target_count": len(target_ids),
+                    "target_ids": target_ids,
+                    "action_count": len(actions),
+                    "actions": actions
+                },
+                severity=AuditSeverity.MEDIUM
+            )
+            
             return job
 
         except Exception as e:
@@ -67,8 +111,22 @@ class JobService:
             logger.error(f"❌ Failed to create job: {str(e)}")
             raise
 
-    def execute_job(self, job_id: int, execute_data: JobExecuteRequest) -> JobExecution:
-        """Execute a job - SIMPLIFIED"""
+    def execute_job(self, job_id: int, execute_data: JobExecuteRequest, user_id: Optional[int] = None) -> JobExecution:
+        """
+        Execute a job.
+        
+        Args:
+            job_id: ID of the job to execute
+            execute_data: Execution request data
+            user_id: ID of the user executing the job (for audit logging)
+            
+        Returns:
+            Created job execution object
+            
+        Raises:
+            ValueError: If job not found or no targets specified
+            Exception: If execution fails
+        """
         try:
             job = self.get_job(job_id)
             if not job:
@@ -117,6 +175,26 @@ class JobService:
             )
 
             self.db.commit()
+            
+            # Log audit event
+            log_audit_event_sync(
+                db=self.db,
+                event_type=AuditEventType.JOB_EXECUTED,
+                user_id=user_id,
+                resource_type="job",
+                resource_id=str(job_id),
+                action="execute",
+                details={
+                    "job_name": job.name,
+                    "execution_id": execution.id,
+                    "execution_number": execution_number,
+                    "target_count": len(target_ids),
+                    "target_ids": target_ids,
+                    "status": execution.status.value if hasattr(execution.status, 'value') else str(execution.status)
+                },
+                severity=AuditSeverity.MEDIUM
+            )
+            
             return execution
 
         except Exception as e:
@@ -203,7 +281,12 @@ class JobService:
         return result
 
     def update_execution_summary(self, execution_id: int):
-        """Update execution summary counts"""
+        """
+        Update execution summary counts and status.
+        
+        Args:
+            execution_id: The ID of the execution to update
+        """
         execution = self.get_job_execution(execution_id)
         if not execution:
             return
@@ -228,6 +311,59 @@ class JobService:
             execution.status = ExecutionStatus.RUNNING
 
         self.db.commit()
+        
+    def record_retry_attempt(
+        self, 
+        execution_id: int, 
+        target_id: int, 
+        action_id: int, 
+        attempt_number: int, 
+        error_message: str
+    ):
+        """
+        Record a retry attempt for better tracking and auditing.
+        
+        Args:
+            execution_id: The execution ID
+            target_id: The target ID
+            action_id: The action ID
+            attempt_number: The retry attempt number (1-based)
+            error_message: The error message that triggered the retry
+        """
+        try:
+            # Get target and action info for logging
+            target = self.db.query(UniversalTarget).filter(UniversalTarget.id == target_id).first()
+            action = self.db.query(JobAction).filter(JobAction.id == action_id).first()
+            
+            if not target or not action:
+                logger.error(f"Failed to record retry: Target or action not found")
+                return
+                
+            # Create a special result record for the retry attempt
+            retry_note = f"Retry attempt {attempt_number} - Previous error: {error_message}"
+            
+            result = JobExecutionResult(
+                execution_id=execution_id,
+                target_id=target_id,
+                target_name=target.name,
+                action_id=action_id,
+                action_order=action.action_order,
+                action_name=f"{action.action_name} (Retry {attempt_number})",
+                action_type=action.action_type,
+                status=ExecutionStatus.SCHEDULED,  # Mark as scheduled since we're retrying
+                error_text=retry_note,
+                command_executed=f"Retrying: {action.action_parameters.get('command', 'N/A') if hasattr(action, 'action_parameters') else 'N/A'}",
+                created_at=datetime.now(timezone.utc)
+            )
+            
+            self.db.add(result)
+            self.db.commit()
+            
+            logger.info(f"Recorded retry attempt {attempt_number} for action {action.action_name} on target {target.name}")
+            
+        except Exception as e:
+            logger.error(f"Failed to record retry attempt: {str(e)}")
+            # Don't raise - this is a non-critical operation
 
     def list_jobs(self, skip: int = 0, limit: int = 100) -> List[Job]:
         """List jobs"""
