@@ -4,17 +4,15 @@ Provides basic system information endpoint that frontend expects
 """
 
 from fastapi import APIRouter, Depends
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any
 
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.services.system_management_service import SystemManagementService
 
 # Security scheme
-security = HTTPBearer()
 
 # Router
 router = APIRouter(prefix="/api/system", tags=["System Info"])
@@ -26,21 +24,11 @@ class SystemInfoResponse(BaseModel):
     version: str
     status: str
 
-def get_current_user(credentials = Depends(security), db: Session = Depends(get_db)):
-    """Get current authenticated user."""
-    token = credentials.credentials
-    payload = verify_token(token)
-    if not payload:
-        from fastapi import HTTPException, status
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-    return payload
+# Local get_current_user removed - using centralized auth_dependencies
 
 @router.get("/info", response_model=SystemInfoResponse)
 async def get_system_info(
-    current_user = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get basic system information"""

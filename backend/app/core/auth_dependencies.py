@@ -82,3 +82,23 @@ def require_active_user(current_user: Dict[str, Any] = Depends(get_current_user)
             detail="Account is disabled"
         )
     return current_user
+
+
+async def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False))
+) -> Dict[str, Any] | None:
+    """
+    Optional authentication dependency.
+    Returns user information if valid token provided, None otherwise.
+    Used for endpoints that can work with or without authentication.
+    """
+    if not credentials:
+        return None
+    
+    try:
+        token = credentials.credentials
+        user_info = await verify_session_token(token)
+        return user_info
+    except Exception:
+        # If token is invalid, return None instead of raising error
+        return None

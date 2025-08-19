@@ -142,7 +142,7 @@ EnableDRM Universal Automation Platform
             db.add(template)
             print(f"Created template: {template_data['name']}")
         else:
-            print(f"Template already exists: {template_data['name']}")
+            print(f"Template already exists: {template_data['name']}')
     
     db.commit()
 

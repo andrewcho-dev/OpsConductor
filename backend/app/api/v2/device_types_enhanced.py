@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.services.device_types_management_service import DeviceTypesManagementService, DeviceTypesManagementError
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger
 
 logger = get_structured_logger(__name__)
@@ -90,15 +90,7 @@ router = APIRouter(
 )
 
 
-def get_current_user(db: Session = Depends(get_db)):
-    """Get current authenticated user (placeholder)"""
-    # Placeholder implementation
-    class MockUser:
-        def __init__(self):
-            self.id = 1
-            self.username = "admin"
-    
-    return MockUser()
+# Local get_current_user removed - using centralized auth_dependencies
 
 
 @router.get(
@@ -116,7 +108,7 @@ def get_current_user(db: Session = Depends(get_db)):
     """
 )
 async def get_device_types(
-    current_user = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> List[DeviceTypeResponse]:
     """Enhanced device types retrieval with service layer"""
@@ -127,8 +119,8 @@ async def get_device_types(
         
         # Get device types through service layer (with caching)
         device_types_result = await device_types_service.get_all_device_types(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         # Convert to response models
@@ -138,7 +130,7 @@ async def get_device_types(
             "Device types retrieval successful via service layer",
             extra={
                 "total_types": len(response),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -150,7 +142,7 @@ async def get_device_types(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -169,7 +161,7 @@ async def get_device_types(
             "Device types retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -200,7 +192,7 @@ async def get_device_types(
 )
 async def create_device_type(
     device_type_data: DeviceTypeCreateRequest,
-    current_user = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> DeviceTypeResponse:
     """Enhanced device type creation with service layer"""
@@ -212,8 +204,8 @@ async def create_device_type(
         # Create device type through service layer
         created_type_result = await device_types_service.create_device_type(
             device_type_data=device_type_data.model_dump(),
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = DeviceTypeResponse(**created_type_result)
@@ -223,7 +215,7 @@ async def create_device_type(
             extra={
                 "device_type_id": created_type_result["id"],
                 "device_type_name": created_type_result["name"],
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -236,7 +228,7 @@ async def create_device_type(
                 "error_code": e.error_code,
                 "error_message": e.message,
                 "device_type_name": device_type_data.name,
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -258,7 +250,7 @@ async def create_device_type(
             extra={
                 "device_type_name": device_type_data.name,
                 "error": str(e),
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         

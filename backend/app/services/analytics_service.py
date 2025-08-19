@@ -142,8 +142,8 @@ class AnalyticsService:
             # Count by health status
             healthy_targets = len([t for t in targets if t.health_status == 'healthy'])
             warning_targets = len([t for t in targets if t.health_status == 'warning'])
-            critical_targets = len([t for t in targets if t.health_status == 'critical'])
-            unknown_targets = len([t for t in targets if t.health_status not in ['healthy', 'warning', 'critical']])
+            critical_targets = len([t for t in targets if t.health_status == 'critical"])
+            unknown_targets = len([t for t in targets if t.health_status not in ['healthy', 'warning', 'critical"]])
             
             # Online targets (healthy + warning)
             online_targets = healthy_targets + warning_targets

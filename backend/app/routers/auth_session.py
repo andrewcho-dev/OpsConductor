@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any
 
 from app.database.database import get_db
+from app.core.auth_dependencies import get_current_user
 from app.schemas.user_schemas import UserLogin
 from app.services.user_service import UserService
 from app.core.session_security import (

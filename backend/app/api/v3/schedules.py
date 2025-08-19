@@ -3,20 +3,18 @@ Job Schedules API v3 - Handles job scheduling operations
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.services.job_scheduling_service import JobSchedulingService
 from app.models.job_schedule_models import JobSchedule, ScheduleType, RecurringType
 import logging
 
 logger = logging.getLogger(__name__)
-security = HTTPBearer()
 
 router = APIRouter(prefix="/api/schedules", tags=["Job Schedules"])
 
@@ -84,11 +82,10 @@ class ScheduleResponse(BaseModel):
 async def create_schedule(
     schedule_data: ScheduleCreate,
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Create a new job schedule"""
     try:
-        verify_token(token.credentials)
         scheduling_service = JobSchedulingService(db)
         
         # Convert frontend format to backend format
@@ -150,11 +147,10 @@ async def create_schedule(
 async def list_schedules(
     job_id: Optional[int] = Query(None, description="Filter by job ID"),
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """List job schedules"""
     try:
-        verify_token(token.credentials)
         scheduling_service = JobSchedulingService(db)
         
         if job_id:
@@ -198,11 +194,10 @@ async def list_schedules(
 async def delete_schedule(
     schedule_id: int,
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Delete a job schedule"""
     try:
-        verify_token(token.credentials)
         scheduling_service = JobSchedulingService(db)
         
         schedule = scheduling_service.get_schedule(schedule_id)

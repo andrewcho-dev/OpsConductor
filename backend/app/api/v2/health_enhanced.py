@@ -17,7 +17,6 @@ PHASE 1 & 2 IMPROVEMENTS:
 import json
 import time
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timezone
@@ -27,7 +26,7 @@ from pydantic import BaseModel, Field
 # Import service layer
 from app.services.health_management_service import HealthManagementService, HealthManagementError
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user, get_current_user_optional
 from app.core.logging import get_structured_logger, RequestLogger
 from app.core.config import settings
 
@@ -35,7 +34,6 @@ from app.core.config import settings
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # PHASE 1: COMPREHENSIVE PYDANTIC MODELS
 
@@ -366,74 +364,10 @@ router = APIRouter(
 
 # PHASE 2: ENHANCED DEPENDENCY FUNCTIONS
 
-def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)), 
-                             db: Session = Depends(get_db)):
-    """Get current authenticated user (optional for health endpoints)."""
-    try:
-        if not credentials:
-            return None
-            
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            return None
-        
-        user_id = payload.get("user_id")
-        from app.services.user_service import UserService
-        user = UserService.get_user_by_id(db, user_id)
-        
-        return user
-        
-    except Exception:
-        return None
+# Local get_current_user removed - using centralized auth_dependencies
 
 
-def get_current_user(credentials = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user with enhanced error handling."""
-    try:
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            logger.warning("Invalid token in health management request")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error": "invalid_token",
-                    "message": "Invalid or expired token",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        user_id = payload.get("user_id")
-        from app.services.user_service import UserService
-        user = UserService.get_user_by_id(db, user_id)
-        
-        if not user:
-            logger.warning(f"User not found for token: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "user_not_found",
-                    "message": "User not found",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting current user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "internal_error",
-                "message": "Internal error during authentication",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+# Local get_current_user removed - using centralized auth_dependencies
 
 
 # PHASE 1 & 2: ENHANCED ENDPOINTS WITH SERVICE LAYER
@@ -466,8 +400,8 @@ async def get_overall_health(
 ) -> OverallHealthResponse:
     """Enhanced overall health with service layer and comprehensive monitoring"""
     
-    username = current_user.username if current_user else "anonymous"
-    user_id = current_user.id if current_user else None
+    username = current_user["username"] if current_user else "anonymous"
+    user_id = current_user["id"] if current_user else None
     
     request_logger = RequestLogger(logger, "get_overall_health")
     request_logger.log_request_start("GET", "/api/v2/health/", username)
@@ -569,8 +503,8 @@ async def get_system_health(
 ) -> SystemHealthResponse:
     """Enhanced system health with detailed resource monitoring"""
     
-    username = current_user.username if current_user else "anonymous"
-    user_id = current_user.id if current_user else None
+    username = current_user["username"] if current_user else "anonymous"
+    user_id = current_user["id"] if current_user else None
     
     request_logger = RequestLogger(logger, "get_system_health")
     request_logger.log_request_start("GET", "/api/v2/health/system", username)
@@ -752,8 +686,8 @@ async def get_database_health(
 ) -> DatabaseHealthResponse:
     """Enhanced database health with comprehensive monitoring"""
     
-    username = current_user.username if current_user else "anonymous"
-    user_id = current_user.id if current_user else None
+    username = current_user["username"] if current_user else "anonymous"
+    user_id = current_user["id"] if current_user else None
     
     request_logger = RequestLogger(logger, "get_database_health")
     request_logger.log_request_start("GET", "/api/v2/health/database", username)
@@ -901,8 +835,8 @@ async def get_application_health(
 ) -> ApplicationHealthResponse:
     """Enhanced application health with comprehensive monitoring"""
     
-    username = current_user.username if current_user else "anonymous"
-    user_id = current_user.id if current_user else None
+    username = current_user["username"] if current_user else "anonymous"
+    user_id = current_user["id"] if current_user else None
     
     request_logger = RequestLogger(logger, "get_application_health")
     request_logger.log_request_start("GET", "/api/v2/health/application", username)
@@ -1060,13 +994,13 @@ async def get_application_health(
     }
 )
 async def get_health_summary(
-    current_user = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> HealthSummaryResponse:
     """Enhanced health summary with service layer and consolidated monitoring"""
     
     request_logger = RequestLogger(logger, "get_health_summary")
-    request_logger.log_request_start("GET", "/api/v2/health/summary", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/health/summary", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1074,8 +1008,8 @@ async def get_health_summary(
         
         # Get health summary through service layer (with caching)
         summary_result = await health_mgmt_service.get_health_summary(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = HealthSummaryResponse(**summary_result)
@@ -1087,7 +1021,7 @@ async def get_health_summary(
             extra={
                 "overall_status": summary_result.get("overall_status", "unknown"),
                 "critical_alerts": len(summary_result.get("critical_alerts", [])),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1101,7 +1035,7 @@ async def get_health_summary(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1122,7 +1056,7 @@ async def get_health_summary(
             "Health summary retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1141,13 +1075,13 @@ async def get_health_summary(
 @router.post("/services/{service_name}/restart")
 async def restart_service(
     service_name: str,
-    current_user = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Restart a Docker service/container"""
     
     request_logger = RequestLogger(logger, "restart_service")
-    request_logger.log_request_start("POST", f"/api/v2/health/services/{service_name}/restart", current_user.username)
+    request_logger.log_request_start("POST", f"/api/v2/health/services/{service_name}/restart", current_user["username"])
     
     try:
         import docker
@@ -1174,7 +1108,7 @@ async def restart_service(
             extra={
                 "service_name": service_name,
                 "container_name": container.name,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1194,7 +1128,7 @@ async def restart_service(
             extra={
                 "service_name": service_name,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1211,7 +1145,7 @@ async def restart_service(
             extra={
                 "service_name": service_name,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         

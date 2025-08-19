@@ -4,14 +4,13 @@ No serialization complexity, just clean IDs and execution tracking
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.services.job_service import JobService
 from app.services.job_scheduling_service import JobSchedulingService
 from app.models.job_models import JobStatus, ExecutionStatus, ActionType
@@ -19,7 +18,6 @@ from app.tasks.job_tasks import execute_job_task
 import logging
 
 logger = logging.getLogger(__name__)
-security = HTTPBearer()
 
 router = APIRouter(prefix="/api/v3/jobs", tags=["Jobs v3 - Simplified"])
 
@@ -115,12 +113,11 @@ class ExecutionResultResponse(BaseModel):
 @router.post("/", response_model=JobResponse)
 async def create_job(
     job_data: JobCreate,
-    db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Create a new job - SIMPLIFIED"""
     try:
-        user = verify_token(token.credentials)
         job_service = JobService(db)
         
         # Convert to internal format
@@ -143,7 +140,7 @@ async def create_job(
             scheduled_at=job_data.scheduled_at
         )
         
-        job = job_service.create_job(internal_job_data, user["user_id"])
+        job = job_service.create_job(internal_job_data, current_user["id"])
         
         return JobResponse(
             id=job.id,
@@ -165,12 +162,11 @@ async def create_job(
 async def list_jobs(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """List jobs - SIMPLIFIED"""
     try:
-        verify_token(token.credentials)
         job_service = JobService(db)
         jobs = job_service.list_jobs(skip=skip, limit=limit)
         
@@ -218,11 +214,10 @@ async def list_jobs(
 async def get_job(
     job_id: int,
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get job by ID - SIMPLIFIED"""
     try:
-        verify_token(token.credentials)
         job_service = JobService(db)
         job = job_service.get_job(job_id)
         
@@ -320,11 +315,10 @@ async def execute_job(
     job_id: int,
     execute_data: JobExecuteRequest,
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Execute a job - SIMPLIFIED"""
     try:
-        verify_token(token.credentials)
         job_service = JobService(db)
         
         # Convert to internal format
@@ -365,11 +359,10 @@ async def execute_job(
 async def get_job_executions(
     job_id: int,
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get all executions for a job - SIMPLIFIED"""
     try:
-        verify_token(token.credentials)
         job_service = JobService(db)
         
         from app.models.job_models import JobExecution, JobExecutionResult
@@ -421,11 +414,10 @@ async def get_execution_results(
     execution_number: int,
     target_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get execution results - SIMPLIFIED"""
     try:
-        verify_token(token.credentials)
         job_service = JobService(db)
         
         # Find the execution
@@ -472,11 +464,10 @@ async def get_target_results(
     target_id: int,
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get all results for a specific target - SIMPLIFIED"""
     try:
-        verify_token(token.credentials)
         job_service = JobService(db)
         
         results = job_service.get_target_results(target_id, limit)
@@ -509,11 +500,10 @@ async def get_target_results(
 async def delete_job(
     job_id: int,
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Delete a job - SIMPLIFIED"""
     try:
-        verify_token(token.credentials)
         job_service = JobService(db)
         
         success = job_service.delete_job(job_id)
@@ -534,11 +524,10 @@ async def update_job(
     job_id: int,
     job_update: JobUpdate,
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Update a job - SIMPLIFIED"""
     try:
-        verify_token(token.credentials)
         job_service = JobService(db)
         
         # Get existing job
@@ -663,11 +652,10 @@ async def update_job(
 async def get_job_targets(
     job_id: int,
     db: Session = Depends(get_db),
-    token: str = Depends(security)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get job targets - for editing purposes"""
     try:
-        verify_token(token.credentials)
         
         # Get job with targets
         from app.models.job_models import Job

@@ -12,7 +12,6 @@ FEATURES:
 
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, desc, func, text
 from datetime import datetime, timezone, timedelta
@@ -20,7 +19,7 @@ from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field
 
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger, RequestLogger
 from app.models.job_models import (
     Job, JobExecution, JobExecutionResult, ExecutionStatus, JobAction
@@ -31,7 +30,6 @@ from app.models.universal_target_models import UniversalTarget
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # Router
 router = APIRouter(prefix="/api/v2/log-viewer", tags=["Log Viewer"])
@@ -110,64 +108,19 @@ class LogViewerStatsResponse(BaseModel):
 
 # HELPER FUNCTIONS
 
-def get_current_user(credentials = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user with enhanced error handling."""
-    try:
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            logger.warning("Invalid token in log viewer request")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error": "invalid_token",
-                    "message": "Invalid or expired token",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }
-            )
-        
-        user_id = payload.get("user_id")
-        from app.services.user_service import UserService
-        user = UserService.get_user_by_id(db, user_id)
-        
-        if not user:
-            logger.warning(f"User not found for token: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "user_not_found",
-                    "message": "User not found",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Authentication error in log viewer: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": "authentication_failed",
-                "message": "Authentication failed",
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-        )
+# Local get_current_user removed - using centralized auth_dependencies
 
 
-def require_log_viewer_permissions(current_user = Depends(get_current_user)):
+def require_log_viewer_permissions(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Require log viewer permissions"""
-    if current_user.role not in ["administrator", "operator", "viewer"]:
+    if current_user["role"] not in ["administrator", "operator", "viewer"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "insufficient_permissions",
                 "message": "Insufficient permissions to view logs",
                 "required_roles": ["administrator", "operator", "viewer"],
-                "user_role": current_user.role,
+                "user_role": current_user["role"],
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
         )
@@ -197,7 +150,7 @@ def build_search_query(db: Session, pattern: Optional[str] = None, status_filter
         pattern = pattern.strip()
         
         # Check if it's a serial pattern search
-        if any(char in pattern for char in ['J', '.', '*']):
+        if any(char in pattern for char in ['J', '.', '*"]):
             # Serial pattern search
             if '*' in pattern:
                 # Wildcard search
@@ -277,7 +230,7 @@ async def search_execution_logs(
     """Search job execution logs with advanced filtering"""
     
     request_logger = RequestLogger(logger, "search_execution_logs")
-    request_logger.log_request_start("GET", "/api/v2/log-viewer/search", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/log-viewer/search", current_user["username"])
     
     try:
         # Build search query
@@ -343,7 +296,7 @@ async def search_execution_logs(
                 "status_filter": status,
                 "results_count": len(action_results),
                 "total_count": total_count,
-                "user": current_user.username
+                "user": current_user["username"]
             }
         )
         
@@ -384,7 +337,7 @@ async def get_log_viewer_stats(
     """Get comprehensive log viewer statistics"""
     
     request_logger = RequestLogger(logger, "get_log_viewer_stats")
-    request_logger.log_request_start("GET", "/api/v2/log-viewer/stats", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/log-viewer/stats", current_user["username"])
     
     try:
         # Build base query for stats
@@ -449,7 +402,7 @@ async def get_log_viewer_stats(
             extra={
                 "pattern": pattern,
                 "stats": stats,
-                "user": current_user.username
+                "user": current_user["username"]
             }
         )
         
@@ -490,7 +443,7 @@ async def get_action_details(
     """Get detailed information for a specific action"""
     
     request_logger = RequestLogger(logger, f"get_action_details_{action_id}")
-    request_logger.log_request_start("GET", f"/api/v2/log-viewer/action/{action_id}", current_user.username)
+    request_logger.log_request_start("GET", f"/api/v2/log-viewer/action/{action_id}", current_user["username"])
     
     try:
         # Query action with all related data
@@ -542,7 +495,7 @@ async def get_action_details(
             extra={
                 "action_id": action_id,
                 "action_serial": action.action_serial,
-                "user": current_user.username
+                "user": current_user["username"]
             }
         )
         

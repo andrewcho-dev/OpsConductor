@@ -15,7 +15,6 @@ PHASE 1 & 2 IMPROVEMENTS:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Union
@@ -24,14 +23,13 @@ from pydantic import BaseModel, Field, IPvAnyAddress, validator
 # Import service layer
 from app.services.target_management_service import TargetManagementService, TargetManagementError
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger, RequestLogger
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # PHASE 1: COMPREHENSIVE PYDANTIC MODELS
 
@@ -477,52 +475,7 @@ router = APIRouter(
 
 # PHASE 2: ENHANCED DEPENDENCY FUNCTIONS
 
-def get_current_user(credentials: HTTPBearer = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user with enhanced error handling."""
-    try:
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            logger.warning("Invalid token in target management request")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error": "invalid_token",
-                    "message": "Invalid or expired token",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        user_id = payload.get("user_id")
-        from app.services.user_service import UserService
-        user = UserService.get_user_by_id(db, user_id)
-        
-        if not user:
-            logger.warning(f"User not found for token: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "user_not_found",
-                    "message": "User not found",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting current user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "internal_error",
-                "message": "Internal error during authentication",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+# Local get_current_user removed - using centralized auth_dependencies
 
 
 # PHASE 1 & 2: ENHANCED ENDPOINTS WITH SERVICE LAYER
@@ -567,7 +520,7 @@ async def get_targets(
     """Enhanced target list retrieval with service layer and advanced filtering"""
     
     request_logger = RequestLogger(logger, "get_targets")
-    request_logger.log_request_start("GET", "/api/targets", current_user.username)
+    request_logger.log_request_start("GET", "/api/targets", current_user["username"])
     
     try:
         # Initialize service layer
@@ -605,7 +558,7 @@ async def get_targets(
                 "total_targets": targets_result["total"],
                 "returned_targets": len(target_responses),
                 "filters_applied": bool(search or os_type or environment or method_type or health_status),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -618,7 +571,7 @@ async def get_targets(
             "Targets list retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -659,7 +612,7 @@ async def get_target(
     """Enhanced target retrieval by ID with service layer and caching"""
     
     request_logger = RequestLogger(logger, f"get_target_{target_id}")
-    request_logger.log_request_start("GET", f"/api/targets/{target_id}", current_user.username)
+    request_logger.log_request_start("GET", f"/api/targets/{target_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -677,7 +630,7 @@ async def get_target(
             extra={
                 "target_id": target_id,
                 "target_name": target_data["name"],
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -693,7 +646,7 @@ async def get_target(
                 "target_id": target_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -715,7 +668,7 @@ async def get_target(
             extra={
                 "target_id": target_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -771,7 +724,7 @@ async def create_target(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, f"create_target_{target_data.name}")
-    request_logger.log_request_start("POST", "/api/targets", current_user.username)
+    request_logger.log_request_start("POST", "/api/targets", current_user["username"])
     
     try:
         # Initialize service layer
@@ -803,8 +756,8 @@ async def create_target(
         # Create target through service layer
         created_target = await target_mgmt_service.create_target(
             target_data=target_create_data,
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -818,7 +771,7 @@ async def create_target(
             extra={
                 "target_id": created_target["id"],
                 "target_name": created_target["name"],
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -833,7 +786,7 @@ async def create_target(
                 "target_name": target_data.name,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -856,7 +809,7 @@ async def create_target(
             extra={
                 "target_name": target_data.name,
                 "error": str(e),
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -903,7 +856,7 @@ async def update_target(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, f"update_target_{target_id}")
-    request_logger.log_request_start("PUT", f"/api/targets/{target_id}", current_user.username)
+    request_logger.log_request_start("PUT", f"/api/targets/{target_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -924,8 +877,8 @@ async def update_target(
         updated_target = await target_mgmt_service.update_target(
             target_id=target_id,
             target_data=target_update_data,
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -939,7 +892,7 @@ async def update_target(
             extra={
                 "target_id": target_id,
                 "target_name": updated_target["name"],
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -955,7 +908,7 @@ async def update_target(
                 "target_id": target_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -977,7 +930,7 @@ async def update_target(
             extra={
                 "target_id": target_id,
                 "error": str(e),
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1021,7 +974,7 @@ async def delete_target(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, f"delete_target_{target_id}")
-    request_logger.log_request_start("DELETE", f"/api/targets/{target_id}", current_user.username)
+    request_logger.log_request_start("DELETE", f"/api/targets/{target_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1030,8 +983,8 @@ async def delete_target(
         # Delete target through service layer
         deletion_result = await target_mgmt_service.delete_target(
             target_id=target_id,
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -1045,7 +998,7 @@ async def delete_target(
             extra={
                 "target_id": target_id,
                 "target_name": deletion_result["deleted_target"]["name"],
-                "deleted_by": current_user.username
+                "deleted_by": current_user["username"]
             }
         )
         
@@ -1061,7 +1014,7 @@ async def delete_target(
                 "target_id": target_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "deleted_by": current_user.username
+                "deleted_by": current_user["username"]
             }
         )
         
@@ -1083,7 +1036,7 @@ async def delete_target(
             extra={
                 "target_id": target_id,
                 "error": str(e),
-                "deleted_by": current_user.username
+                "deleted_by": current_user["username"]
             }
         )
         
@@ -1124,7 +1077,7 @@ async def test_target_connection(
     """Enhanced connection testing with service layer and comprehensive results"""
     
     request_logger = RequestLogger(logger, f"test_connection_{target_id}")
-    request_logger.log_request_start("POST", f"/api/targets/{target_id}/test-connection", current_user.username)
+    request_logger.log_request_start("POST", f"/api/targets/{target_id}/test-connection", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1133,8 +1086,8 @@ async def test_target_connection(
         # Test connection through service layer
         test_result = await target_mgmt_service.test_target_connection(
             target_id=target_id,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = ConnectionTestResult(**test_result)
@@ -1147,7 +1100,7 @@ async def test_target_connection(
                 "target_id": target_id,
                 "success": test_result["success"],
                 "response_time": test_result.get("response_time"),
-                "tested_by": current_user.username
+                "tested_by": current_user["username"]
             }
         )
         
@@ -1163,7 +1116,7 @@ async def test_target_connection(
                 "target_id": target_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "tested_by": current_user.username
+                "tested_by": current_user["username"]
             }
         )
         
@@ -1185,7 +1138,7 @@ async def test_target_connection(
             extra={
                 "target_id": target_id,
                 "error": str(e),
-                "tested_by": current_user.username
+                "tested_by": current_user["username"]
             }
         )
         

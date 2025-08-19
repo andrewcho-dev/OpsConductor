@@ -21,7 +21,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger
 
 logger = get_structured_logger(__name__)

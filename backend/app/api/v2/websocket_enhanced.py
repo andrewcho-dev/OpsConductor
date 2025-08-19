@@ -17,7 +17,6 @@ PHASE 1 & 2 IMPROVEMENTS:
 import json
 import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Union
@@ -26,14 +25,13 @@ from pydantic import BaseModel, Field, validator
 # Import service layer
 from app.services.websocket_management_service import WebSocketManagementService, WebSocketManagementError
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger, RequestLogger
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # PHASE 1: COMPREHENSIVE PYDANTIC MODELS
 

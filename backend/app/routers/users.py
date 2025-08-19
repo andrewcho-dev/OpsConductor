@@ -32,7 +32,7 @@ async def create_user(
         
         await audit_service.log_event(
             event_type=AuditEventType.USER_CREATED,
-            user_id=current_user.id,
+            user_id=current_user["id"],
             resource_type="user",
             resource_id=str(user.id),
             action="create_user",
@@ -124,7 +124,7 @@ async def update_user(
     
     await audit_service.log_event(
         event_type=AuditEventType.USER_UPDATED,
-        user_id=current_user.id,
+        user_id=current_user["id"],
         resource_type="user",
         resource_id=str(user_id),
         action="update_user",
@@ -143,7 +143,7 @@ async def update_user(
     if user_data.role and user_data.role != original_user.role:
         await audit_service.log_event(
             event_type=AuditEventType.PERMISSION_CHANGED,
-            user_id=current_user.id,
+            user_id=current_user["id"],
             resource_type="user",
             resource_id=str(user_id),
             action="change_user_role",
@@ -193,7 +193,7 @@ async def delete_user(
     
     await audit_service.log_event(
         event_type=AuditEventType.USER_DELETED,
-        user_id=current_user.id,
+        user_id=current_user["id"],
         resource_type="user",
         resource_id=str(user_id),
         action="delete_user",

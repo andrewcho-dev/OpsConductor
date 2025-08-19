@@ -4,7 +4,6 @@ Provides basic job execution log viewing without complex queries
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
 from datetime import datetime, timezone
@@ -12,7 +11,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger
 from app.models.job_models import (
     Job, JobExecution, JobExecutionResult, ExecutionStatus
@@ -22,7 +21,6 @@ from app.models.job_models import (
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # Router
 router = APIRouter(prefix="/api/v2/log-viewer", tags=["Log Viewer Simple"])
@@ -68,23 +66,7 @@ class LogStatsResponse(BaseModel):
 
 # DEPENDENCY FUNCTIONS
 
-def get_current_user(credentials = Depends(security), db: Session = Depends(get_db)):
-    """Get current authenticated user."""
-    try:
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-        return payload
-    except Exception as e:
-        logger.error(f"Authentication failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed"
-        )
+# Local get_current_user removed - using centralized auth_dependencies
 
 # ENDPOINTS
 
@@ -102,7 +84,7 @@ async def search_execution_logs(
     execution_id: Optional[int] = Query(None, description="Filter by execution ID"),
     job_id: Optional[int] = Query(None, description="Filter by job ID"),
     execution_number: Optional[int] = Query(None, description="Filter by execution number"),
-    current_user = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Search execution logs with basic filtering"""
@@ -197,7 +179,7 @@ async def search_execution_logs(
     description="Get basic statistics about job execution logs"
 )
 async def get_log_stats(
-    current_user = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get basic log statistics"""

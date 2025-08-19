@@ -110,7 +110,7 @@ class DeviceTypeRepository:
         
         # Update fields
         for field, value in update_data.items():
-            if hasattr(device_type, field) and field not in ['id', 'created_by', 'created_at']:
+            if hasattr(device_type, field) and field not in ['id', 'created_by', 'created_at"]:
                 setattr(device_type, field, value)
         
         # Update search vector

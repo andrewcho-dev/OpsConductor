@@ -42,7 +42,7 @@ class SimpleAnalyticsService:
             # Get target metrics
             targets = self.db.query(UniversalTarget).filter(UniversalTarget.is_active == True).all()
             total_targets = len(targets)
-            healthy_targets = len([t for t in targets if t.health_status == 'healthy'])
+            healthy_targets = len([t for t in targets if t.health_status == 'healthy"])
             
             # Get recent activity
             recent_executions = self.db.query(JobExecution).join(Job).order_by(

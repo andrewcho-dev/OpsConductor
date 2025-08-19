@@ -85,7 +85,7 @@ def test_simplified_jobs():
         print(f"✅ Job created successfully!")
         print(f"   Job ID: {job_id}")
         print(f"   Job Name: {job['name']}")
-        print(f"   Status: {job['status']}")
+        print(f"   Status: {job['status"]}")
         
     except Exception as e:
         print(f"❌ Error creating job: {str(e)}")
@@ -103,9 +103,9 @@ def test_simplified_jobs():
         execution = response.json()
         execution_id = execution["id"]
         execution_number = execution["execution_number"]
-        print(f"✅ Job execution started!")
-        print(f"   Execution ID: {execution_id}")
-        print(f"   Execution Number: {execution_number}")
+        print(f"✅ Job execution started!')
+        print(f"   Execution ID: {execution_id}')
+        print(f"   Execution Number: {execution_number}')
         print(f"   Status: {execution['status']}")
         print(f"   Total Targets: {execution['total_targets']}")
         
@@ -114,7 +114,7 @@ def test_simplified_jobs():
         return False
     
     # Step 5: Check execution status
-    print("\n5️⃣ Monitoring execution...")
+    print("\n5️⃣ Monitoring execution...')
     for i in range(10):  # Wait up to 30 seconds
         try:
             response = requests.get(f"{BASE_URL}/api/v3/jobs/{job_id}/executions", headers=headers)
@@ -123,9 +123,9 @@ def test_simplified_jobs():
                 if executions:
                     current_execution = executions[0]  # Most recent
                     status = current_execution["status"]
-                    print(f"   Status: {status} (check {i+1}/10)")
+                    print(f"   Status: {status} (check {i+1}/10)')
                     
-                    if status in ["completed", "failed"]:
+                    if status in ["completed", "failed']:
                         print(f"✅ Execution finished with status: {status}")
                         print(f"   Successful targets: {current_execution['successful_targets']}")
                         print(f"   Failed targets: {current_execution['failed_targets']}")
