@@ -150,26 +150,37 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
   // Transform API actions to frontend format
   const transformActionsForFrontend = (apiActions) => {
+    console.log('🔄 Transforming API actions to frontend format:', apiActions);
     if (!apiActions || !Array.isArray(apiActions)) return [];
     
-    return apiActions.map(apiAction => ({
-      id: apiAction.id?.toString() || Date.now().toString(),
-      type: apiAction.action_type || 'command',
-      name: apiAction.action_name || 'Unnamed Action',
-      order: apiAction.action_order || 1,
-      enabled: true,
-      continueOnError: false,
-      timeout: 30,
-      conditions: [],
-      parameters: {
-        ...apiAction.action_parameters,
-        // Ensure captureOutput is set for backward compatibility
-        captureOutput: apiAction.action_parameters?.captureOutput !== undefined 
-          ? apiAction.action_parameters.captureOutput 
-          : true
-      },
-      targetCompatibility: { compatible: true, warnings: [] }
-    }));
+    const transformedActions = apiActions.map(apiAction => {
+      console.log('🔄 Processing API action:', apiAction);
+      
+      const transformedAction = {
+        id: apiAction.id?.toString() || Date.now().toString(),
+        type: apiAction.action_type || 'command',
+        name: apiAction.action_name || 'Unnamed Action',
+        order: apiAction.action_order || 1,
+        enabled: true,
+        continueOnError: false,
+        timeout: 30,
+        conditions: [],
+        parameters: {
+          ...apiAction.action_parameters,
+          // Ensure captureOutput is set for backward compatibility
+          captureOutput: apiAction.action_parameters?.captureOutput !== undefined 
+            ? apiAction.action_parameters.captureOutput 
+            : true
+        },
+        targetCompatibility: { compatible: true, warnings: [] }
+      };
+      
+      console.log('🔄 Transformed to frontend action:', transformedAction);
+      return transformedAction;
+    });
+    
+    console.log('🔄 All transformed actions:', transformedActions);
+    return transformedActions;
   };
 
   const populateFormData = async () => {
@@ -207,8 +218,8 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
       console.log('📝 Initial form data:', initialFormData);
       setFormData(initialFormData);
 
-      // Try to fetch more complete job details from v2 API (includes actions and targets)
-      const response = await fetch(`/api/v2/jobs/${job.id}`, {
+      // Try to fetch more complete job details from v3 API (includes actions and targets)
+      const response = await fetch(`/api/v3/jobs/${job.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -267,7 +278,54 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
         // Set schedule config if exists
         if (fullJob.schedule_config) {
           console.log('📅 Setting schedule config from API:', fullJob.schedule_config);
-          setScheduleConfig(fullJob.schedule_config);
+          
+          // Transform backend schedule config to frontend format
+          const transformedScheduleConfig = {
+            scheduleType: fullJob.schedule_config.schedule_type,
+            timezone: fullJob.schedule_config.timezone || 'UTC',
+          };
+          
+          // Add type-specific fields
+          if (fullJob.schedule_config.schedule_type === 'once') {
+            transformedScheduleConfig.executeAt = fullJob.schedule_config.execute_at;
+          }
+          else if (fullJob.schedule_config.schedule_type === 'recurring') {
+            transformedScheduleConfig.recurringType = fullJob.schedule_config.recurring_type;
+            transformedScheduleConfig.interval = fullJob.schedule_config.interval || 1;
+            transformedScheduleConfig.time = fullJob.schedule_config.time;
+            
+            // Handle days of week for weekly schedules
+            if (fullJob.schedule_config.recurring_type === 'weekly' && fullJob.schedule_config.days_of_week) {
+              transformedScheduleConfig.daysOfWeek = fullJob.schedule_config.days_of_week.split(',').map(Number);
+            }
+            
+            // Handle day of month for monthly schedules
+            if (fullJob.schedule_config.recurring_type === 'monthly' && fullJob.schedule_config.day_of_month) {
+              transformedScheduleConfig.dayOfMonth = fullJob.schedule_config.day_of_month;
+            }
+            
+            // Extract start date and time from execute_at if available
+            if (fullJob.schedule_config.execute_at) {
+              const executeDate = new Date(fullJob.schedule_config.execute_at);
+              transformedScheduleConfig.startDate = executeDate.toISOString().split('T')[0];
+              transformedScheduleConfig.startTime = executeDate.toTimeString().slice(0, 5);
+            }
+            
+            // Advanced options
+            if (fullJob.schedule_config.max_executions) {
+              transformedScheduleConfig.maxExecutions = fullJob.schedule_config.max_executions;
+            }
+            
+            if (fullJob.schedule_config.end_date) {
+              transformedScheduleConfig.endDate = fullJob.schedule_config.end_date;
+            }
+          }
+          else if (fullJob.schedule_config.schedule_type === 'cron') {
+            transformedScheduleConfig.cronExpression = fullJob.schedule_config.cron_expression;
+          }
+          
+          console.log('📅 Transformed schedule config for frontend:', transformedScheduleConfig);
+          setScheduleConfig(transformedScheduleConfig);
         } else if (fullJob.scheduled_at) {
           // Create a basic schedule config from scheduled_at
           console.log('📅 Creating schedule config from scheduled_at:', fullJob.scheduled_at);
@@ -337,7 +395,17 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
   const handleActionsConfiguration = (actionsData) => {
     console.log('🔧 Actions configured:', actionsData);
-    setFormData(prev => ({ ...prev, actions: actionsData }));
+    console.log('🔧 Current form data actions:', formData.actions);
+    
+    // Create a deep copy to ensure we're not affected by reference issues
+    const actionsCopy = JSON.parse(JSON.stringify(actionsData));
+    console.log('🔧 Deep copied actions:', actionsCopy);
+    
+    setFormData(prev => {
+      const newFormData = { ...prev, actions: actionsCopy };
+      console.log('🔧 New form data:', newFormData);
+      return newFormData;
+    });
     setShowActionsModal(false);
   };
 
@@ -407,10 +475,40 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
         });
       }
       
+      // Validate schedule configuration before submitting
+      if (scheduleConfig) {
+        console.log('📅 Schedule configuration before submission:', JSON.stringify(scheduleConfig, null, 2));
+        
+        if (scheduleConfig.scheduleType === 'recurring') {
+          console.log('🔄 Recurring type:', scheduleConfig.recurringType);
+          console.log('🔄 Interval:', scheduleConfig.interval);
+          
+          if (scheduleConfig.recurringType === 'minutes') {
+            console.log('⏱️ Minutes-based schedule with interval:', scheduleConfig.interval);
+            // For minutes, we don't need time
+            if (scheduleConfig.time) {
+              console.log('⚠️ Time is set but not needed for minutes-based schedule:', scheduleConfig.time);
+            }
+          } else if (scheduleConfig.recurringType === 'hours') {
+            console.log('⏱️ Hours-based schedule with interval:', scheduleConfig.interval);
+            // For hours, we don't need time
+            if (scheduleConfig.time) {
+              console.log('⚠️ Time is set but not needed for hours-based schedule:', scheduleConfig.time);
+            }
+          } else if (scheduleConfig.recurringType === 'weekly') {
+            console.log('📆 Days of week:', scheduleConfig.daysOfWeek);
+            if (!scheduleConfig.daysOfWeek || scheduleConfig.daysOfWeek.length === 0) {
+              console.warn('⚠️ Weekly schedule without days of week selected');
+            }
+          }
+        }
+      }
+      
       // Pass both job data and schedule configuration
+      console.log('📤 Submitting job update with schedule config:', scheduleConfig ? 'yes' : 'no');
       const success = await onSubmit(job.id, submitData, scheduleConfig);
       console.log('📤 Job update result:', success);
-      console.log('📅 Schedule config:', scheduleConfig);
+      console.log('📅 Schedule config after submission:', JSON.stringify(scheduleConfig, null, 2));
       if (success) {
         onClose();
       }

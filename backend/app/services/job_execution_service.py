@@ -23,6 +23,11 @@ class JobExecutionService:
         self.semaphore = asyncio.Semaphore(self.max_concurrent)
         self.connection_timeout = settings.CONNECTION_TIMEOUT
         self.command_timeout = settings.COMMAND_TIMEOUT
+        
+        # Retry configuration
+        self.enable_retry = settings.ENABLE_RETRY
+        self.max_retries = settings.MAX_RETRIES
+        self.retry_backoff_base = settings.RETRY_BACKOFF_BASE
 
     async def execute_job_on_targets(
         self,
@@ -83,7 +88,16 @@ class JobExecutionService:
         }
 
     async def _execute_on_target(self, execution: JobExecution, target: UniversalTarget) -> Dict[str, Any]:
-        """Execute job on a single target - SIMPLIFIED"""
+        """
+        Execute job on a single target with retry support.
+        
+        Args:
+            execution: The job execution record
+            target: The target to execute on
+            
+        Returns:
+            dict: Execution result with success status
+        """
         logger.info(f"🎯 Executing on target: {target.name}")
         
         try:
@@ -99,13 +113,23 @@ class JobExecutionService:
             if not comm_method:
                 raise ValueError(f"No communication method found for target {target.name}")
 
-            # Execute each action
+            # Execute each action with retry support
             all_success = True
             for action in actions:
                 try:
-                    result = await self._execute_action(execution, target, action, comm_method)
+                    # Use retry logic if enabled
+                    if self.enable_retry:
+                        result = await self._execute_action_with_retry(execution, target, action, comm_method)
+                    else:
+                        result = await self._execute_action(execution, target, action, comm_method)
+                        
                     if not result.get('success', False):
                         all_success = False
+                        
+                        # Log retry information if available
+                        if result.get('retries_exhausted'):
+                            logger.warning(f"⚠️ All retries exhausted for action '{action.action_name}' on {target.name}")
+                            
                 except Exception as e:
                     logger.error(f"Action {action.action_name} failed on {target.name}: {str(e)}")
                     # Create failed result record
@@ -118,7 +142,7 @@ class JobExecutionService:
                         action_name=action.action_name,
                         action_type=action.action_type,
                         status=ExecutionStatus.FAILED,
-                        error_text=str(e)
+                        error_text=f"Unhandled exception: {str(e)}"
                     )
                     all_success = False
 
@@ -128,6 +152,109 @@ class JobExecutionService:
             logger.error(f"Target execution failed for {target.name}: {str(e)}")
             return {"success": False, "target": target.name, "error": str(e)}
 
+    async def _execute_action_with_retry(
+        self, 
+        execution: JobExecution, 
+        target: UniversalTarget, 
+        action, 
+        comm_method,
+        retry_count: int = 0
+    ) -> Dict[str, Any]:
+        """
+        Execute a single action with retry logic.
+        
+        Args:
+            execution: The job execution record
+            target: The target to execute on
+            action: The action to execute
+            comm_method: The communication method to use
+            retry_count: Current retry attempt (0 for first attempt)
+            
+        Returns:
+            dict: Execution result with success status and output/error information
+        """
+        try:
+            # Execute the action
+            result = await self._execute_action(execution, target, action, comm_method)
+            
+            # If successful or retries disabled, return the result
+            if result.get('success', False) or not self.enable_retry:
+                return result
+                
+            # Check if the error is retriable
+            if not result.get('retriable', False):
+                logger.info(f"⚠️ Error is not retriable for action '{action.action_name}' on {target.name}")
+                return result
+                
+            # If we've reached max retries, return the failed result
+            if retry_count >= self.max_retries:
+                logger.warning(f"⚠️ Max retries ({self.max_retries}) reached for action '{action.action_name}' on {target.name}")
+                result['retries_exhausted'] = True
+                
+                # Create a final execution result with retry information
+                error_msg = result.get('error', 'Unknown error')
+                self.job_service.create_execution_result(
+                    execution_id=execution.id,
+                    target_id=target.id,
+                    target_name=target.name,
+                    action_id=action.id,
+                    action_order=action.action_order,
+                    action_name=action.action_name,
+                    action_type=action.action_type,
+                    status=ExecutionStatus.FAILED,
+                    error_text=f"Failed after {self.max_retries} retries: {error_msg}",
+                    command_executed=result.get('command', 'N/A')
+                )
+                
+                return result
+                
+            # Calculate backoff time using exponential backoff
+            backoff_seconds = self.retry_backoff_base ** retry_count
+            logger.info(f"🔄 Retrying action '{action.action_name}' on {target.name} in {backoff_seconds:.2f}s (attempt {retry_count + 1}/{self.max_retries})")
+            
+            # Record the retry attempt
+            try:
+                self.job_service.record_retry_attempt(
+                    execution_id=execution.id,
+                    target_id=target.id,
+                    action_id=action.id,
+                    attempt_number=retry_count + 1,
+                    error_message=result.get('error', 'Unknown error')
+                )
+            except Exception as record_error:
+                logger.error(f"Failed to record retry attempt: {str(record_error)}")
+            
+            # Wait for backoff period
+            await asyncio.sleep(backoff_seconds)
+            
+            # Retry the action
+            return await self._execute_action_with_retry(
+                execution=execution,
+                target=target,
+                action=action,
+                comm_method=comm_method,
+                retry_count=retry_count + 1
+            )
+            
+        except Exception as e:
+            logger.error(f"❌ Retry mechanism failed: {str(e)}")
+            
+            # Create a failure record for the retry mechanism itself
+            self.job_service.create_execution_result(
+                execution_id=execution.id,
+                target_id=target.id,
+                target_name=target.name,
+                action_id=action.id,
+                action_order=action.action_order,
+                action_name=f"{action.action_name} (Retry Mechanism)",
+                action_type=action.action_type,
+                status=ExecutionStatus.FAILED,
+                error_text=f"Retry mechanism failed: {str(e)}",
+                command_executed="N/A - Retry mechanism failure"
+            )
+            
+            return {"success": False, "error": f"Retry mechanism failed: {str(e)}"}
+    
     async def _execute_action(
         self, 
         execution: JobExecution, 
@@ -135,17 +262,55 @@ class JobExecutionService:
         action, 
         comm_method
     ) -> Dict[str, Any]:
-        """Execute a single action on a target - SIMPLIFIED"""
+        """
+        Execute a single action on a target with improved error handling.
+        
+        Args:
+            execution: The job execution record
+            target: The target to execute on
+            action: The action to execute
+            comm_method: The communication method to use
+            
+        Returns:
+            dict: Execution result with success status and output/error information
+        """
         start_time = time.time()
+        credentials = None
         
         try:
             logger.info(f"🔧 Executing action '{action.action_name}' on {target.name}")
+            
+            # Get credentials first - fail early if credentials are not available
+            try:
+                credentials = self._get_credentials(comm_method)
+                logger.info(f"✅ Retrieved credentials for {target.name} using {comm_method.method_type}")
+            except ValueError as cred_error:
+                # Handle credential errors specifically
+                error_msg = f"Credential error for {target.name}: {str(cred_error)}"
+                logger.error(f"🔑 {error_msg}")
+                
+                # Create a specific credential error result
+                execution_time_ms = int((time.time() - start_time) * 1000)
+                self.job_service.create_execution_result(
+                    execution_id=execution.id,
+                    target_id=target.id,
+                    target_name=target.name,
+                    action_id=action.id,
+                    action_order=action.action_order,
+                    action_name=action.action_name,
+                    action_type=action.action_type,
+                    status=ExecutionStatus.FAILED,
+                    error_text=f"Authentication error: {error_msg}",
+                    execution_time_ms=execution_time_ms,
+                    command_executed="N/A - Authentication failed"
+                )
+                return {"success": False, "error": error_msg, "auth_failure": True, "retriable": False}
 
             # Execute based on communication method
             if comm_method.method_type == "ssh":
-                result = await self._execute_ssh_action(target, action, comm_method)
+                result = await self._execute_ssh_action(target, action, comm_method, credentials)
             elif comm_method.method_type == "winrm":
-                result = await self._execute_winrm_action(target, action, comm_method)
+                result = await self._execute_winrm_action(target, action, comm_method, credentials)
             else:
                 raise ValueError(f"Unsupported communication method: {comm_method.method_type}")
 
@@ -153,9 +318,6 @@ class JobExecutionService:
 
             # Check if output capture is enabled for this action
             capture_output = action.action_parameters.get('captureOutput', True)  # Default to True for backward compatibility
-            
-            # Get credentials for connection info
-            credentials = self._get_credentials(comm_method)
             
             # Prepare output text with connection info
             output_text = ""
@@ -171,22 +333,34 @@ class JobExecutionService:
                 else:
                     output_text = connection_info + f"❌ Connection Error: {result.get('error', 'Unknown error')}"
             
-            # Create result record
-            self.job_service.create_execution_result(
-                execution_id=execution.id,
-                target_id=target.id,
-                target_name=target.name,
-                action_id=action.id,
-                action_order=action.action_order,
-                action_name=action.action_name,
-                action_type=action.action_type,
-                status=ExecutionStatus.COMPLETED if result['success'] else ExecutionStatus.FAILED,
-                output_text=output_text if capture_output else None,
-                error_text=result.get('error', '') if capture_output else None,
-                exit_code=result.get('exit_code', 0),
-                command_executed=result.get('command', ''),
-                execution_time_ms=execution_time_ms
-            )
+            # Determine if this error is retriable
+            retriable = False
+            if not result.get('success', False):
+                error_text = result.get('error', '').lower()
+                # Connection timeouts, network errors are retriable
+                retriable = any(term in error_text for term in [
+                    'timeout', 'connection refused', 'network', 'unreachable', 
+                    'temporary failure', 'reset by peer', 'broken pipe'
+                ])
+                result['retriable'] = retriable
+            
+            # Create result record only if this is not a retry or it's the final attempt
+            if not self.enable_retry or not retriable:
+                self.job_service.create_execution_result(
+                    execution_id=execution.id,
+                    target_id=target.id,
+                    target_name=target.name,
+                    action_id=action.id,
+                    action_order=action.action_order,
+                    action_name=action.action_name,
+                    action_type=action.action_type,
+                    status=ExecutionStatus.COMPLETED if result['success'] else ExecutionStatus.FAILED,
+                    output_text=output_text if capture_output else None,
+                    error_text=result.get('error', '') if capture_output else None,
+                    exit_code=result.get('exit_code', 0),
+                    command_executed=result.get('command', ''),
+                    execution_time_ms=execution_time_ms
+                )
 
             logger.info(f"✅ Action '{action.action_name}' completed on {target.name} in {execution_time_ms}ms")
             return result
@@ -195,29 +369,49 @@ class JobExecutionService:
             execution_time_ms = int((time.time() - start_time) * 1000)
             logger.error(f"❌ Action '{action.action_name}' failed on {target.name}: {str(e)}")
             
-            # Create failed result record
-            self.job_service.create_execution_result(
-                execution_id=execution.id,
-                target_id=target.id,
-                target_name=target.name,
-                action_id=action.id,
-                action_order=action.action_order,
-                action_name=action.action_name,
-                action_type=action.action_type,
-                status=ExecutionStatus.FAILED,
-                error_text=str(e),
-                execution_time_ms=execution_time_ms
-            )
+            # Determine if this error is retriable
+            error_text = str(e).lower()
+            retriable = any(term in error_text for term in [
+                'timeout', 'connection refused', 'network', 'unreachable', 
+                'temporary failure', 'reset by peer', 'broken pipe'
+            ])
             
-            return {"success": False, "error": str(e)}
+            # Create failed result record with detailed error information
+            error_category = "Authentication error" if "credential" in error_text else "Execution error"
+            error_message = f"{error_category}: {str(e)}"
+            
+            # Create result record only if this is not a retry or it's the final attempt
+            if not self.enable_retry or not retriable:
+                self.job_service.create_execution_result(
+                    execution_id=execution.id,
+                    target_id=target.id,
+                    target_name=target.name,
+                    action_id=action.id,
+                    action_order=action.action_order,
+                    action_name=action.action_name,
+                    action_type=action.action_type,
+                    status=ExecutionStatus.FAILED,
+                    error_text=error_message,
+                    execution_time_ms=execution_time_ms,
+                    command_executed=action.action_parameters.get('command', 'N/A') if hasattr(action, 'action_parameters') else 'N/A'
+                )
+            
+            return {"success": False, "error": error_message, "retriable": retriable}
 
-    async def _execute_ssh_action(self, target: UniversalTarget, action, comm_method) -> Dict[str, Any]:
-        """Execute action via SSH using existing connection utilities"""
-        try:
-            logger.info(f"🔍 DEBUG: comm_method type: {type(comm_method)}")
-            logger.info(f"🔍 DEBUG: comm_method attributes: {dir(comm_method)}")
-            logger.info(f"🔍 DEBUG: comm_method.config type: {type(getattr(comm_method, 'config', 'NOT_FOUND'))}")
+    async def _execute_ssh_action(self, target: UniversalTarget, action, comm_method, credentials: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute action via SSH using existing connection utilities.
+        
+        Args:
+            target: The target to execute on
+            action: The action to execute
+            comm_method: The communication method to use
+            credentials: The credentials to use for authentication
             
+        Returns:
+            dict: Execution result with success status and output/error information
+        """
+        try:
             if action.action_type != ActionType.COMMAND:
                 raise ValueError(f"Unsupported SSH action type: {action.action_type}")
 
@@ -227,13 +421,13 @@ class JobExecutionService:
 
             # Get target connection details
             host = getTargetIpAddress(target)
+            if not host:
+                raise ValueError(f"Could not determine IP address for target {target.name}")
+                
             port = comm_method.config.get('port', 22)
             
-            # Get credentials
-            credentials = self._get_credentials(comm_method)
-            
             # Log connection attempt
-            logger.info(f"🔗 CONNECTING to {host}:{port} via SSH")
+            logger.info(f"🔗 Connecting to {host}:{port} via SSH")
             logger.info(f"👤 Using credentials: username='{credentials.get('username', 'NONE')}'")
             logger.info(f"💻 Executing command: '{command}'")
             
@@ -242,14 +436,12 @@ class JobExecutionService:
             
             # Log connection result
             if result.get('success'):
-                logger.info(f"✅ SSH CONNECTION SUCCESSFUL to {host}:{port}")
+                logger.info(f"✅ SSH connection successful to {host}:{port}")
                 logger.info(f"📤 Command output: {len(result.get('output', ''))} characters")
             else:
-                logger.error(f"❌ SSH CONNECTION FAILED to {host}:{port}")
+                logger.error(f"❌ SSH connection failed to {host}:{port}")
                 logger.error(f"🚫 Error: {result.get('error', 'Unknown error')}")
                 logger.error(f"🔢 Exit code: {result.get('exit_code', 'Unknown')}")
-                
-            logger.info(f"🔍 Full SSH result: {result}")
             
             return {
                 'success': result.get('success', False),
@@ -260,6 +452,7 @@ class JobExecutionService:
             }
                 
         except Exception as e:
+            logger.error(f"❌ SSH action execution error: {str(e)}")
             return {
                 'success': False,
                 'error': str(e),
@@ -267,8 +460,19 @@ class JobExecutionService:
                 'exit_code': 1
             }
 
-    async def _execute_winrm_action(self, target: UniversalTarget, action, comm_method) -> Dict[str, Any]:
-        """Execute action via WinRM using existing connection utilities"""
+    async def _execute_winrm_action(self, target: UniversalTarget, action, comm_method, credentials: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute action via WinRM using existing connection utilities.
+        
+        Args:
+            target: The target to execute on
+            action: The action to execute
+            comm_method: The communication method to use
+            credentials: The credentials to use for authentication
+            
+        Returns:
+            dict: Execution result with success status and output/error information
+        """
         try:
             if action.action_type != ActionType.COMMAND:
                 raise ValueError(f"Unsupported WinRM action type: {action.action_type}")
@@ -279,28 +483,30 @@ class JobExecutionService:
 
             # Get target connection details
             host = getTargetIpAddress(target)
+            if not host:
+                raise ValueError(f"Could not determine IP address for target {target.name}")
+                
             port = comm_method.config.get('port', 5985)
             
-            # Get credentials
-            credentials = self._get_credentials(comm_method)
-            
             # Log connection attempt
-            logger.info(f"🔗 CONNECTING to {host}:{port} via WinRM")
+            logger.info(f"🔗 Connecting to {host}:{port} via WinRM")
             logger.info(f"👤 Using credentials: username='{credentials.get('username', 'NONE')}'")
             logger.info(f"💻 Executing command: '{command}'")
+            
+            # Validate credentials for WinRM
+            if not credentials.get('username') or not credentials.get('password'):
+                raise ValueError("WinRM requires both username and password")
             
             result = execute_winrm_command(host, port, credentials, command, timeout=self.command_timeout)
             
             # Log connection result
             if result.get('success'):
-                logger.info(f"✅ WinRM CONNECTION SUCCESSFUL to {host}:{port}")
+                logger.info(f"✅ WinRM connection successful to {host}:{port}")
                 logger.info(f"📤 Command output: {len(result.get('output', ''))} characters")
             else:
-                logger.error(f"❌ WinRM CONNECTION FAILED to {host}:{port}")
+                logger.error(f"❌ WinRM connection failed to {host}:{port}")
                 logger.error(f"🚫 Error: {result.get('error', 'Unknown error')}")
                 logger.error(f"🔢 Exit code: {result.get('exit_code', 'Unknown')}")
-                
-            logger.info(f"🔍 Full WinRM result: {result}")
             
             return {
                 'success': result.get('success', False),
@@ -311,6 +517,7 @@ class JobExecutionService:
             }
                 
         except Exception as e:
+            logger.error(f"❌ WinRM action execution error: {str(e)}")
             return {
                 'success': False,
                 'error': str(e),
@@ -332,61 +539,88 @@ class JobExecutionService:
         return None
 
     def _get_credentials(self, comm_method) -> Dict[str, Any]:
-        """Get credentials for communication method"""
+        """
+        Get credentials for communication method with secure handling.
+        
+        This method retrieves and decrypts credentials for a communication method.
+        It implements secure credential handling with proper error reporting.
+        
+        Args:
+            comm_method: The communication method object containing credential information
+            
+        Returns:
+            dict: Credential information or empty dict if credentials cannot be retrieved
+            
+        Raises:
+            ValueError: If credentials are required but not available
+        """
         credentials = {}
         
-        logger.info(f"🔐 RETRIEVING CREDENTIALS for communication method")
+        logger.info(f"🔐 Retrieving credentials for communication method")
         
-        if hasattr(comm_method, 'credentials') and comm_method.credentials:
-            logger.info(f"🔑 Found {len(comm_method.credentials)} credential(s)")
+        # Check if communication method has credentials
+        if not hasattr(comm_method, 'credentials') or not comm_method.credentials:
+            logger.error(f"⚠️ No credentials found for communication method")
+            raise ValueError("No credentials available for target communication method")
+        
+        logger.info(f"🔑 Found {len(comm_method.credentials)} credential(s)")
+        
+        # Process credentials based on type
+        for cred in comm_method.credentials:
+            logger.info(f"🔍 Processing credential type: {cred.credential_type}")
             
-            for cred in comm_method.credentials:
-                logger.info(f"🔍 Processing credential type: {cred.credential_type}")
+            # Skip if no encrypted credentials
+            if not cred.encrypted_credentials:
+                logger.warning(f"⚠️ Empty encrypted credentials for {cred.credential_type}")
+                continue
                 
-                if cred.credential_type == 'password' and cred.encrypted_credentials:
-                    # The credentials are encrypted - need to decrypt them
-                    try:
-                        from app.utils.encryption_utils import CredentialEncryption
-                        encryptor = CredentialEncryption()
-                        cred_data = encryptor.decrypt_credentials(cred.encrypted_credentials)
+            try:
+                # Use the global credential encryption instance
+                from app.utils.encryption_utils import decrypt_credentials
+                cred_data = decrypt_credentials(cred.encrypted_credentials)
+                
+                if not isinstance(cred_data, dict):
+                    logger.error(f"❌ Invalid credential format after decryption")
+                    continue
+                
+                # Process based on credential type
+                if cred.credential_type == 'password':
+                    if 'username' not in cred_data or 'password' not in cred_data:
+                        logger.error(f"❌ Missing username or password in decrypted credentials")
+                        continue
                         
-                        if isinstance(cred_data, dict):
-                            credentials['username'] = cred_data.get('username', 'admin')
-                            credentials['password'] = cred_data.get('password', '')
-                            logger.info(f"✅ CREDENTIALS DECRYPTED successfully - username: '{credentials['username']}'")
-                        else:
-                            # If decryption fails, use fallback
-                            credentials = {'username': 'admin', 'password': 'password123'}
-                            logger.error(f"❌ CREDENTIAL DECRYPTION FAILED - using fallback credentials")
-                    except Exception as e:
-                        logger.error(f"❌ CREDENTIAL DECRYPTION ERROR: {str(e)}")
-                        logger.error(f"🔄 Using fallback credentials: admin/password123")
-                        credentials = {'username': 'admin', 'password': 'password123'}
-                elif cred.credential_type == 'ssh_key' and cred.encrypted_credentials:
-                    try:
-                        from app.utils.encryption_utils import decrypt_credentials
-                        cred_data = decrypt_credentials(cred.encrypted_credentials)
-                        if isinstance(cred_data, dict):
-                            credentials['username'] = cred_data.get('username', 'admin')
-                            credentials['private_key'] = cred_data.get('private_key', '')
-                            if cred_data.get('passphrase'):
-                                credentials['passphrase'] = cred_data.get('passphrase')
-                        else:
-                            credentials = {'username': 'admin', 'password': 'password123'}
-                    except Exception as e:
-                        logger.warning(f"Failed to decrypt SSH key credentials: {str(e)}")
-                        credentials = {'username': 'admin', 'password': 'password123'}
+                    credentials['username'] = cred_data['username']
+                    credentials['password'] = cred_data['password']
+                    credentials['type'] = 'password'
+                    logger.info(f"✅ Password credentials decrypted successfully for user: '{credentials['username']}'")
+                    break  # Use first valid credential
+                    
+                elif cred.credential_type == 'ssh_key':
+                    if 'username' not in cred_data or 'private_key' not in cred_data:
+                        logger.error(f"❌ Missing username or private_key in decrypted credentials")
+                        continue
+                        
+                    credentials['username'] = cred_data['username']
+                    credentials['private_key'] = cred_data['private_key']
+                    credentials['type'] = 'ssh_key'
+                    
+                    if 'passphrase' in cred_data:
+                        credentials['passphrase'] = cred_data['passphrase']
+                        
+                    logger.info(f"✅ SSH key credentials decrypted successfully for user: '{credentials['username']}'")
+                    break  # Use first valid credential
+                    
+                else:
+                    logger.warning(f"⚠️ Unsupported credential type: {cred.credential_type}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Credential decryption error: {str(e)}")
+                # Continue to try other credentials instead of using fallback
         
-        else:
-            logger.warning(f"⚠️  NO CREDENTIALS found for communication method")
-        
-        # Fallback credentials for testing
+        # Check if we have valid credentials
         if not credentials:
-            logger.error(f"❌ NO VALID CREDENTIALS - using default fallback")
-            credentials = {
-                'username': 'admin',
-                'password': 'password123'  # Default test credentials
-            }
+            error_msg = "Failed to retrieve valid credentials for target communication"
+            logger.error(f"❌ {error_msg}")
+            raise ValueError(error_msg)
         
-        logger.info(f"🔐 FINAL CREDENTIALS: username='{credentials.get('username', 'NONE')}'")
         return credentials

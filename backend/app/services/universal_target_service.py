@@ -5,6 +5,7 @@ Handles business logic for target management following the architecture plan.
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_
+import logging
 
 from app.models.universal_target_models import UniversalTarget, TargetCommunicationMethod, TargetCredential
 # SerialService removed - using database defaults
@@ -19,6 +20,10 @@ from app.utils.target_utils import (
 )
 from app.utils.encryption_utils import encrypt_password_credentials, encrypt_ssh_key_credentials, decrypt_credentials
 from app.utils.connection_test_utils import perform_connection_test
+from app.core.audit_utils import log_audit_event_sync
+from app.domains.audit.services.audit_service import AuditEventType, AuditSeverity
+
+logger = logging.getLogger(__name__)
 
 
 class UniversalTargetService:
@@ -304,6 +309,27 @@ class UniversalTargetService:
             self.db.add(credential)
             self.db.commit()
             
+            # Log audit event for target creation
+            log_audit_event_sync(
+                db=self.db,
+                event_type=AuditEventType.TARGET_CREATED,
+                user_id=None,  # Will be set by the API endpoint
+                resource_type="target",
+                resource_id=str(target.id),
+                action="create",
+                details={
+                    "target_name": target.name,
+                    "target_type": target.target_type,
+                    "os_type": target.os_type,
+                    "environment": target.environment,
+                    "method_type": method_type,
+                    "ip_address": ip_address,
+                    "username": username,
+                    "credential_type": credential_type
+                },
+                severity=AuditSeverity.MEDIUM
+            )
+            
             # Return target with relationships loaded
             return self.get_target_by_id(target.id)
             
@@ -497,6 +523,31 @@ class UniversalTargetService:
                 target.status = status
             
             self.db.commit()
+            
+            # Log audit event for target update
+            log_audit_event_sync(
+                db=self.db,
+                event_type=AuditEventType.TARGET_UPDATED,
+                user_id=None,  # Will be set by the API endpoint
+                resource_type="target",
+                resource_id=str(target_id),
+                action="update",
+                details={
+                    "target_name": target.name,
+                    "updated_fields": {
+                        "name": name if name else None,
+                        "description": description if description is not None else None,
+                        "os_type": os_type if os_type else None,
+                        "environment": environment if environment else None,
+                        "location": location if location is not None else None,
+                        "data_center": data_center if data_center is not None else None,
+                        "region": region if region is not None else None,
+                        "status": status if status else None
+                    }
+                },
+                severity=AuditSeverity.MEDIUM
+            )
+            
             return self.get_target_by_id(target_id)
             
         except Exception as e:
@@ -518,11 +569,33 @@ class UniversalTargetService:
             return False
         
         try:
+            # Store target info for audit logging before deletion
+            target_info = {
+                "target_name": target.name,
+                "target_type": target.target_type,
+                "os_type": target.os_type,
+                "environment": target.environment
+            }
+            
             target.is_active = False
             self.db.commit()
+            
+            # Log audit event for target deletion
+            log_audit_event_sync(
+                db=self.db,
+                event_type=AuditEventType.TARGET_DELETED,
+                user_id=None,  # Will be set by the API endpoint
+                resource_type="target",
+                resource_id=str(target_id),
+                action="delete",
+                details=target_info,
+                severity=AuditSeverity.HIGH
+            )
+            
             return True
-        except Exception:
+        except Exception as e:
             self.db.rollback()
+            logger.error(f"Failed to delete target {target_id}: {str(e)}")
             return False
     
     def get_targets_summary(self) -> List[Dict[str, Any]]:
@@ -586,15 +659,58 @@ class UniversalTargetService:
             result['method_type'] = primary_method.method_type
             result['target_name'] = target.name
             
+            # Log audit event for connection test
+            event_type = AuditEventType.TARGET_CONNECTION_SUCCESS if result.get('success') else AuditEventType.TARGET_CONNECTION_FAILURE
+            severity = AuditSeverity.INFO if result.get('success') else AuditSeverity.MEDIUM
+            
+            log_audit_event_sync(
+                db=self.db,
+                event_type=event_type,
+                user_id=None,  # Will be set by the API endpoint
+                resource_type="target",
+                resource_id=str(target_id),
+                action="connection_test",
+                details={
+                    "target_name": target.name,
+                    "ip_address": result['ip_address'],
+                    "method_type": result['method_type'],
+                    "success": result.get('success', False),
+                    "message": result.get('message', ''),
+                    "latency_ms": result.get('latency_ms')
+                },
+                severity=severity
+            )
+            
             return result
             
         except Exception as e:
-            return {
+            result = {
                 'success': False, 
                 'message': f'Connection test failed: {str(e)}',
                 'ip_address': getTargetIpAddress(target),
                 'method_type': primary_method.method_type
             }
+            
+            # Log audit event for connection test failure
+            log_audit_event_sync(
+                db=self.db,
+                event_type=AuditEventType.TARGET_CONNECTION_FAILURE,
+                user_id=None,  # Will be set by the API endpoint
+                resource_type="target",
+                resource_id=str(target_id),
+                action="connection_test",
+                details={
+                    "target_name": target.name,
+                    "ip_address": result['ip_address'],
+                    "method_type": result['method_type'],
+                    "success": False,
+                    "message": result['message'],
+                    "error": str(e)
+                },
+                severity=AuditSeverity.MEDIUM
+            )
+            
+            return result
     
     def update_target_comprehensive(
         self,

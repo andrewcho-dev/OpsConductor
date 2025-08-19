@@ -159,12 +159,27 @@ export const SessionAuthProvider = ({ children }) => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = (forceLogout = true) => {
+    console.log(`🔒 Handling logout${forceLogout ? ' (forced)' : ''}`);
+    
+    // Clear all session data
     localStorage.removeItem('access_token');
+    sessionStorage.clear();
+    
+    // Update state
     setUser(null);
     setIsAuthenticated(false);
     setSessionWarning({ show: false, timeRemaining: 0 });
-    sessionService.destroy();
+    
+    // Stop session monitoring
+    if (sessionService.destroy) {
+      sessionService.destroy();
+    } else {
+      sessionService.stopSessionMonitoring();
+    }
+    
+    // Always redirect to login page
+    console.log('🔄 Redirecting to login page');
     window.location.href = '/login';
   };
 

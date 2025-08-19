@@ -368,7 +368,7 @@ class SystemManagementService:
             from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
             audit_service = AuditService(self.db)
             await audit_service.log_event(
-                event_type=AuditEventType.RESOURCE_MODIFIED,
+                event_type=AuditEventType.SYSTEM_CONFIG_CHANGED,
                 user_id=current_user_id,
                 resource_type="system_configuration",
                 resource_id="system_config",
@@ -376,7 +376,8 @@ class SystemManagementService:
                 details={
                     "config_keys": list(config_updates.keys()),
                     "backup_id": backup_result.get("backup_id"),
-                    "updated_by": current_username
+                    "updated_by": current_username,
+                    "updated_values": config_updates
                 },
                 severity=AuditSeverity.HIGH,
                 ip_address=ip_address,

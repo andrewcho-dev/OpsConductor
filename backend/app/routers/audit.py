@@ -304,49 +304,104 @@ async def get_audit_event_types(
     """Get available audit event types"""
     
     try:
-        # Return basic event types
-        event_types = [
-            EventTypeResponse(
-                name="user_login",
-                description="User login event",
-                category="authentication"
-            ),
-            EventTypeResponse(
-                name="user_logout",
-                description="User logout event",
-                category="authentication"
-            ),
-            EventTypeResponse(
-                name="target_created",
-                description="Target creation event",
-                category="target_management"
-            ),
-            EventTypeResponse(
-                name="target_updated",
-                description="Target update event",
-                category="target_management"
-            ),
-            EventTypeResponse(
-                name="target_deleted",
-                description="Target deletion event",
-                category="target_management"
-            ),
-            EventTypeResponse(
-                name="job_created",
-                description="Job creation event",
-                category="job_management"
-            ),
-            EventTypeResponse(
-                name="job_executed",
-                description="Job execution event",
-                category="job_management"
-            ),
-            EventTypeResponse(
-                name="system_maintenance",
-                description="System maintenance event",
-                category="system"
-            )
-        ]
+        # Get all event types from the enum
+        from app.domains.audit.services.audit_service import AuditEventType
+        
+        # Define category mapping
+        category_mapping = {
+            "user_login": "authentication",
+            "login_success": "authentication",
+            "login_failed": "authentication",
+            "logout": "authentication",
+            "user_logout": "authentication",
+            "password_changed": "authentication",
+            "password_reset_requested": "authentication",
+            "password_reset_completed": "authentication",
+            "account_locked": "authentication",
+            
+            "user_created": "user_management",
+            "user_updated": "user_management",
+            "user_deleted": "user_management",
+            "user_role_changed": "user_management",
+            "user_activated": "user_management",
+            "user_deactivated": "user_management",
+            
+            "session_created": "session_management",
+            "session_expired": "session_management",
+            "session_extended": "session_management",
+            "session_terminated": "session_management",
+            
+            "target_created": "target_management",
+            "target_updated": "target_management",
+            "target_deleted": "target_management",
+            "target_connection_test": "target_management",
+            "target_connection_success": "target_management",
+            "target_connection_failure": "target_management",
+            "target_status_changed": "target_management",
+            "target_credentials_updated": "target_management",
+            
+            "job_created": "job_management",
+            "job_updated": "job_management",
+            "job_deleted": "job_management",
+            "job_executed": "job_management",
+            "job_execution_started": "job_management",
+            "job_execution_completed": "job_management",
+            "job_execution_failed": "job_management",
+            "job_scheduled": "job_management",
+            "job_schedule_updated": "job_management",
+            "job_schedule_deleted": "job_management",
+            
+            "system_startup": "system",
+            "system_shutdown": "system",
+            "system_config_changed": "system",
+            "system_maintenance": "system",
+            "system_backup": "system",
+            "system_restore": "system",
+            "system_update": "system",
+            
+            "security_violation": "security",
+            "permission_changed": "security",
+            "unauthorized_access_attempt": "security",
+            "suspicious_activity": "security",
+            
+            "data_export": "data",
+            "data_import": "data",
+            "data_deleted": "data",
+            "data_accessed": "data",
+            
+            "api_access": "api",
+            "api_error": "api",
+            
+            "discovery_job_created": "discovery",
+            "discovery_job_executed": "discovery",
+            "discovery_job_completed": "discovery",
+            "discovery_target_found": "discovery",
+            
+            "bulk_operation": "bulk_operations",
+            "bulk_import": "bulk_operations",
+            "bulk_export": "bulk_operations",
+            "bulk_delete": "bulk_operations",
+            "bulk_update": "bulk_operations"
+        }
+        
+        # Create event type responses
+        event_types = []
+        for event_type in AuditEventType:
+            # Get the event type name and value
+            name = event_type.name
+            value = event_type.value
+            
+            # Get the category
+            category = category_mapping.get(value, "other")
+            
+            # Create a human-readable description
+            description = " ".join(word.capitalize() for word in value.split("_"))
+            
+            event_types.append(EventTypeResponse(
+                name=value,
+                description=description,
+                category=category
+            ))
         
         return EventTypesResponse(event_types=event_types)
         

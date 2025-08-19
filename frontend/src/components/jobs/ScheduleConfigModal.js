@@ -73,8 +73,35 @@ const ScheduleConfigModal = ({ open, onClose, onConfigurationComplete, initialCo
       fetchSystemTimezone();
       // Load initial configuration if provided
       if (initialConfig) {
+        console.log('📅 ScheduleConfigModal: Initializing with config:', JSON.stringify(initialConfig, null, 2));
+        
+        // Set schedule type
         setScheduleType(initialConfig.scheduleType || 'once');
+        
+        // Set schedule data from initial config
         setScheduleData(prev => ({ ...prev, ...initialConfig }));
+        
+        // CRITICAL FIX: For recurring schedules, ensure recurringType is set
+        if (initialConfig.scheduleType === 'recurring') {
+          // If no recurring type is set, default to minutes
+          if (!initialConfig.recurringType) {
+            console.log('🔄 No recurring type found, defaulting to minutes');
+            setScheduleData(prev => ({
+              ...prev,
+              recurringType: 'minutes',
+              interval: 2
+            }));
+          } else {
+            console.log('🔄 Using recurring type from config:', initialConfig.recurringType);
+          }
+        }
+      } else {
+        // For new schedules, default to minutes for recurring type
+        setScheduleData(prev => ({
+          ...prev,
+          recurringType: 'minutes',
+          interval: 2
+        }));
       }
     }
   }, [open, initialConfig]);
@@ -103,10 +130,53 @@ const ScheduleConfigModal = ({ open, onClose, onConfigurationComplete, initialCo
   };
 
   const handleSubmit = () => {
+    // CRITICAL FIX: Ensure scheduleType and recurringType are set correctly
+    if (scheduleType === 'recurring' && !scheduleData.recurringType) {
+      console.log('🔄 No recurring type set, defaulting to minutes');
+      setScheduleData(prev => ({
+        ...prev,
+        recurringType: 'minutes',
+        interval: 2
+      }));
+    }
+    
     const configData = {
       scheduleType,
       ...scheduleData,
     };
+    
+    console.log('📅 ScheduleConfigModal: Submitting schedule configuration:', JSON.stringify(configData, null, 2));
+    
+    // Validate the configuration
+    if (scheduleType === 'recurring') {
+      console.log('🔄 Recurring schedule type:', configData.recurringType);
+      console.log('🔄 Interval:', configData.interval);
+      
+      // CRITICAL FIX: Ensure recurringType is set
+      if (!configData.recurringType) {
+        console.warn('⚠️ No recurring type set, forcing to minutes');
+        configData.recurringType = 'minutes';
+        configData.interval = configData.interval || 2;
+      }
+      
+      if (configData.recurringType === 'minutes') {
+        console.log('⏱️ Minutes-based schedule with interval:', configData.interval);
+        // For minutes, we don't need time
+        delete configData.time;
+        delete configData.startTime;
+        console.log('⏱️ Removed time fields for minutes-based schedule');
+      } else if (configData.recurringType === 'hours') {
+        console.log('⏱️ Hours-based schedule with interval:', configData.interval);
+        // For hours, we don't need time
+        delete configData.time;
+        delete configData.startTime;
+        console.log('⏱️ Removed time fields for hours-based schedule');
+      } else if (configData.recurringType === 'weekly' && (!configData.daysOfWeek || configData.daysOfWeek.length === 0)) {
+        console.warn('⚠️ Weekly schedule without days of week selected');
+      }
+    }
+    
+    console.log('📅 ScheduleConfigModal: Final configuration:', JSON.stringify(configData, null, 2));
     onConfigurationComplete(configData);
   };
 
@@ -212,13 +282,14 @@ const ScheduleConfigModal = ({ open, onClose, onConfigurationComplete, initialCo
           <Grid item xs={12}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>Days of Week</Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day, index) => (
+              {/* Use 0-6 for Sunday-Saturday to match backend expectations */}
+              {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, index) => (
                 <Chip
                   key={day}
                   label={day}
-                  onClick={() => handleDayOfWeekToggle(index + 1)}
-                  variant={scheduleData.daysOfWeek.includes(index + 1) ? 'filled' : 'outlined'}
-                  color={scheduleData.daysOfWeek.includes(index + 1) ? 'primary' : 'default'}
+                  onClick={() => handleDayOfWeekToggle(index)}
+                  variant={scheduleData.daysOfWeek.includes(index) ? 'filled' : 'outlined'}
+                  color={scheduleData.daysOfWeek.includes(index) ? 'primary' : 'default'}
                 />
               ))}
             </Box>

@@ -55,10 +55,88 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️  Structured logging initialization failed: {e}")
     
+    # Log system startup event
+    try:
+        from sqlalchemy.orm import Session
+        from app.database.database import SessionLocal
+        from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
+        import platform
+        import socket
+        import os
+        
+        # Get system information
+        hostname = socket.gethostname()
+        ip_address = socket.gethostbyname(hostname)
+        os_info = f"{platform.system()} {platform.release()}"
+        python_version = platform.python_version()
+        
+        # Create database session
+        db = SessionLocal()
+        
+        # Log startup event
+        audit_service = AuditService(db)
+        await audit_service.log_event(
+            event_type=AuditEventType.SYSTEM_STARTUP,
+            user_id=None,  # System event
+            resource_type="system",
+            resource_id="startup",
+            action="system_startup",
+            details={
+                "hostname": hostname,
+                "ip_address": ip_address,
+                "os_info": os_info,
+                "python_version": python_version,
+                "pid": os.getpid()
+            },
+            severity=AuditSeverity.INFO
+        )
+        
+        # Close database session
+        db.close()
+        print("✅ System startup audit event logged")
+    except Exception as e:
+        print(f"⚠️  Failed to log system startup event: {e}")
+    
     yield
     
     # Shutdown
     print("🛑 OpsConductor Platform shutting down...")
+    
+    # Log system shutdown event
+    try:
+        from sqlalchemy.orm import Session
+        from app.database.database import SessionLocal
+        from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
+        import platform
+        import socket
+        import os
+        
+        # Get system information
+        hostname = socket.gethostname()
+        
+        # Create database session
+        db = SessionLocal()
+        
+        # Log shutdown event
+        audit_service = AuditService(db)
+        await audit_service.log_event(
+            event_type=AuditEventType.SYSTEM_SHUTDOWN,
+            user_id=None,  # System event
+            resource_type="system",
+            resource_id="shutdown",
+            action="system_shutdown",
+            details={
+                "hostname": hostname,
+                "pid": os.getpid()
+            },
+            severity=AuditSeverity.INFO
+        )
+        
+        # Close database session
+        db.close()
+        print("✅ System shutdown audit event logged")
+    except Exception as e:
+        print(f"⚠️  Failed to log system shutdown event: {e}")
     
     # Close Redis connections
     try:
@@ -91,6 +169,10 @@ def get_cors_origins():
 app.add_middleware(ErrorHandlingMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
+# Add audit middleware for API access logging
+from app.core.audit_middleware import AuditMiddleware
+app.add_middleware(AuditMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_cors_origins(),
@@ -106,6 +188,9 @@ app.include_router(auth_session.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(universal_targets.router, tags=["Universal Targets"])
 app.include_router(audit.router, tags=["Audit v1"])
+# Include data export router
+from app.routers import data_export
+app.include_router(data_export.router, tags=["Data Export/Import"])
 # Legacy routers removed - consolidated into V2 APIs
 # system.router -> /api/v2/system/*
 # notifications.router -> /api/v2/notifications/*  
@@ -140,7 +225,7 @@ app.include_router(audit_v2.router, tags=["Audit API v2"])
 app.include_router(device_types_v2.router, tags=["Device Types API v2"])
 app.include_router(health_v2.router, tags=["Health & Monitoring v2"])
 app.include_router(metrics_v2.router, tags=["Metrics & Analytics v2"])
-app.include_router(jobs_v2.router, tags=["Jobs Management v2"])
+# app.include_router(jobs_v2.router, tags=["Jobs Management v2"])  # DISABLED - Using v3 instead
 app.include_router(templates_v2.router, tags=["Templates Management v2"])
 app.include_router(system_v2.router, tags=["System Administration v2"])
 app.include_router(discovery_v2.router, tags=["Network Discovery v2"])

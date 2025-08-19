@@ -1155,3 +1155,68 @@ async def restart_service(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while restarting service '{service_name}'"
         )
+
+
+# VOLUME MANAGEMENT ENDPOINTS
+
+@router.post("/volumes/prune")
+async def prune_volumes(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Prune unused Docker volumes to free up space"""
+    
+    request_logger = RequestLogger(logger, "prune_volumes")
+    request_logger.log_request_start("POST", "/api/v2/health/volumes/prune", current_user["username"])
+    
+    try:
+        # Initialize service layer
+        health_mgmt_service = HealthManagementService(db)
+        
+        # Prune volumes through service layer
+        result = await health_mgmt_service.prune_volumes()
+        
+        if not result.get("success", False):
+            logger.error(
+                "Volume pruning failed",
+                extra={
+                    "error": result.get("error", "Unknown error"),
+                    "requested_by": current_user["username"]
+                }
+            )
+            
+            request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+            
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.get("message", "Failed to prune volumes")
+            )
+        
+        logger.info(
+            "Volume pruning successful",
+            extra={
+                "pruned_count": result.get("pruned_count", 0),
+                "space_reclaimed": result.get("space_reclaimed", 0),
+                "requested_by": current_user["username"]
+            }
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(result)))
+        
+        return result
+        
+    except Exception as e:
+        logger.error(
+            "Volume pruning error",
+            extra={
+                "error": str(e),
+                "requested_by": current_user["username"]
+            }
+        )
+        
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while pruning volumes: {str(e)}"
+        )

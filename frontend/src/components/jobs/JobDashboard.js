@@ -137,16 +137,82 @@ const JobDashboard = () => {
             // If there's advanced schedule configuration, create the schedule
             if (scheduleConfig && scheduleConfig.scheduleType !== 'once') {
                 try {
+                    // Create new schedule - transform frontend format to API format
+                    // IMPORTANT: The backend API expects camelCase field names for the request body
                     const scheduleData = {
                         job_id: newJob.id,
                         schedule_type: scheduleConfig.scheduleType,
                         enabled: true,
                         timezone: scheduleConfig.timezone || 'UTC',
-                        description: `Auto-created schedule for job: ${newJob.name}`,
-                        ...scheduleConfig
+                        description: `Auto-created schedule for job: ${newJob.name}`
                     };
                     
-                    await authService.api.post('/api/schedules', scheduleData);
+                    // Add schedule-specific fields based on schedule type
+                    if (scheduleConfig.scheduleType === 'once' && scheduleConfig.executeAt) {
+                        // Backend expects executeAt (camelCase)
+                        scheduleData.executeAt = scheduleConfig.executeAt;
+                    } 
+                    else if (scheduleConfig.scheduleType === 'recurring') {
+                        // Backend expects recurringType (camelCase)
+                        scheduleData.recurringType = scheduleConfig.recurringType;
+                        scheduleData.interval = scheduleConfig.interval || 1;
+                        
+                        if (scheduleConfig.startDate) {
+                            // Combine startDate and startTime for the first occurrence
+                            const startDate = scheduleConfig.startDate;
+                            const startTime = scheduleConfig.startTime || '00:00';
+                            
+                            // Create a proper ISO string for the backend
+                            const dateTimeStr = `${startDate}T${startTime}`;
+                            const dateObj = new Date(dateTimeStr);
+                            scheduleData.executeAt = dateObj.toISOString();
+                        }
+                        
+                        if (!['minutes', 'hours'].includes(scheduleConfig.recurringType)) {
+                            scheduleData.time = scheduleConfig.time || '09:00';
+                        }
+                        
+                        if (scheduleConfig.recurringType === 'weekly' && scheduleConfig.daysOfWeek) {
+                            // Backend expects daysOfWeek (camelCase)
+                            scheduleData.daysOfWeek = Array.isArray(scheduleConfig.daysOfWeek) 
+                                ? scheduleConfig.daysOfWeek.join(',') 
+                                : scheduleConfig.daysOfWeek;
+                        }
+                        
+                        if (scheduleConfig.recurringType === 'monthly' && scheduleConfig.dayOfMonth) {
+                            // Backend expects dayOfMonth (camelCase)
+                            scheduleData.dayOfMonth = scheduleConfig.dayOfMonth;
+                        }
+                        
+                        // Advanced options
+                        if (scheduleConfig.maxExecutions) {
+                            // Backend expects maxExecutions (camelCase)
+                            scheduleData.maxExecutions = scheduleConfig.maxExecutions;
+                        }
+                        
+                        if (scheduleConfig.endDate) {
+                            // Backend expects endDate (camelCase)
+                            scheduleData.endDate = scheduleConfig.endDate;
+                        }
+                    }
+                    else if (scheduleConfig.scheduleType === 'cron' && scheduleConfig.cronExpression) {
+                        // Backend expects cronExpression (camelCase)
+                        scheduleData.cronExpression = scheduleConfig.cronExpression;
+                    }
+                    
+                    console.log('📅 JobDashboard: Sending schedule data to API:', scheduleData);
+                    
+                    console.log('📤 Creating new schedule');
+                    try {
+                        // The baseURL already includes /api, so we don't need to include it again
+                        const scheduleResponse = await authService.api.post('/schedules', scheduleData);
+                        console.log('✅ Schedule creation response:', scheduleResponse.status, scheduleResponse.data);
+                    } catch (error) {
+                        console.error('❌ Schedule creation error:', error);
+                        console.error('❌ Error response:', error.response);
+                        console.error('❌ Error data:', error.response?.data);
+                        throw error; // Re-throw to be caught by the outer catch
+                    }
                     addAlert(`Job "${newJob.name}" created with ${scheduleConfig.scheduleType} schedule!`, 'success', 3000);
                 } catch (scheduleError) {
                     console.error('Failed to create schedule:', scheduleError);
@@ -190,8 +256,8 @@ const JobDashboard = () => {
 
 
 
-    const handleUpdateJob = async (updatedJobData) => {
-        console.log('🔄 JobDashboard: Starting job update...', updatedJobData);
+    const handleUpdateJob = async (jobId, updatedJobData, scheduleConfig) => {
+        console.log('🔄 JobDashboard: Starting job update...', { jobId, updatedJobData, scheduleConfig });
         try {
             // Separate basic job data from schedule data
             const jobData = {
@@ -204,24 +270,28 @@ const JobDashboard = () => {
             console.log('📤 JobDashboard: Sending job data:', jobData);
             
             // Update the basic job first
-            const response = await authService.api.put(`/v3/jobs/${updatedJobData.id || updatedJobData.job_id}`, jobData);
+            const response = await authService.api.put(`/v3/jobs/${jobId}`, jobData);
             console.log('✅ JobDashboard: Job API response:', response.status, response.data);
             
             if (response.status === 200 && response.data) {
                 const updatedJob = response.data;
                 
                 // Handle schedule configuration if present
-                const scheduleConfig = updatedJobData.schedule_config;
+                console.log('📅 JobDashboard: Schedule config received:', scheduleConfig);
                 if (scheduleConfig && scheduleConfig.scheduleType !== 'once') {
                     try {
                         console.log('📅 JobDashboard: Processing schedule config:', scheduleConfig);
                         
                         // First, disable any existing schedules for this job
                         try {
-                            const existingSchedulesResponse = await authService.api.get(`/api/schedules?job_id=${updatedJob.id}`);
+                            console.log('🔍 Fetching schedules for job:', updatedJob.id);
+                            // The baseURL already includes /api, so we don't need to include it again
+                            const existingSchedulesResponse = await authService.api.get(`/schedules?job_id=${updatedJob.id}`);
                             if (existingSchedulesResponse.data && existingSchedulesResponse.data.length > 0) {
                                 for (const existingSchedule of existingSchedulesResponse.data) {
-                                    await authService.api.delete(`/api/schedules/${existingSchedule.id}`);
+                                    console.log('🗑️ Deleting schedule:', existingSchedule.id);
+                                    // The baseURL already includes /api, so we don't need to include it again
+                                    await authService.api.delete(`/schedules/${existingSchedule.id}`);
                                     console.log('🗑️ JobDashboard: Deleted existing schedule:', existingSchedule.id);
                                 }
                             }
@@ -229,17 +299,183 @@ const JobDashboard = () => {
                             console.log('⚠️ JobDashboard: No existing schedules to delete or delete failed:', deleteError.message);
                         }
                         
-                        // Create new schedule
+                        // Create new schedule - transform frontend format to API format
+                        // IMPORTANT: The backend API expects camelCase field names for the request body
+                        console.log('📅 JobDashboard: Creating schedule with config:', JSON.stringify(scheduleConfig, null, 2));
+                        
                         const scheduleData = {
                             job_id: updatedJob.id,
                             schedule_type: scheduleConfig.scheduleType,
                             enabled: true,
                             timezone: scheduleConfig.timezone || 'UTC',
-                            description: `Updated schedule for job: ${updatedJob.name}`,
-                            ...scheduleConfig
+                            description: `Updated schedule for job: ${updatedJob.name}`
                         };
                         
-                        await authService.api.post('/api/schedules', scheduleData);
+                        console.log('📅 JobDashboard: Basic schedule data created:', JSON.stringify(scheduleData, null, 2));
+                        
+                        // Add schedule-specific fields based on schedule type
+                        if (scheduleConfig.scheduleType === 'once' && scheduleConfig.executeAt) {
+                            // Backend expects executeAt (camelCase)
+                            scheduleData.executeAt = scheduleConfig.executeAt;
+                        } 
+                        else if (scheduleConfig.scheduleType === 'recurring') {
+                            // Backend expects recurringType (camelCase)
+                            console.log('🔄 JobDashboard: Processing recurring schedule type:', scheduleConfig.recurringType);
+                            
+                            // CRITICAL FIX: Ensure recurringType is set correctly
+                            if (!scheduleConfig.recurringType) {
+                                console.error('❌ Missing recurringType in schedule config!');
+                                throw new Error('Missing recurringType in schedule config');
+                            }
+                            
+                            scheduleData.recurringType = scheduleConfig.recurringType;
+                            scheduleData.interval = scheduleConfig.interval || 1;
+                            
+                            console.log('🔄 JobDashboard: Set recurring type to:', scheduleData.recurringType);
+                            console.log('🔄 JobDashboard: Set interval to:', scheduleData.interval);
+                            
+                            // For debugging
+                            console.log('🔍 Full schedule config:', JSON.stringify(scheduleConfig, null, 2));
+                            
+                            if (scheduleConfig.startDate) {
+                                // Combine startDate and startTime for the first occurrence
+                                const startDate = scheduleConfig.startDate;
+                                const startTime = scheduleConfig.startTime || '00:00';
+                                
+                                // Create a proper ISO string for the backend
+                                const dateTimeStr = `${startDate}T${startTime}`;
+                                const dateObj = new Date(dateTimeStr);
+                                scheduleData.executeAt = dateObj.toISOString();
+                            }
+                            
+                            if (!['minutes', 'hours'].includes(scheduleConfig.recurringType)) {
+                                scheduleData.time = scheduleConfig.time || '09:00';
+                                console.log('⏰ JobDashboard: Set time to:', scheduleData.time);
+                            } else {
+                                console.log('⏰ JobDashboard: No time needed for minutes/hours recurring type');
+                                // For minutes and hours, we don't need to set time
+                                // Make sure it's not set in the request
+                                delete scheduleData.time;
+                                
+                                // Also make sure startTime is not set
+                                delete scheduleData.startTime;
+                                
+                                // Log the final schedule data for minutes/hours
+                                console.log('⏱️ Final minutes/hours schedule data:', JSON.stringify(scheduleData, null, 2));
+                            }
+                            
+                            if (scheduleConfig.recurringType === 'weekly' && scheduleConfig.daysOfWeek) {
+                                // Backend expects daysOfWeek (camelCase) as a comma-separated string
+                                // The service expects a string like "0,1,2" for Sunday, Monday, Tuesday
+                                // 0 = Sunday, 1 = Monday, 2 = Tuesday, etc.
+                                console.log('🔍 daysOfWeek before processing:', scheduleConfig.daysOfWeek);
+                                
+                                if (Array.isArray(scheduleConfig.daysOfWeek)) {
+                                    // Convert array to comma-separated string
+                                    scheduleData.daysOfWeek = scheduleConfig.daysOfWeek.join(',');
+                                } else if (typeof scheduleConfig.daysOfWeek === 'string') {
+                                    // If it's already a string, use it directly
+                                    scheduleData.daysOfWeek = scheduleConfig.daysOfWeek;
+                                } else {
+                                    console.error('❌ Invalid daysOfWeek format:', scheduleConfig.daysOfWeek);
+                                }
+                                
+                                console.log('✅ Processed daysOfWeek:', scheduleData.daysOfWeek);
+                            }
+                            
+                            if (scheduleConfig.recurringType === 'monthly' && scheduleConfig.dayOfMonth) {
+                                // Backend expects dayOfMonth (camelCase)
+                                scheduleData.dayOfMonth = scheduleConfig.dayOfMonth;
+                            }
+                            
+                            // Advanced options
+                            if (scheduleConfig.maxExecutions) {
+                                // Backend expects maxExecutions (camelCase)
+                                scheduleData.maxExecutions = scheduleConfig.maxExecutions;
+                            }
+                            
+                            if (scheduleConfig.endDate) {
+                                // Backend expects endDate (camelCase)
+                                scheduleData.endDate = scheduleConfig.endDate;
+                            }
+                        }
+                        else if (scheduleConfig.scheduleType === 'cron' && scheduleConfig.cronExpression) {
+                            // Backend expects cronExpression (camelCase)
+                            scheduleData.cronExpression = scheduleConfig.cronExpression;
+                        }
+                        
+                        console.log('📅 JobDashboard: Sending schedule data to API:', JSON.stringify(scheduleData, null, 2));
+                        
+                        // Validate schedule data before sending
+                        if (!scheduleData.job_id) {
+                            console.error('❌ Missing job_id in schedule data!');
+                        }
+                        if (!scheduleData.schedule_type) {
+                            console.error('❌ Missing schedule_type in schedule data!');
+                        }
+                        
+                        // For recurring schedules, check required fields
+                        if (scheduleData.schedule_type === 'recurring') {
+                            if (!scheduleData.recurringType) {
+                                console.error('❌ Missing recurringType for recurring schedule!');
+                                throw new Error('Missing recurringType for recurring schedule');
+                            }
+                            
+                            // For minutes and hours, we don't need time
+                            if (['minutes', 'hours'].includes(scheduleData.recurringType)) {
+                                console.log('⏱️ Minutes/hours schedule - time field not required');
+                                // Make sure time is not set
+                                delete scheduleData.time;
+                            } 
+                            // For other recurring types, time is required
+                            else if (!scheduleData.time) {
+                                console.error('❌ Missing time for recurring schedule!');
+                                throw new Error(`Missing time for ${scheduleData.recurringType} recurring schedule`);
+                            }
+                        }
+                        
+                        console.log('📤 Creating new schedule');
+                        try {
+                            // The baseURL already includes /api, so we don't need to include it again
+                            console.log('🔍 Request URL:', '/schedules');
+                            console.log('🔍 Request method:', 'POST');
+                            console.log('🔍 Request data:', JSON.stringify(scheduleData, null, 2));
+                            
+                            // For minutes and hours, make sure time is not set
+                            if (scheduleData.schedule_type === 'recurring') {
+                                // CRITICAL FIX: Ensure recurringType is set
+                                if (!scheduleData.recurringType) {
+                                    console.error('❌ Missing recurringType in schedule data!');
+                                    scheduleData.recurringType = 'minutes';
+                                    scheduleData.interval = scheduleData.interval || 2;
+                                    console.log('⚠️ Forced recurringType to minutes with interval:', scheduleData.interval);
+                                }
+                                
+                                if (['minutes', 'hours'].includes(scheduleData.recurringType)) {
+                                    console.log('⏱️ Ensuring time is not set for minutes/hours schedule');
+                                    delete scheduleData.time;
+                                    delete scheduleData.startTime;
+                                }
+                            }
+                            
+                            // Final check of the data being sent
+                            console.log('📤 Final schedule data being sent:', JSON.stringify(scheduleData, null, 2));
+                            
+                            const scheduleResponse = await authService.api.post('/schedules', scheduleData);
+                            console.log('✅ Schedule creation response status:', scheduleResponse.status);
+                            console.log('✅ Schedule creation response data:', JSON.stringify(scheduleResponse.data, null, 2));
+                        } catch (error) {
+                            console.error('❌ Schedule creation error:', error.message);
+                            if (error.response) {
+                                console.error('❌ Error status:', error.response.status);
+                                console.error('❌ Error data:', JSON.stringify(error.response.data, null, 2));
+                            } else if (error.request) {
+                                console.error('❌ No response received. Request:', error.request);
+                            } else {
+                                console.error('❌ Error setting up request:', error.message);
+                            }
+                            throw error; // Re-throw to be caught by the outer catch
+                        }
                         console.log('✅ JobDashboard: Schedule created/updated successfully');
                         addAlert(`Job "${updatedJob.name}" updated with ${scheduleConfig.scheduleType} schedule!`, 'success');
                     } catch (scheduleError) {

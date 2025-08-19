@@ -3,10 +3,15 @@ Periodic Celery tasks for scheduled operations
 """
 
 import logging
+from datetime import datetime, timezone, timedelta
 from app.core.celery_app import celery_app
 from app.tasks.cleanup_tasks import CleanupTasks
 from app.services.health_monitoring_service import HealthMonitoringService
 from app.services.celery_monitoring_service import CeleryMonitoringService
+from app.services.job_scheduling_service import JobSchedulingService
+from app.services.job_service import JobService
+from app.models.job_schedule_models import JobSchedule
+from app.schemas.job_schemas import JobExecuteRequest
 from app.database.database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -145,4 +150,92 @@ def collect_celery_metrics_task(self):
             
     except Exception as e:
         logger.error(f"❌ Celery metrics collection failed: {str(e)}")
+        return {"status": "failed", "error": str(e)}
+
+
+@celery_app.task(bind=True, name="app.tasks.periodic_tasks.process_recurring_schedules_task")
+def process_recurring_schedules_task(self):
+    """Celery task to process recurring job schedules"""
+    logger.info("⏰ Processing recurring job schedules...")
+    
+    try:
+        db = SessionLocal()
+        try:
+            # Get current time
+            now = datetime.now(timezone.utc)
+            
+            # Get scheduling service
+            scheduling_service = JobSchedulingService(db)
+            job_service = JobService(db)
+            
+            # Get all enabled schedules with next_run <= now
+            schedules = db.query(JobSchedule).filter(
+                JobSchedule.enabled == True,
+                JobSchedule.next_run <= now
+            ).all()
+            
+            logger.info(f"📋 Found {len(schedules)} schedules ready for execution")
+            
+            executed_count = 0
+            for schedule in schedules:
+                try:
+                    logger.info(f"🚀 Processing schedule {schedule.id} for job {schedule.job_id}")
+                    
+                    # Get the job
+                    job = schedule.job
+                    
+                    # Execute the job
+                    execute_data = JobExecuteRequest(target_ids=None)  # Use all targets
+                    execution = job_service.execute_job(
+                        job_id=job.id,
+                        execute_data=execute_data
+                    )
+                    
+                    # Get target IDs for this job
+                    target_ids = [jt.target_id for jt in job.targets]
+                    
+                    # Queue the execution task
+                    from app.tasks.job_tasks import execute_job_task
+                    execute_job_task.delay(execution.id, target_ids)
+                    
+                    # Mark schedule as executed
+                    scheduling_service.mark_schedule_executed(schedule.id)
+                    
+                    # Calculate next run time
+                    logger.info(f"🧮 Calculating next run for schedule {schedule.id} with type {schedule.recurring_type}")
+                    next_run = scheduling_service._calculate_next_recurring_run(schedule)
+                    
+                    # Update schedule with next run time
+                    if next_run:
+                        schedule.next_run = next_run
+                        db.commit()
+                        logger.info(f"📅 Next run for schedule {schedule.id}: {next_run}")
+                    else:
+                        logger.error(f"❌ Failed to calculate next run for schedule {schedule.id}")
+                        # Set a default next run time for minutes and hours to prevent schedule from being lost
+                        if schedule.recurring_type in ['minutes', 'hours']:
+                            now = datetime.now(timezone.utc)
+                            if schedule.recurring_type == 'minutes':
+                                next_run = now + timedelta(minutes=schedule.interval)
+                            else:  # hours
+                                next_run = now + timedelta(hours=schedule.interval)
+                            
+                            schedule.next_run = next_run
+                            db.commit()
+                            logger.info(f"📅 Set fallback next run for {schedule.recurring_type} schedule {schedule.id}: {next_run}")
+                    
+                    executed_count += 1
+                    logger.info(f"✅ Schedule {schedule.id} processed successfully")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Error processing schedule {schedule.id}: {str(e)}")
+            
+            logger.info(f"✅ Recurring schedule processing completed: {executed_count} schedules executed")
+            return {"status": "success", "schedules_executed": executed_count}
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"❌ Error processing recurring schedules: {str(e)}")
         return {"status": "failed", "error": str(e)}
