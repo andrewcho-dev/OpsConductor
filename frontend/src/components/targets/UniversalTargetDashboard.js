@@ -30,12 +30,12 @@ import UniversalTargetDetailModal from './UniversalTargetDetailModal';
 import SimpleNetworkDiscoveryModal from './SimpleNetworkDiscoveryModal';
 import discoveryService from '../../services/discoveryService';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import '../../styles/dashboard.css';
 
 const UniversalTargetDashboard = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout } = useSessionAuth();
   const { addAlert } = useAlert();
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(true);

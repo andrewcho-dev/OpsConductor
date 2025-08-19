@@ -35,14 +35,14 @@ import {
   KeyboardArrowDown as ArrowDownIcon,
   KeyboardArrowUp as ArrowUpIcon
 } from '@mui/icons-material';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { authService } from '../../services/authService';
 import { formatLocalDateTime } from '../../utils/timeUtils';
 import StandardDataTable from '../common/StandardDataTable';
 import '../../styles/dashboard.css';
 
 const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) => {
-  const { token } = useAuth();
+  const { token } = useSessionAuth();
   
   // State management
   const [actions, setActions] = useState([]);

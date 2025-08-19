@@ -40,7 +40,7 @@ import JobScheduleModal from './JobScheduleModal';
 import JobEditModal from './JobEditModal';
 import JobExecutionHistoryModal from './JobExecutionHistoryModal';
 import { formatLocalDateTime } from '../../utils/timeUtils';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useAlert } from '../layout/BottomStatusBar';
 import { ViewDetailsAction, EditAction, DeleteAction, PlayAction, StopAction } from '../common/StandardActions';
 import { getStatusRowStyling, getTableCellStyle } from '../../utils/tableUtils';
@@ -55,7 +55,7 @@ const JobList = ({
     onDeleteJob
 }) => {
     const theme = useTheme();
-    const { token } = useAuth();
+    const { token } = useSessionAuth();
     const { addAlert } = useAlert();
     
     // State for filtering, sorting, and pagination

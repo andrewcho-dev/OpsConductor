@@ -23,7 +23,7 @@ import {
 import JobCreateModal from './JobCreateModal';
 import JobList from './JobList';
 import JobSafetyControls from './JobSafetyControls';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useAlert } from '../layout/BottomStatusBar';
 import { authService } from '../../services/authService';
 import '../../styles/dashboard.css';
@@ -37,7 +37,7 @@ const JobDashboard = () => {
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [refreshInterval, setRefreshInterval] = useState(30000); // 30 seconds
     const [countdown, setCountdown] = useState(30); // Countdown in seconds
-    const { token } = useAuth();
+    const { token } = useSessionAuth();
 
     useEffect(() => {
         if (token) {

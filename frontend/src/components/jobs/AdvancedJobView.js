@@ -3,7 +3,7 @@
  * Exposes advanced scheduling, retry logic, priorities, and monitoring
  */
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useAlert } from '../layout/BottomStatusBar';
 import JobCreateModal from './JobCreateModal';
 import {

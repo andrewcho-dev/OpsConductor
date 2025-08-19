@@ -48,7 +48,7 @@ import {
   ContentCopy as CopyIcon,
   FindInPage as FindInPageIcon
 } from '@mui/icons-material';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useNavigate } from 'react-router-dom';
 import { formatLocalDateTime } from '../../utils/timeUtils';
 import { getExecutionActionResults, formatExecutionTime, getActionStatusColor } from '../../services/jobService';
@@ -60,7 +60,7 @@ import './JobExecutionHistoryModal.css';
 const JobExecutionHistoryModal = ({ open, onClose, job }) => {
   console.log('JobExecutionHistoryModal rendered, open:', open);
   
-  const { token } = useAuth();
+  const { token } = useSessionAuth();
   const navigate = useNavigate();
   const [executions, setExecutions] = useState([]);
   const [loading, setLoading] = useState(false);

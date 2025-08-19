@@ -32,10 +32,10 @@ import {
   ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 const SimpleTargetResultsModal = ({ open, onClose, executionSerial }) => {
-  const { token } = useAuth();
+  const { token } = useSessionAuth();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
 

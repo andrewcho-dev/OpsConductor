@@ -37,13 +37,13 @@ import {
   Schedule as ScheduleIcon
 } from '@mui/icons-material';
 
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import TargetSelectionModal from './TargetSelectionModal';
 import ScheduleConfigModal from './ScheduleConfigModal';
 import ActionsWorkspaceModal from './ActionsWorkspaceModal';
 
 const JobCreateModal = ({ open, onClose, onCreateJob }) => {
-  const { token } = useAuth();
+  const { token } = useSessionAuth();
   const [loading, setLoading] = useState(false);
   const [targets, setTargets] = useState([]);
   const [showTargetModal, setShowTargetModal] = useState(false);

@@ -48,13 +48,13 @@ import {
   MonitorHeart as MonitorHeartIcon,
   DataObject as DataObjectIcon,
 } from '@mui/icons-material';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useAlert } from '../layout/BottomStatusBar';
 import MetricsChart from './MetricsChart';
 import '../../styles/dashboard.css';
 
 const CeleryMonitorPage = () => {
-  const { token } = useAuth();
+  const { token } = useSessionAuth();
   const { addAlert } = useAlert();
   
   // State management

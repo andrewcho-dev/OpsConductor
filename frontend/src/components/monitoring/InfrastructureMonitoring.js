@@ -30,7 +30,7 @@ import {
   ViewInAr as ContainerIcon,
   Timeline as TimelineIcon
 } from '@mui/icons-material';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 const InfrastructureMonitoring = () => {
   const [systemMetrics, setSystemMetrics] = useState(null);
@@ -39,7 +39,7 @@ const InfrastructureMonitoring = () => {
   const [error, setError] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(null);
-  const { token } = useAuth();
+  const { token } = useSessionAuth();
 
   const fetchSystemMetrics = async () => {
     try {
