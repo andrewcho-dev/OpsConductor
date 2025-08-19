@@ -3,6 +3,7 @@ Jobs API v3 - SIMPLIFIED
 No serialization complexity, just clean IDs and execution tracking
 """
 
+import os
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -19,7 +20,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v3/jobs", tags=["Jobs v3 - Simplified"])
+router = APIRouter(prefix=f"{os.getenv(\'API_BASE_URL\', \'/api/v3\')}/jobs", tags=["Jobs v3 - Simplified"])
 
 
 # SIMPLIFIED MODELS

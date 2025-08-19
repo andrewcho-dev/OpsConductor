@@ -29,7 +29,9 @@ const useWebSocket = (room = null) => {
     }
 
     try {
-      const wsUrl = `${process.env.REACT_APP_WS_URL || 'ws://localhost:8000'}/api/v1/ws/${token}${room ? `?room=${room}` : ''}`;
+      const baseWsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+      const apiPath = process.env.REACT_APP_API_URL ? `${process.env.REACT_APP_API_URL}/websocket/connect` : '/api/v3/websocket/connect';
+      const wsUrl = `${baseWsUrl}${apiPath}/${token}${room ? `?room=${room}` : ''}`;
       wsRef.current = new WebSocket(wsUrl);
 
       wsRef.current.onopen = () => {

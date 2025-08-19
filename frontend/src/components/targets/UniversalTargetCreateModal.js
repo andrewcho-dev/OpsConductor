@@ -893,7 +893,7 @@ const UniversalTargetCreateModal = ({ open, onClose, onTargetCreated }) => {
                           value={method.base_path || '/'}
                           onChange={(e) => updateCommunicationMethod(method.id, 'base_path', e.target.value)}
                           size="small"
-                          placeholder="/api/v1"
+                          placeholder="/api"
                         />
                       </Grid>
                       

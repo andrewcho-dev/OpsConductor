@@ -48,17 +48,18 @@ const SystemHealthDashboard = () => {
     if (!refreshing) setRefreshing(true);
     
     try {
+      const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
       const [overallRes, systemRes, databaseRes, applicationRes] = await Promise.all([
-        fetch('/api/v2/health/', { 
+        fetch(`${baseUrl}/system/health/`, { 
           headers: { 'Content-Type': 'application/json' }
         }),
-        fetch('/api/v2/health/system', { 
+        fetch(`${baseUrl}/system/health/system`, { 
           headers: { 'Content-Type': 'application/json' }
         }),
-        fetch('/api/v2/health/database', { 
+        fetch(`${baseUrl}/system/health/database`, { 
           headers: { 'Content-Type': 'application/json' }
         }),
-        fetch('/api/v2/health/application', { 
+        fetch(`${baseUrl}/system/health/application`, { 
           headers: { 'Content-Type': 'application/json' }
         })
       ]);
@@ -103,7 +104,8 @@ const SystemHealthDashboard = () => {
         return;
       }
       
-      const response = await fetch('/api/v2/health/volumes/prune', {
+      const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${baseUrl}/system/health/volumes/prune`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -136,7 +138,8 @@ const SystemHealthDashboard = () => {
         return;
       }
 
-      const response = await fetch(`/api/v2/health/services/${serviceName}/${action}`, {
+      const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${baseUrl}/system/health/services/${serviceName}/${action}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

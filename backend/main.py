@@ -17,7 +17,7 @@ from typing import List
 from app.shared.middleware.error_handler import ErrorHandlingMiddleware, RequestLoggingMiddleware
 
 from app.database.database import engine, Base
-from app.routers import users, universal_targets, audit, auth_session
+# LEGACY ROUTERS REMOVED - Using v3 only
 # Legacy routers removed - consolidated into V2 APIs
 # Legacy system_health and system_management removed - consolidated into V2 APIs
 from app.core.config import settings
@@ -183,64 +183,52 @@ app.add_middleware(
 
 # Authentication is now handled by centralized auth_dependencies module
 
-# Include routers
-app.include_router(auth_session.router, prefix="/auth", tags=["Authentication"])
-app.include_router(users.router, prefix="/api/users", tags=["Users"])
-app.include_router(universal_targets.router, tags=["Universal Targets"])
-app.include_router(audit.router, tags=["Audit v1"])
-# Include data export router
-from app.routers import data_export
-app.include_router(data_export.router, tags=["Data Export/Import"])
-# Legacy routers removed - consolidated into V2 APIs
-# system.router -> /api/v2/system/*
-# notifications.router -> /api/v2/notifications/*  
-# discovery.router -> /api/v2/discovery/*
-# Legacy health/metrics/log_viewer routers removed - consolidated into V2 APIs
+# LEGACY ROUTERS REMOVED - Using v3 only
+# Legacy routers removed - using v3 only
 
-# Include enhanced V2 API routers
-from app.api.v2 import (
-    websocket_enhanced as websocket_v2,
-    audit_enhanced as audit_v2,
-    device_types_enhanced as device_types_v2,
-    health_enhanced as health_v2,
-    metrics_enhanced as metrics_v2,
-    jobs_enhanced as jobs_v2,
-    templates_enhanced as templates_v2,
-    system_enhanced as system_v2,
-    discovery_enhanced as discovery_v2,
-    notifications_enhanced as notifications_v2,
-    log_viewer_simple as log_viewer_v2
-)
-from app.api.v1 import (
-    celery_monitor
-)
-from app.api import system_info
+# V2 APIs REMOVED - Using v3 only
+# V1 APIs REMOVED - Using v3 only
 from app.api.v3 import (
     jobs_simple as jobs_v3,
-    schedules as schedules_v3
+    schedules as schedules_v3,
+    users as users_v3,
+    targets as targets_v3,
+    auth as auth_v3,
+    system as system_v3,
+    celery as celery_v3,
+    audit as audit_v3,
+    discovery as discovery_v3,
+    notifications as notifications_v3,
+    templates as templates_v3,
+    metrics as metrics_v3,
+    websocket as websocket_v3,
+    device_types as device_types_v3,
+    logs as logs_v3,
+    analytics as analytics_v3,
+    data_export as data_export_v3
 )
-# Include enhanced V2 routers (routers already have their own prefixes)
-app.include_router(websocket_v2.router, tags=["WebSocket API v2"])
-app.include_router(audit_v2.router, tags=["Audit API v2"])
-app.include_router(device_types_v2.router, tags=["Device Types API v2"])
-app.include_router(health_v2.router, tags=["Health & Monitoring v2"])
-app.include_router(metrics_v2.router, tags=["Metrics & Analytics v2"])
-# app.include_router(jobs_v2.router, tags=["Jobs Management v2"])  # DISABLED - Using v3 instead
-app.include_router(templates_v2.router, tags=["Templates Management v2"])
-app.include_router(system_v2.router, tags=["System Administration v2"])
-app.include_router(discovery_v2.router, tags=["Network Discovery v2"])
-app.include_router(notifications_v2.router, tags=["Notifications & Alerts v2"])
-app.include_router(log_viewer_v2.router, tags=["Log Viewer v2"])
+# V2 ROUTERS REMOVED - Using v3 only
 
-# Include V3 simplified APIs
+# Include V3 consolidated APIs
 app.include_router(jobs_v3.router, tags=["Jobs v3 - Simplified"])
 app.include_router(schedules_v3.router, tags=["Schedules v3"])
+app.include_router(users_v3.router, tags=["Users v3"])
+app.include_router(targets_v3.router, tags=["Targets v3"])
+app.include_router(auth_v3.router, tags=["Auth v3"])
+app.include_router(system_v3.router, tags=["System v3"])
+app.include_router(celery_v3.router, tags=["Celery v3"])
+app.include_router(audit_v3.router, tags=["Audit v3"])
+app.include_router(discovery_v3.router, tags=["Discovery v3"])
+app.include_router(notifications_v3.router, tags=["Notifications v3"])
+app.include_router(templates_v3.router, tags=["Templates v3"])
+app.include_router(metrics_v3.router, tags=["Metrics v3"])
+app.include_router(websocket_v3.router, tags=["WebSocket v3"])
+app.include_router(device_types_v3.router, tags=["Device Types v3"])
+app.include_router(logs_v3.router, tags=["Logs v3"])
+app.include_router(analytics_v3.router, tags=["Analytics v3"])
+app.include_router(data_export_v3.router, tags=["Data Export v3"])
 
-# Include V1 compatibility routers
-app.include_router(celery_monitor.router, tags=["Celery Monitoring"])
-
-# Include system info router for frontend compatibility
-app.include_router(system_info.router, tags=["System Info"])
+# V1 ROUTERS REMOVED - Using v3 only
 
 @app.get("/")
 async def root():
@@ -255,7 +243,7 @@ async def health_check():
     """Simple health check endpoint for Docker health checks"""
     return {"status": "healthy", "service": "opsconductor-backend"}
 
-# Legacy health endpoints removed - use /api/v2/health/ instead
+# Legacy health endpoints removed - using v3 only
 
 if __name__ == "__main__":
     import uvicorn

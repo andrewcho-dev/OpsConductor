@@ -209,7 +209,7 @@ const LogViewer = () => {
         params.append('pattern', pattern.trim());
       }
       
-      const response = await apiCall(`/api/v2/log-viewer/search?${params}`);
+      const response = await apiCall(`/logs/entries?${params}`);
       const flatResults = response.results || [];
       
       setResults(flatResults);
@@ -220,7 +220,7 @@ const LogViewer = () => {
       // Get comprehensive stats
       try {
         const statsParams = pattern.trim() ? `?pattern=${encodeURIComponent(pattern.trim())}` : '';
-        const statsResponse = await apiCall(`/api/v2/log-viewer/stats${statsParams}`);
+        const statsResponse = await apiCall(`/logs/stats${statsParams}`);
         setStats(statsResponse.stats);
       } catch (statsError) {
         console.warn('Stats API not available:', statsError);

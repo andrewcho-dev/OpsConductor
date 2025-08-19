@@ -25,9 +25,10 @@ class AuditService {
    */
   async fetchUserLookups(userIds = null) {
     try {
+      const baseUrl = process.env.REACT_APP_API_URL || '';
       const url = userIds 
-        ? `/api/v1/audit/lookups/users?user_ids=${userIds.join(',')}`
-        : '/api/v1/audit/lookups/users';
+        ? `${baseUrl}/audit/lookups/users?user_ids=${userIds.join(',')}`
+        : `${baseUrl}/audit/lookups/users`;
       
       const response = await fetch(url, {
         headers: this.getAuthHeaders()
@@ -71,9 +72,10 @@ class AuditService {
    */
   async fetchTargetLookups(targetIds = null) {
     try {
+      const baseUrl = process.env.REACT_APP_API_URL || '';
       const url = targetIds 
-        ? `/api/v1/audit/lookups/targets?target_ids=${targetIds.join(',')}`
-        : '/api/v1/audit/lookups/targets';
+        ? `${baseUrl}/audit/lookups/targets?target_ids=${targetIds.join(',')}`
+        : `${baseUrl}/audit/lookups/targets`;
       
       const response = await fetch(url, {
         headers: this.getAuthHeaders()
