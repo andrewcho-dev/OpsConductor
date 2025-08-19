@@ -73,12 +73,12 @@ const LoginScreen = () => {
         >
           <Box
             sx={{
-              width: 200,
-              height: 200,
+              width: 240,
+              height: 240,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              mb: 3,
+              mb: 1.5,
             }}
           >
             <Box
