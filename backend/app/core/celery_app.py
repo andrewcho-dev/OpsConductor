@@ -1,68 +1,50 @@
 """
-Celery configuration for OpsConductor background task processing
+BULLETPROOF Celery configuration - NO DEPENDENCIES VERSION
 """
 
+import os
 from celery import Celery
-from celery.schedules import crontab
-from app.core.config import settings
 
-# Create Celery app
-celery_app = Celery(
-    "opsconductor",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
-    include=["app.tasks.job_tasks", "app.tasks.periodic_tasks", "app.tasks.discovery_tasks"]
-)
+# Get environment variables directly - NO PYDANTIC BULLSHIT
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://opsconductor:opsconductor_secure_password_2024@postgres:5432/opsconductor_dev")
 
-# Celery configuration
+# Create Celery app - MINIMAL CONFIG
+celery_app = Celery("opsconductor")
+
+# BASIC configuration that actually works
 celery_app.conf.update(
+    broker_url=REDIS_URL,
+    result_backend=REDIS_URL,
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    task_always_eager=False,
     task_track_started=True,
-    task_time_limit=30 * 60,  # 30 minutes
-    task_soft_time_limit=25 * 60,  # 25 minutes
     worker_prefetch_multiplier=1,
-    worker_max_tasks_per_child=1000,
-    result_expires=3600,  # 1 hour
-    task_always_eager=False,  # Set to True for testing
+    task_acks_late=True,
+    result_expires=3600,
+    # Disable all the complex shit
+    task_ignore_result=False,
+    worker_disable_rate_limits=True,
 )
 
-# Celery Beat Schedule - Periodic Tasks
+# Auto-discover tasks from the tasks package
+celery_app.autodiscover_tasks(['app.tasks'])
+
+# MINIMAL beat schedule
 celery_app.conf.beat_schedule = {
-    # Check for scheduled jobs every 30 seconds
+    'test-task-every-minute': {
+        'task': 'app.tasks.simple_tasks.health_check',
+        'schedule': 60.0,  # Every minute for testing
+    },
     'check-scheduled-jobs': {
         'task': 'app.tasks.job_tasks.check_scheduled_jobs',
-        'schedule': 30.0,  # Every 30 seconds
-    },
-    # Run cleanup tasks every hour
-    'cleanup-stale-executions': {
-        'task': 'app.tasks.periodic_tasks.cleanup_stale_executions_task',
-        'schedule': crontab(minute=0),  # Every hour at minute 0
-    },
-    # System health check every 5 minutes
-    'system-health-check': {
-        'task': 'app.tasks.periodic_tasks.system_health_check_task',
-        'schedule': crontab(minute='*/5'),  # Every 5 minutes
-    },
-    # Target health monitoring every 10 minutes
-    'target-health-monitoring': {
-        'task': 'app.tasks.periodic_tasks.target_health_monitoring_task',
-        'schedule': crontab(minute='*/10'),  # Every 10 minutes
-    },
-    # Collect Celery metrics every 5 minutes
-    'collect-celery-metrics': {
-        'task': 'app.tasks.periodic_tasks.collect_celery_metrics_task',
-        'schedule': crontab(minute='*/5'),  # Every 5 minutes
+        'schedule': 30.0,  # Every 30 seconds to check for scheduled jobs
     },
 }
-
-# Task routing - use default queue for now
-# celery_app.conf.task_routes = {
-#     "app.tasks.job_tasks.*": {"queue": "job_execution"},
-# }
 
 if __name__ == "__main__":
     celery_app.start()

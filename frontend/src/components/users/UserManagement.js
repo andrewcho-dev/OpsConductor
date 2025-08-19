@@ -216,14 +216,16 @@ const UserManagement = () => {
             </IconButton>
           </Tooltip>
           <Tooltip title="Refresh users">
-            <IconButton 
-              className="btn-icon" 
-              onClick={fetchUsers}
-              disabled={loading}
-              size="small"
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
+            <span>
+              <IconButton 
+                className="btn-icon" 
+                onClick={fetchUsers}
+                disabled={loading}
+                size="small"
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </span>
           </Tooltip>
           <Button
             className="btn-compact"

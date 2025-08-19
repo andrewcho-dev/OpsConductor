@@ -70,7 +70,7 @@ async def test_phase3_improvements():
         print("✅ DeviceTypeModel imported successfully")
         print("✅ DeviceTypeCategoryModel imported successfully")
         print("✅ DeviceTypeTemplateModel imported successfully")
-        print("✅ DeviceTypeUsageModel imported successfully")
+        print("✅ DeviceTypeUsageModel imported successfully')
         
         # Test model methods
         test_device_type = DeviceTypeModel(
@@ -78,7 +78,7 @@ async def test_phase3_improvements():
             label="Test Device",
             category="test_category",
             description="Test description",
-            communication_methods=["ssh", "snmp"],
+            communication_methods=["ssh", "snmp'],
             discovery_ports=[22, 161],
             is_system=False
         )

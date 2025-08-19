@@ -52,7 +52,7 @@ import {
   Analytics as AnalyticsIcon,
 } from '@mui/icons-material';
 
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { apiService } from '../../services/apiService';
 import { useAlert } from '../layout/BottomStatusBar';
 
@@ -66,7 +66,7 @@ import JobControlCenter from './JobControlCenter';
 // import JobAnalytics from './JobAnalytics'; // TODO: Create this component
 
 const EnhancedJobDashboard = () => {
-  const { token } = useAuth();
+  const { token } = useSessionAuth();
   const { addAlert } = useAlert();
   
   // State management
@@ -107,7 +107,7 @@ const EnhancedJobDashboard = () => {
 
   const fetchJobs = async () => {
     try {
-      const response = await apiService.get('/v2/jobs/');
+      const response = await apiService.get('/v3/jobs/');
       if (response.ok) {
         const data = await response.json();
         setJobs(data.jobs || []);

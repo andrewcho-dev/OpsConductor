@@ -25,6 +25,7 @@ import {
   MenuItem,
   Switch,
   FormControlLabel,
+  Checkbox,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -606,8 +607,22 @@ const ActionConfigurationPanel = ({ action, onUpdate, selectedTargets }) => {
   const [localAction, setLocalAction] = useState(action);
 
   useEffect(() => {
-    setLocalAction(action);
-  }, [action]);
+    // Initialize action with default parameters if they don't exist
+    const initializedAction = {
+      ...action,
+      parameters: {
+        ...action.parameters,
+        // Set default captureOutput to true for backward compatibility if not set
+        captureOutput: action.parameters?.captureOutput !== undefined ? action.parameters.captureOutput : true
+      }
+    };
+    setLocalAction(initializedAction);
+    
+    // If we added default parameters, update the parent
+    if (action.parameters?.captureOutput === undefined) {
+      onUpdate(initializedAction);
+    }
+  }, [action, onUpdate]);
 
   const handleParameterChange = (key, value) => {
     const updatedAction = {
@@ -652,6 +667,16 @@ const ActionConfigurationPanel = ({ action, onUpdate, selectedTargets }) => {
               sx={{ mb: 2 }}
               placeholder="0, 1, 2"
             />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={localAction.parameters.captureOutput === true}
+                  onChange={(e) => handleParameterChange('captureOutput', e.target.checked)}
+                />
+              }
+              label="Capture command output (stdout/stderr)"
+              sx={{ mb: 2 }}
+            />
           </>
         );
       
@@ -689,6 +714,16 @@ const ActionConfigurationPanel = ({ action, onUpdate, selectedTargets }) => {
               onChange={(e) => handleParameterChange('arguments', e.target.value.split(',').map(a => a.trim()).filter(a => a))}
               sx={{ mb: 2 }}
               placeholder="--verbose, --config=/path/to/config"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={localAction.parameters.captureOutput === true}
+                  onChange={(e) => handleParameterChange('captureOutput', e.target.checked)}
+                />
+              }
+              label="Capture script output (stdout/stderr)"
+              sx={{ mb: 2 }}
             />
           </>
         );

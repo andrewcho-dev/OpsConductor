@@ -16,7 +16,6 @@ PHASE 1 & 2 IMPROVEMENTS:
 
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Union
@@ -25,14 +24,13 @@ from pydantic import BaseModel, Field, validator
 # Import service layer
 from app.services.jobs_management_service import JobsManagementService, JobsManagementError
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger, RequestLogger
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # PHASE 1: COMPREHENSIVE PYDANTIC MODELS
 
@@ -103,8 +101,8 @@ class JobCreateRequest(BaseModel):
 class JobResponse(BaseModel):
     """Enhanced response model for job information"""
     id: int = Field(..., description="Job ID")
-    job_uuid: Optional[str] = Field(None, description="Permanent job UUID")
-    job_serial: Optional[str] = Field(None, description="Human-readable job serial (e.g., J20250000001)")
+    # job_uuid removed - simplified system uses only IDs
+    # job_serial removed - simplified system uses only IDs
     name: str = Field(..., description="Job name")
     job_type: str = Field(..., description="Job type")
     description: Optional[str] = Field(None, description="Job description")
@@ -114,10 +112,12 @@ class JobResponse(BaseModel):
     created_by: int = Field(..., description="Creator user ID")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Job parameters")
     actions: List[Dict[str, Any]] = Field(default_factory=list, description="Job actions")
+    targets: List[Dict[str, Any]] = Field(default_factory=list, description="Job targets")
     scheduled_at: Optional[datetime] = Field(None, description="Job scheduled execution time")
     priority: int = Field(..., description="Job priority")
     timeout: Optional[int] = Field(None, description="Job timeout")
     retry_count: int = Field(..., description="Retry count")
+    last_execution: Optional[Dict[str, Any]] = Field(None, description="Last execution data")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Job metadata")
     
     class Config:
@@ -359,64 +359,19 @@ router = APIRouter(
 
 # PHASE 2: ENHANCED DEPENDENCY FUNCTIONS
 
-def get_current_user(credentials = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user with enhanced error handling."""
-    try:
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            logger.warning("Invalid token in jobs management request")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error": "invalid_token",
-                    "message": "Invalid or expired token",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        user_id = payload.get("user_id")
-        from app.services.user_service import UserService
-        user = UserService.get_user_by_id(db, user_id)
-        
-        if not user:
-            logger.warning(f"User not found for token: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "user_not_found",
-                    "message": "User not found",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting current user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "internal_error",
-                "message": "Internal error during authentication",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+# Local get_current_user removed - using centralized auth_dependencies
 
 
-def require_job_permissions(current_user = Depends(get_current_user)):
+def require_job_permissions(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Require job management permissions."""
-    if current_user.role not in ["administrator", "operator"]:
+    if current_user["role"] not in ["administrator", "operator"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "insufficient_permissions",
                 "message": "Insufficient permissions to manage jobs",
                 "required_roles": ["administrator", "operator"],
-                "user_role": current_user.role,
+                "user_role": current_user["role"],
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
@@ -459,7 +414,7 @@ async def create_job(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, f"create_job_{job_data.name}")
-    request_logger.log_request_start("POST", "/api/v2/jobs/", current_user.username)
+    request_logger.log_request_start("POST", "/api/v2/jobs/", current_user["username"])
     
     try:
         # Initialize service layer
@@ -468,8 +423,8 @@ async def create_job(
         # Create job through service layer
         job_result = await jobs_mgmt_service.create_job(
             job_data=job_data.model_dump(),
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -484,7 +439,7 @@ async def create_job(
                 "job_id": job_result["id"],
                 "job_name": job_result["name"],
                 "job_type": job_result["job_type"],
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -499,7 +454,7 @@ async def create_job(
                 "error_code": e.error_code,
                 "error_message": e.message,
                 "job_name": job_data.name,
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -521,7 +476,7 @@ async def create_job(
             extra={
                 "error": str(e),
                 "job_name": job_data.name,
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -572,7 +527,7 @@ async def get_jobs(
     """Enhanced jobs retrieval with service layer and advanced filtering"""
     
     request_logger = RequestLogger(logger, "get_jobs")
-    request_logger.log_request_start("GET", "/api/v2/jobs/", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/jobs/", current_user["username"])
     
     try:
         # Initialize service layer
@@ -587,13 +542,15 @@ async def get_jobs(
             status=job_status,
             sort_by=sort_by,
             sort_order=sort_order,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         # Convert to response format
         job_responses = []
         for job_data in jobs_result["jobs"]:
+            # Keep last_execution as dict for now to avoid Pydantic serialization issues
+            # TODO: Fix JobExecutionResponse serialization
             job_responses.append(JobResponse(**job_data))
         
         response = JobsListResponse(
@@ -614,7 +571,7 @@ async def get_jobs(
                 "total_jobs": jobs_result["total"],
                 "returned_jobs": len(job_responses),
                 "filters_applied": bool(job_type or job_status or user_id),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -628,7 +585,7 @@ async def get_jobs(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -649,7 +606,9 @@ async def get_jobs(
             "Jobs retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "error_type": type(e).__name__,
+                "traceback": str(e.__traceback__),
+                "requested_by": current_user["username"]
             }
         )
         
@@ -688,7 +647,7 @@ async def get_job_by_id(
     """Enhanced job retrieval by ID with service layer and caching"""
     
     request_logger = RequestLogger(logger, f"get_job_{job_id}")
-    request_logger.log_request_start("GET", f"/api/v2/jobs/{job_id}", current_user.username)
+    request_logger.log_request_start("GET", f"/api/v2/jobs/{job_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -697,8 +656,8 @@ async def get_job_by_id(
         # Get job through service layer (with caching)
         job_result = await jobs_mgmt_service.get_job_by_id(
             job_id=job_id,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = JobResponse(**job_result)
@@ -710,7 +669,7 @@ async def get_job_by_id(
             extra={
                 "job_id": job_id,
                 "job_name": job_result.get("name", "unknown"),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -725,7 +684,7 @@ async def get_job_by_id(
                 "job_id": job_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -749,7 +708,7 @@ async def get_job_by_id(
             extra={
                 "job_id": job_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -793,7 +752,7 @@ async def execute_job(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, f"execute_job_{job_id}")
-    request_logger.log_request_start("POST", f"/api/v2/jobs/{job_id}/execute", current_user.username)
+    request_logger.log_request_start("POST", f"/api/v2/jobs/{job_id}/execute", current_user["username"])
     
     try:
         # Initialize service layer
@@ -803,8 +762,8 @@ async def execute_job(
         execution_result = await jobs_mgmt_service.execute_job(
             job_id=job_id,
             execution_params=execution_data.model_dump(),
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -818,7 +777,7 @@ async def execute_job(
             extra={
                 "job_id": job_id,
                 "task_id": execution_result["task_id"],
-                "executed_by": current_user.username
+                "executed_by": current_user["username"]
             }
         )
         
@@ -833,7 +792,7 @@ async def execute_job(
                 "job_id": job_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "executed_by": current_user.username
+                "executed_by": current_user["username"]
             }
         )
         
@@ -857,7 +816,7 @@ async def execute_job(
             extra={
                 "job_id": job_id,
                 "error": str(e),
-                "executed_by": current_user.username
+                "executed_by": current_user["username"]
             }
         )
         
@@ -896,7 +855,7 @@ async def get_job_statistics(
     """Enhanced job statistics with service layer and comprehensive analytics"""
     
     request_logger = RequestLogger(logger, "get_job_statistics")
-    request_logger.log_request_start("GET", "/api/v2/jobs/statistics", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/jobs/statistics", current_user["username"])
     
     try:
         # Initialize service layer
@@ -904,8 +863,8 @@ async def get_job_statistics(
         
         # Get statistics through service layer (with caching)
         stats_result = await jobs_mgmt_service.get_jobs_statistics(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = JobStatisticsResponse(**stats_result)
@@ -916,7 +875,7 @@ async def get_job_statistics(
             "Job statistics retrieval successful via service layer",
             extra={
                 "total_jobs": stats_result.get("total_jobs", 0),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -930,7 +889,7 @@ async def get_job_statistics(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -951,7 +910,7 @@ async def get_job_statistics(
             "Job statistics retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1016,7 +975,7 @@ async def update_job(
     """Enhanced job update with service layer and comprehensive features"""
     
     request_logger = RequestLogger(logger, "update_job")
-    request_logger.log_request_start("PUT", f"/api/v2/jobs/{job_id}", current_user.username)
+    request_logger.log_request_start("PUT", f"/api/v2/jobs/{job_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1026,8 +985,8 @@ async def update_job(
         updated_job = await jobs_mgmt_service.update_job(
             job_id=job_id,
             job_update_data=job_update.dict(exclude_unset=True),
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         request_logger.log_request_end(status.HTTP_200_OK, 1)
@@ -1036,7 +995,7 @@ async def update_job(
             "Job update successful",
             extra={
                 "job_id": job_id,
-                "updated_by": current_user.username,
+                "updated_by": current_user["username"],
                 "fields_updated": list(job_update.dict(exclude_unset=True).keys())
             }
         )
@@ -1052,7 +1011,7 @@ async def update_job(
                 "job_id": job_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1074,7 +1033,7 @@ async def update_job(
             extra={
                 "job_id": job_id,
                 "error": str(e),
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1116,7 +1075,7 @@ async def delete_job(
     """Enhanced job deletion with service layer and comprehensive features"""
     
     request_logger = RequestLogger(logger, "delete_job")
-    request_logger.log_request_start("DELETE", f"/api/v2/jobs/{job_id}", current_user.username)
+    request_logger.log_request_start("DELETE", f"/api/v2/jobs/{job_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1126,8 +1085,8 @@ async def delete_job(
         result = await jobs_mgmt_service.delete_job(
             job_id=job_id,
             soft_delete=soft_delete,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         request_logger.log_request_end(status.HTTP_200_OK, 1)
@@ -1137,7 +1096,7 @@ async def delete_job(
             extra={
                 "job_id": job_id,
                 "soft_delete": soft_delete,
-                "deleted_by": current_user.username
+                "deleted_by": current_user["username"]
             }
         )
         
@@ -1157,7 +1116,7 @@ async def delete_job(
                 "job_id": job_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "deleted_by": current_user.username
+                "deleted_by": current_user["username"]
             }
         )
         
@@ -1179,7 +1138,7 @@ async def delete_job(
             extra={
                 "job_id": job_id,
                 "error": str(e),
-                "deleted_by": current_user.username
+                "deleted_by": current_user["username"]
             }
         )
         
@@ -1218,7 +1177,7 @@ async def get_job_targets(
     """Get targets associated with a job"""
     
     request_logger = RequestLogger(logger, "get_job_targets")
-    request_logger.log_request_start("GET", f"/api/v2/jobs/{job_id}/targets", current_user.username)
+    request_logger.log_request_start("GET", f"/api/v2/jobs/{job_id}/targets", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1227,8 +1186,8 @@ async def get_job_targets(
         # Get job targets through service layer
         targets = await jobs_mgmt_service.get_job_targets(
             job_id=job_id,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         request_logger.log_request_end(status.HTTP_200_OK, len(targets))
@@ -1260,7 +1219,7 @@ async def get_job_targets(
             extra={
                 "job_id": job_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1302,7 +1261,7 @@ async def get_job_executions(
     """Get execution history for a job"""
     
     request_logger = RequestLogger(logger, "get_job_executions")
-    request_logger.log_request_start("GET", f"/api/v2/jobs/{job_id}/executions", current_user.username)
+    request_logger.log_request_start("GET", f"/api/v2/jobs/{job_id}/executions", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1313,8 +1272,8 @@ async def get_job_executions(
             job_id=job_id,
             skip=skip,
             limit=limit,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         request_logger.log_request_end(status.HTTP_200_OK, len(executions_data.get('executions', [])))
@@ -1341,7 +1300,7 @@ async def get_job_executions(
             extra={
                 "job_id": job_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         

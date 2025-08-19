@@ -17,12 +17,12 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import Logo from '../common/Logo';
 
 const TopHeader = () => {
-  const { user, logout } = useAuth();
+  const { user, logout } = useSessionAuth();
   const { getTheme } = useTheme();
   const navigate = useNavigate();
   const theme = getTheme();
@@ -77,7 +77,7 @@ const TopHeader = () => {
             onClick={handleHomeClick}
             sx={{ mr: 2, p: 0.5 }}
           >
-            <Logo size={40} />
+            <Logo size={40} variant="hat" theme="light" />
           </IconButton>
           
           <Typography 
@@ -163,7 +163,7 @@ const TopHeader = () => {
             <CloseIcon fontSize="small" />
           </IconButton>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
-            <Logo size={32} />
+            <Logo size={32} variant="hat" theme="light" />
             <Typography variant="h6" sx={{ ml: 1.5, fontWeight: 600, color: '#003c82' }}>
               OpsConductor
             </Typography>

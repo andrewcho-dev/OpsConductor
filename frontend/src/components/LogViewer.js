@@ -53,12 +53,12 @@ import {
   Storage as StorageIcon,
   Speed as SpeedIcon,
 } from '@mui/icons-material';
-import { useAuth } from '../contexts/AuthContext';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { authService } from '../services/authService';
 import '../styles/dashboard.css';
 
 const LogViewer = () => {
-  const { token } = useAuth();
+  const { token } = useSessionAuth();
   const location = useLocation();
   
   // State management

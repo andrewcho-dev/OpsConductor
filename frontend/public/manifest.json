@@ -4,7 +4,7 @@
   "description": "Universal Automation Orchestration Platform",
   "icons": [
     {
-      "src": "logo.svg",
+      "src": "OpsConductor hat dark on light.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

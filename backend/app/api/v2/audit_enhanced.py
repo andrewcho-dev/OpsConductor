@@ -15,7 +15,6 @@ PHASE 1 & 2 IMPROVEMENTS:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any, Union
@@ -24,7 +23,7 @@ from pydantic import BaseModel, Field, validator
 # Import service layer
 from app.services.audit_management_service import AuditManagementService, AuditManagementError
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger, RequestLogger
 from app.domains.audit.services.audit_service import AuditEventType, AuditSeverity
 
@@ -32,7 +31,6 @@ from app.domains.audit.services.audit_service import AuditEventType, AuditSeveri
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # PHASE 1: COMPREHENSIVE PYDANTIC MODELS
 
@@ -351,80 +349,35 @@ router = APIRouter(
 
 # PHASE 2: ENHANCED DEPENDENCY FUNCTIONS
 
-def get_current_user(credentials: HTTPBearer = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user with enhanced error handling."""
-    try:
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            logger.warning("Invalid token in audit management request")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error": "invalid_token",
-                    "message": "Invalid or expired token",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        user_id = payload.get("user_id")
-        from app.services.user_service import UserService
-        user = UserService.get_user_by_id(db, user_id)
-        
-        if not user:
-            logger.warning(f"User not found for token: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "user_not_found",
-                    "message": "User not found",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting current user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "internal_error",
-                "message": "Internal error during authentication",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+# Local get_current_user removed - using centralized auth_dependencies
 
 
-def require_audit_permissions(current_user = Depends(get_current_user)):
+def require_audit_permissions(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Require audit viewing permissions."""
-    if current_user.role not in ["administrator", "operator"]:
+    if current_user["role"] not in ["administrator", "operator"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "insufficient_permissions",
                 "message": "Insufficient permissions to access audit data",
                 "required_roles": ["administrator", "operator"],
-                "user_role": current_user.role,
+                "user_role": current_user["role"],
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
     return current_user
 
 
-def require_admin_permissions(current_user = Depends(get_current_user)):
+def require_admin_permissions(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Require administrator permissions."""
-    if current_user.role not in ["administrator"]:
+    if current_user["role"] not in ["administrator"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "admin_required",
                 "message": "Administrator permissions required",
                 "required_roles": ["administrator"],
-                "user_role": current_user.role,
+                "user_role": current_user["role"],
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
@@ -476,7 +429,7 @@ async def get_audit_events(
     """Enhanced audit events retrieval with service layer and advanced filtering"""
     
     request_logger = RequestLogger(logger, "get_audit_events")
-    request_logger.log_request_start("GET", "/api/v1/audit/events", current_user.username)
+    request_logger.log_request_start("GET", "/api/v1/audit/events", current_user["username"])
     
     try:
         # Initialize service layer
@@ -522,8 +475,8 @@ async def get_audit_events(
             severity=severity_enum,
             start_date=start_date,
             end_date=end_date,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         # Convert to response format
@@ -549,7 +502,7 @@ async def get_audit_events(
                 "total_events": events_result["total"],
                 "returned_events": len(event_responses),
                 "filters_applied": bool(event_type or user_id or severity or start_date or end_date),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -565,7 +518,7 @@ async def get_audit_events(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -586,7 +539,7 @@ async def get_audit_events(
             "Audit events retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -625,7 +578,7 @@ async def get_audit_statistics(
     """Enhanced audit statistics with service layer and comprehensive analytics"""
     
     request_logger = RequestLogger(logger, "get_audit_statistics")
-    request_logger.log_request_start("GET", "/api/v1/audit/statistics", current_user.username)
+    request_logger.log_request_start("GET", "/api/v1/audit/statistics", current_user["username"])
     
     try:
         # Initialize service layer
@@ -633,8 +586,8 @@ async def get_audit_statistics(
         
         # Get statistics through service layer (with caching)
         stats_result = await audit_mgmt_service.get_audit_statistics(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = AuditStatisticsResponse(**stats_result)
@@ -645,7 +598,7 @@ async def get_audit_statistics(
             "Audit statistics retrieval successful via service layer",
             extra={
                 "total_events": stats_result.get("total_events", 0),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -659,7 +612,7 @@ async def get_audit_statistics(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -680,7 +633,7 @@ async def get_audit_statistics(
             "Audit statistics retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -720,7 +673,7 @@ async def search_audit_events(
     """Enhanced audit search with service layer and advanced filtering"""
     
     request_logger = RequestLogger(logger, f"search_audit_events_{search_request.query}")
-    request_logger.log_request_start("POST", "/api/v1/audit/search", current_user.username)
+    request_logger.log_request_start("POST", "/api/v1/audit/search", current_user["username"])
     
     try:
         # Initialize service layer
@@ -751,8 +704,8 @@ async def search_audit_events(
             end_date=search_request.end_date,
             event_types=event_type_enums,
             user_ids=search_request.user_ids,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         # Convert to response format
@@ -778,7 +731,7 @@ async def search_audit_events(
                 "query": search_request.query,
                 "total_results": search_result["total"],
                 "returned_results": len(event_responses),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -795,7 +748,7 @@ async def search_audit_events(
                 "query": search_request.query,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -817,7 +770,7 @@ async def search_audit_events(
             extra={
                 "query": search_request.query,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -857,7 +810,7 @@ async def verify_audit_entry(
     """Enhanced audit entry verification with service layer and comprehensive checks"""
     
     request_logger = RequestLogger(logger, f"verify_audit_entry_{entry_id}")
-    request_logger.log_request_start("GET", f"/api/v1/audit/verify/{entry_id}", current_user.username)
+    request_logger.log_request_start("GET", f"/api/v1/audit/verify/{entry_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -866,8 +819,8 @@ async def verify_audit_entry(
         # Verify through service layer
         verification_result = await audit_mgmt_service.verify_audit_entry(
             entry_id=entry_id,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = AuditVerificationResponse(**verification_result)
@@ -879,7 +832,7 @@ async def verify_audit_entry(
             extra={
                 "entry_id": entry_id,
                 "is_valid": verification_result.get("is_valid", False),
-                "verified_by": current_user.username
+                "verified_by": current_user["username"]
             }
         )
         
@@ -894,7 +847,7 @@ async def verify_audit_entry(
                 "entry_id": entry_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "verified_by": current_user.username
+                "verified_by": current_user["username"]
             }
         )
         
@@ -916,7 +869,7 @@ async def verify_audit_entry(
             extra={
                 "entry_id": entry_id,
                 "error": str(e),
-                "verified_by": current_user.username
+                "verified_by": current_user["username"]
             }
         )
         
@@ -960,7 +913,7 @@ async def get_compliance_report(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, "get_compliance_report")
-    request_logger.log_request_start("GET", "/api/v1/audit/compliance/report", current_user.username)
+    request_logger.log_request_start("GET", "/api/v1/audit/compliance/report", current_user["username"])
     
     try:
         # Default to last 30 days if no dates provided
@@ -976,8 +929,8 @@ async def get_compliance_report(
         report_result = await audit_mgmt_service.get_compliance_report(
             start_date=start_date,
             end_date=end_date,
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -992,7 +945,7 @@ async def get_compliance_report(
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
                 "event_count": report_result.get("summary", {}).get("total_events", 0),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1008,7 +961,7 @@ async def get_compliance_report(
                 "end_date": end_date.isoformat() if end_date else None,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1031,7 +984,7 @@ async def get_compliance_report(
                 "start_date": start_date.isoformat() if start_date else None,
                 "end_date": end_date.isoformat() if end_date else None,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1069,7 +1022,7 @@ async def get_audit_event_types(
     """Enhanced audit event types with service layer and comprehensive metadata"""
     
     request_logger = RequestLogger(logger, "get_audit_event_types")
-    request_logger.log_request_start("GET", "/api/v1/audit/event-types", current_user.username)
+    request_logger.log_request_start("GET", "/api/v1/audit/event-types", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1077,8 +1030,8 @@ async def get_audit_event_types(
         
         # Get event types through service layer
         event_types_result = await audit_mgmt_service.get_audit_event_types(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = AuditEventTypesResponse(**event_types_result)
@@ -1089,7 +1042,7 @@ async def get_audit_event_types(
             "Audit event types retrieval successful via service layer",
             extra={
                 "event_types_count": len(event_types_result["event_types"]),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1103,7 +1056,7 @@ async def get_audit_event_types(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1124,7 +1077,7 @@ async def get_audit_event_types(
             "Audit event types retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1233,7 +1186,7 @@ async def get_user_lookups(
     """Get user lookup data for audit event enrichment"""
     
     request_logger = RequestLogger(logger, "get_user_lookups")
-    request_logger.log_request_start("GET", "/api/v1/audit/lookups/users", current_user.username)
+    request_logger.log_request_start("GET", "/api/v1/audit/lookups/users", current_user["username"])
     
     try:
         from app.services.user_service import UserService
@@ -1282,7 +1235,7 @@ async def get_user_lookups(
             users=users_data,
             metadata={
                 "total_users": len(users_data),
-                "requested_by": current_user.username,
+                "requested_by": current_user["username"],
                 "timestamp": datetime.utcnow().isoformat(),
                 "filtered": bool(user_ids)
             }
@@ -1295,7 +1248,7 @@ async def get_user_lookups(
             extra={
                 "users_count": len(users_data),
                 "filtered": bool(user_ids),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1312,7 +1265,7 @@ async def get_user_lookups(
             extra={
                 "error": str(e),
                 "user_ids": user_ids,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1351,7 +1304,7 @@ async def get_target_lookups(
     """Get target lookup data for audit event enrichment"""
     
     request_logger = RequestLogger(logger, "get_target_lookups")
-    request_logger.log_request_start("GET", "/api/v1/audit/lookups/targets", current_user.username)
+    request_logger.log_request_start("GET", "/api/v1/audit/lookups/targets", current_user["username"])
     
     try:
         from app.services.universal_target_service import UniversalTargetService
@@ -1406,7 +1359,7 @@ async def get_target_lookups(
             targets=targets_data,
             metadata={
                 "total_targets": len(targets_data),
-                "requested_by": current_user.username,
+                "requested_by": current_user["username"],
                 "timestamp": datetime.utcnow().isoformat(),
                 "filtered": bool(target_ids)
             }
@@ -1419,7 +1372,7 @@ async def get_target_lookups(
             extra={
                 "targets_count": len(targets_data),
                 "filtered": bool(target_ids),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1436,7 +1389,7 @@ async def get_target_lookups(
             extra={
                 "error": str(e),
                 "target_ids": target_ids,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         

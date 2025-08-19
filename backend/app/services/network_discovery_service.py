@@ -58,7 +58,7 @@ class DiscoveryConfig:
     ])
     timeout: float = 2.0
     max_concurrent: int = 200
-    snmp_communities: List[str] = field(default_factory=lambda: ['public', 'private'])
+    snmp_communities: List[str] = field(default_factory=lambda: ['public', 'private"])
     enable_snmp: bool = True
     enable_service_detection: bool = True
     enable_hostname_resolution: bool = True

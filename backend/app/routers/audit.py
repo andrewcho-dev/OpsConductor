@@ -11,8 +11,8 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.database.database import get_db
-from app.core.security import verify_token
 from app.services.user_service import UserService
+from app.core.auth_dependencies import get_current_user
 from app.services.universal_target_service import UniversalTargetService
 from app.domains.audit.services.audit_service import AuditService
 
@@ -25,8 +25,6 @@ router = APIRouter(
         403: {"description": "Forbidden"}
     }
 )
-
-security = HTTPBearer()
 
 # Response models
 class UserLookupResponse(BaseModel):
@@ -63,29 +61,9 @@ class EventTypeResponse(BaseModel):
 class EventTypesResponse(BaseModel):
     event_types: List[EventTypeResponse]
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user."""
-    token = credentials.credentials
-    payload = verify_token(token)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-    
-    user_id = payload.get("user_id")
-    user = UserService.get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    return user
-
-def require_audit_permissions(current_user = Depends(get_current_user)):
+def require_audit_permissions(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Require audit viewing permissions."""
-    if current_user.role not in ["administrator", "operator", "manager"]:
+    if current_user.get("role") not in ["administrator", "operator", "manager"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions to access audit data"

@@ -35,10 +35,10 @@ import {
   Computer as ComputerIcon
 } from '@mui/icons-material';
 
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 const TargetSelectionModal = ({ open, onClose, selectedTargetIds = [], onSelectionChange }) => {
-  const { token } = useAuth();
+  const { token } = useSessionAuth();
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);

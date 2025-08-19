@@ -8,7 +8,7 @@ from typing import List
 
 # Import celery_app at the bottom to avoid circular imports
 from app.database.database import get_db, SessionLocal
-from app.models.job_models import JobExecution, JobExecutionBranch, ExecutionStatus
+from app.models.job_models import JobExecution, ExecutionStatus
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)

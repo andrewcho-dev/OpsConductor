@@ -15,13 +15,11 @@ import redis
 import json
 
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger
-from fastapi.security import HTTPBearer
 
 # Initialize
 logger = get_structured_logger(__name__)
-security = HTTPBearer()
 router = APIRouter(prefix="/api/celery", tags=["Celery Monitoring"])
 
 # Celery app instance
@@ -36,19 +34,11 @@ except Exception as e:
     redis_client = None
 
 
-def require_auth(token: str = Depends(security)):
-    """Require authentication for Celery monitoring"""
-    user = verify_token(token.credentials)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials"
-        )
-    return user
+# Authentication is handled by get_current_user from auth_dependencies
 
 
 @router.get("/stats")
-async def get_celery_stats(current_user = Depends(require_auth), db: Session = Depends(get_db)):
+async def get_celery_stats(current_user = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get general Celery statistics"""
     try:
         # Get active tasks
@@ -131,7 +121,7 @@ async def get_celery_stats(current_user = Depends(require_auth), db: Session = D
 
 
 @router.get("/workers")
-async def get_celery_workers(current_user = Depends(require_auth)):
+async def get_celery_workers(current_user = Depends(get_current_user)):
     """Get Celery worker information"""
     try:
         # Get worker stats
@@ -197,7 +187,7 @@ async def get_celery_workers(current_user = Depends(require_auth)):
 
 
 @router.get("/queues")
-async def get_celery_queues(current_user = Depends(require_auth)):
+async def get_celery_queues(current_user = Depends(get_current_user)):
     """Get Celery queue information"""
     try:
         # Get queue lengths from Redis if available
@@ -240,7 +230,7 @@ async def get_celery_queues(current_user = Depends(require_auth)):
 @router.get("/metrics/history")
 async def get_celery_metrics_history(
     hours: int = Query(24, description="Hours of history to retrieve"),
-    current_user = Depends(require_auth),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get Celery metrics history"""
@@ -309,7 +299,7 @@ async def get_celery_metrics_history(
 
 
 @router.get("/health")
-async def get_celery_health(current_user = Depends(require_auth)):
+async def get_celery_health(current_user = Depends(get_current_user)):
     """Get Celery health status"""
     try:
         # Check if workers are responding

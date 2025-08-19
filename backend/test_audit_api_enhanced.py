@@ -154,7 +154,7 @@ async def test_audit_api_enhanced():
             if hasattr(route, 'methods'):
                 methods.extend(route.methods)
         
-        expected_methods = ['POST', 'GET']
+        expected_methods = ['POST', 'GET"]
         for method in expected_methods:
             if method in methods:
                 print(f"✅ HTTP method '{method}' available")

@@ -14,7 +14,6 @@ PHASE 1 & 2 IMPROVEMENTS:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -23,14 +22,13 @@ from pydantic import BaseModel, Field, EmailStr
 # Import service layer
 from app.services.user_management_service import UserManagementService, UserManagementError
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger, RequestLogger
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # PHASE 1: COMPREHENSIVE PYDANTIC MODELS
 
@@ -262,59 +260,14 @@ router = APIRouter(
 
 # PHASE 2: ENHANCED DEPENDENCY FUNCTIONS
 
-def get_current_user(credentials: HTTPBearer = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user with enhanced error handling."""
-    try:
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            logger.warning("Invalid token in user management request")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error": "invalid_token",
-                    "message": "Invalid or expired token",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        user_id = payload.get("user_id")
-        from app.services.user_service import UserService
-        user = UserService.get_user_by_id(db, user_id)
-        
-        if not user:
-            logger.warning(f"User not found for token: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "user_not_found",
-                    "message": "User not found",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting current user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "internal_error",
-                "message": "Internal error during authentication",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+# Local get_current_user removed - using centralized auth_dependencies
 
 
 def require_admin_role(current_user = Depends(get_current_user)):
     """Require administrator role for access with enhanced error handling."""
-    if current_user.role != "administrator":
+    if current_user["role"] != "administrator":
         logger.warning(
-            f"Access denied for user {current_user.username} with role {current_user.role}"
+            f"Access denied for user {current_user["username"]} with role {current_user["role"]}"
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -323,7 +276,7 @@ def require_admin_role(current_user = Depends(get_current_user)):
                 "message": "Administrator access required",
                 "details": {
                     "required_role": "administrator",
-                    "current_role": current_user.role
+                    "current_role": current_user["role"]
                 },
                 "timestamp": datetime.utcnow().isoformat()
             }
@@ -376,7 +329,7 @@ async def create_user(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, f"create_user_{user_data.username}")
-    request_logger.log_request_start("POST", "/users", current_user.username)
+    request_logger.log_request_start("POST", "/users", current_user["username"])
     
     try:
         # Initialize service layer
@@ -395,8 +348,8 @@ async def create_user(
         # Create user through service layer
         created_user = await user_mgmt_service.create_user(
             user_data=user_create_data,
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -420,7 +373,7 @@ async def create_user(
             extra={
                 "created_user_id": created_user["id"],
                 "created_username": created_user["username"],
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -435,7 +388,7 @@ async def create_user(
                 "username": user_data.username,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -458,7 +411,7 @@ async def create_user(
             extra={
                 "username": user_data.username,
                 "error": str(e),
-                "created_by": current_user.username
+                "created_by": current_user["username"]
             }
         )
         
@@ -511,7 +464,7 @@ async def get_users(
     """Enhanced user list retrieval with service layer and advanced filtering"""
     
     request_logger = RequestLogger(logger, "get_users")
-    request_logger.log_request_start("GET", "/users", current_user.username)
+    request_logger.log_request_start("GET", "/users", current_user["username"])
     
     try:
         # Initialize service layer
@@ -557,7 +510,7 @@ async def get_users(
                 "total_users": users_result["total"],
                 "returned_users": len(user_responses),
                 "filters_applied": bool(search or role or is_active is not None),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -570,7 +523,7 @@ async def get_users(
             "Users list retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -612,7 +565,7 @@ async def get_user(
     """Enhanced user retrieval by ID with service layer and caching"""
     
     request_logger = RequestLogger(logger, f"get_user_{user_id}")
-    request_logger.log_request_start("GET", f"/users/{user_id}", current_user.username)
+    request_logger.log_request_start("GET", f"/users/{user_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -640,7 +593,7 @@ async def get_user(
             extra={
                 "user_id": user_id,
                 "username": user_data["username"],
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -656,7 +609,7 @@ async def get_user(
                 "user_id": user_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -678,7 +631,7 @@ async def get_user(
             extra={
                 "user_id": user_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -726,7 +679,7 @@ async def update_user(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, f"update_user_{user_id}")
-    request_logger.log_request_start("PUT", f"/users/{user_id}", current_user.username)
+    request_logger.log_request_start("PUT", f"/users/{user_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -745,8 +698,8 @@ async def update_user(
         updated_user = await user_mgmt_service.update_user(
             user_id=user_id,
             user_data=user_update_data,
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -771,7 +724,7 @@ async def update_user(
                 "user_id": user_id,
                 "updated_username": updated_user["username"],
                 "changes": updated_user.get("changes_applied", {}),
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -787,7 +740,7 @@ async def update_user(
                 "user_id": user_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -809,7 +762,7 @@ async def update_user(
             extra={
                 "user_id": user_id,
                 "error": str(e),
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -854,7 +807,7 @@ async def delete_user(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, f"delete_user_{user_id}")
-    request_logger.log_request_start("DELETE", f"/users/{user_id}", current_user.username)
+    request_logger.log_request_start("DELETE", f"/users/{user_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -863,8 +816,8 @@ async def delete_user(
         # Delete user through service layer
         deletion_result = await user_mgmt_service.delete_user(
             user_id=user_id,
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -883,7 +836,7 @@ async def delete_user(
             extra={
                 "deleted_user_id": user_id,
                 "deleted_username": deletion_result["deleted_user"]["username"],
-                "deleted_by": current_user.username
+                "deleted_by": current_user["username"]
             }
         )
         
@@ -899,7 +852,7 @@ async def delete_user(
                 "user_id": user_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "deleted_by": current_user.username
+                "deleted_by": current_user["username"]
             }
         )
         
@@ -921,7 +874,7 @@ async def delete_user(
             extra={
                 "user_id": user_id,
                 "error": str(e),
-                "deleted_by": current_user.username
+                "deleted_by": current_user["username"]
             }
         )
         
@@ -962,7 +915,7 @@ async def get_user_sessions(
     """Enhanced user sessions retrieval with service layer and caching"""
     
     request_logger = RequestLogger(logger, f"get_user_sessions_{user_id}")
-    request_logger.log_request_start("GET", f"/users/{user_id}/sessions", current_user.username)
+    request_logger.log_request_start("GET", f"/users/{user_id}/sessions", current_user["username"])
     
     try:
         # Initialize service layer
@@ -989,7 +942,7 @@ async def get_user_sessions(
             extra={
                 "user_id": user_id,
                 "session_count": len(session_responses),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1005,7 +958,7 @@ async def get_user_sessions(
                 "user_id": user_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1027,7 +980,7 @@ async def get_user_sessions(
             extra={
                 "user_id": user_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         

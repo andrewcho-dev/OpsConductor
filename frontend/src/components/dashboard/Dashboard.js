@@ -2,10 +2,10 @@ import React from 'react';
 import {
   Typography,
 } from '@mui/material';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user } = useSessionAuth();
 
 
 

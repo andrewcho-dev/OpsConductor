@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { formatLocalDateTime } from '../../utils/timeUtils';
 import './JobExecutionMonitor.css';
 
 const JobExecutionMonitor = ({ job, activeExecution, onExecutionComplete }) => {
-    const { token } = useAuth();
+    const { token } = useSessionAuth();
     const [executions, setExecutions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedExecution, setSelectedExecution] = useState(null);

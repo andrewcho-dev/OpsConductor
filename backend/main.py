@@ -17,11 +17,12 @@ from typing import List
 from app.shared.middleware.error_handler import ErrorHandlingMiddleware, RequestLoggingMiddleware
 
 from app.database.database import engine, Base
-from app.routers import users, auth, universal_targets, audit
+from app.routers import users, universal_targets, audit, auth_session
 # Legacy routers removed - consolidated into V2 APIs
 # Legacy system_health and system_management removed - consolidated into V2 APIs
 from app.core.config import settings
-from app.core.security import verify_token
+# Import centralized authentication
+from app.core.auth_dependencies import get_current_user
 
 # Import models to ensure they are registered with SQLAlchemy
 from app.models import notification_models, user_models, job_models, analytics_models, job_schedule_models, discovery_models
@@ -98,30 +99,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Security
-security = HTTPBearer()
-
-# Dependency to verify JWT token
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    token = credentials.credentials
-    user = verify_token(token)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user
+# Authentication is now handled by centralized auth_dependencies module
 
 # Include routers
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(auth_session.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(universal_targets.router, tags=["Universal Targets"])
 app.include_router(audit.router, tags=["Audit v1"])
@@ -143,11 +124,15 @@ from app.api.v2 import (
     system_enhanced as system_v2,
     discovery_enhanced as discovery_v2,
     notifications_enhanced as notifications_v2,
-    log_viewer_enhanced as log_viewer_v2
+    log_viewer_simple as log_viewer_v2
 )
 from app.api.v1 import (
-    celery_monitor,
-    system_info
+    celery_monitor
+)
+from app.api import system_info
+from app.api.v3 import (
+    jobs_simple as jobs_v3,
+    schedules as schedules_v3
 )
 # Include enhanced V2 routers (routers already have their own prefixes)
 app.include_router(websocket_v2.router, tags=["WebSocket API v2"])
@@ -162,8 +147,14 @@ app.include_router(discovery_v2.router, tags=["Network Discovery v2"])
 app.include_router(notifications_v2.router, tags=["Notifications & Alerts v2"])
 app.include_router(log_viewer_v2.router, tags=["Log Viewer v2"])
 
+# Include V3 simplified APIs
+app.include_router(jobs_v3.router, tags=["Jobs v3 - Simplified"])
+app.include_router(schedules_v3.router, tags=["Schedules v3"])
+
 # Include V1 compatibility routers
 app.include_router(celery_monitor.router, tags=["Celery Monitoring"])
+
+# Include system info router for frontend compatibility
 app.include_router(system_info.router, tags=["System Info"])
 
 @app.get("/")

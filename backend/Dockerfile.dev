@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     net-tools \
     postgresql-client \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Create docker group with the same GID as host

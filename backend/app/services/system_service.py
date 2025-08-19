@@ -108,19 +108,36 @@ class SystemService:
         except Exception:
             return False
     
-    def get_session_timeout(self) -> int:
-        """Get user session timeout in seconds"""
-        timeout = self.get_setting('session_timeout')
-        return int(timeout) if timeout else 28800  # Default 8 hours
+    def get_inactivity_timeout(self) -> int:
+        """Get user inactivity timeout in minutes"""
+        timeout = self.get_setting('inactivity_timeout_minutes')
+        return int(timeout) if timeout else 60  # Default 60 minutes
     
-    def set_session_timeout(self, timeout_seconds: int) -> bool:
-        """Set user session timeout in seconds"""
+    def set_inactivity_timeout(self, timeout_minutes: int) -> bool:
+        """Set user inactivity timeout in minutes"""
         try:
-            if timeout_seconds < 60 or timeout_seconds > 86400:  # 1 min to 24 hours
+            if timeout_minutes < 5 or timeout_minutes > 480:  # 5 min to 8 hours
                 return False
             
-            self.set_setting('session_timeout', timeout_seconds, 
-                           'User session timeout in seconds')
+            self.set_setting('inactivity_timeout_minutes', timeout_minutes, 
+                           'User inactivity timeout in minutes for activity-based sessions')
+            return True
+        except Exception:
+            return False
+    
+    def get_warning_time(self) -> int:
+        """Get warning time before timeout in minutes"""
+        warning_time = self.get_setting('warning_time_minutes')
+        return int(warning_time) if warning_time else 2  # Default 2 minutes
+    
+    def set_warning_time(self, warning_minutes: int) -> bool:
+        """Set warning time before timeout in minutes"""
+        try:
+            if warning_minutes < 1 or warning_minutes > 10:  # 1-10 minutes
+                return False
+            
+            self.set_setting('warning_time_minutes', warning_minutes, 
+                           'Warning time in minutes before session timeout')
             return True
         except Exception:
             return False
@@ -168,7 +185,8 @@ class SystemService:
                 'is_dst_active': self.is_dst_active(),
                 'current_utc_offset': self.get_current_utc_offset()
             },
-            'session_timeout': self.get_session_timeout(),
+            'inactivity_timeout_minutes': self.get_inactivity_timeout(),
+            'warning_time_minutes': self.get_warning_time(),
             'max_concurrent_jobs': self.get_max_concurrent_jobs(),
             'log_retention_days': self.get_log_retention_days(),
             'uptime': self.get_system_uptime(),

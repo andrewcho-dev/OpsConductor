@@ -2,6 +2,7 @@
 Connection test utilities for testing target connectivity.
 """
 import socket
+import io
 import paramiko
 import winrm
 import sqlite3
@@ -118,6 +119,123 @@ def test_ssh_connection(host: str, port: int, credentials: Dict[str, Any], timeo
             ssh_client.close()
         except:
             pass
+
+
+def execute_ssh_command(host, port, credentials, command, timeout=30):
+    """Execute a command via SSH and return the actual output"""
+    ssh_client = paramiko.SSHClient()
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    try:
+        # Connect using the same logic as test_ssh_connection
+        username = credentials.get('username')
+        
+        if credentials.get('type') == 'key':
+            private_key_content = credentials.get('private_key')
+            if not private_key_content:
+                return {'success': False, 'error': 'Private key content is required for key authentication'}
+            
+            # Try different key types
+            for key_class in [paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey]:
+                try:
+                    private_key = key_class.from_private_key(io.StringIO(private_key_content))
+                    ssh_client.connect(
+                        hostname=host,
+                        port=port,
+                        username=username,
+                        pkey=private_key,
+                        timeout=timeout,
+                        allow_agent=False,
+                        look_for_keys=False
+                    )
+                    break
+                except Exception:
+                    continue
+            else:
+                return {'success': False, 'error': 'Failed to load private key'}
+        else:
+            # Password authentication
+            password = credentials.get('password')
+            if not password:
+                return {'success': False, 'error': 'Password is required for password authentication'}
+            
+            ssh_client.connect(
+                hostname=host,
+                port=port,
+                username=username,
+                password=password,
+                timeout=timeout,
+                allow_agent=False,
+                look_for_keys=False
+            )
+        
+        # Execute the actual command
+        stdin, stdout, stderr = ssh_client.exec_command(command, timeout=timeout)
+        
+        # Get the output and error
+        output = stdout.read().decode('utf-8', errors='replace').strip()
+        error = stderr.read().decode('utf-8', errors='replace').strip()
+        exit_code = stdout.channel.recv_exit_status()
+        
+        return {
+            'success': exit_code == 0,
+            'output': output,
+            'error': error,
+            'exit_code': exit_code,
+            'command': command
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'SSH command execution failed: {str(e)}',
+            'output': '',
+            'exit_code': 1,
+            'command': command
+        }
+    finally:
+        try:
+            ssh_client.close()
+        except:
+            pass
+
+
+def execute_winrm_command(host, port, credentials, command, timeout=30):
+    """Execute a command via WinRM and return the actual output"""
+    try:
+        username = credentials.get('username')
+        password = credentials.get('password')
+        
+        if not username or not password:
+            return {'success': False, 'error': 'Username and password are required for WinRM authentication'}
+        
+        # Create WinRM session
+        session = winrm.Session(f'http://{host}:{port}/wsman', auth=(username, password), transport='ntlm')
+        
+        # Execute the command
+        result = session.run_cmd(command)
+        
+        # Get output and error
+        output = result.std_out.decode('utf-8', errors='replace').strip() if result.std_out else ''
+        error = result.std_err.decode('utf-8', errors='replace').strip() if result.std_err else ''
+        exit_code = result.status_code
+        
+        return {
+            'success': exit_code == 0,
+            'output': output,
+            'error': error,
+            'exit_code': exit_code,
+            'command': command
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'WinRM command execution failed: {str(e)}',
+            'output': '',
+            'exit_code': 1,
+            'command': command
+        }
 
 
 def test_winrm_connection(host: str, port: int, credentials: Dict[str, Any], timeout: int = 10) -> Dict[str, Any]:

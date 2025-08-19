@@ -9,7 +9,7 @@ from .analytics_models import (
     PerformanceMetric, SystemHealthSnapshot, ReportTemplate, GeneratedReport
 )
 from .job_models import (
-    Job, JobTarget, JobAction, JobExecution, JobExecutionLog, JobActionResult
+    Job, JobTarget, JobAction, JobExecution, JobExecutionResult
 )
 from .job_schedule_models import (
     JobSchedule, ScheduleExecution

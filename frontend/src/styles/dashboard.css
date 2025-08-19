@@ -550,7 +550,7 @@ div.table-content-area {
 
 /* Table Data Cells - STANDARDIZED */
 .standard-table-cell {
-  font-size: 0.75rem !important; /* Fixed 12px */
+  font-size: var(--font-size-lg) !important; /* 14px - improved readability */
   padding: 4px 8px !important; /* Fixed 4px top/bottom, 8px left/right */
   font-family: monospace !important;
 }
@@ -564,7 +564,7 @@ div.table-content-area {
 /* Filter Input Fields - STANDARDIZED */
 .standard-filter-input .MuiInputBase-input {
   font-family: monospace !important;
-  font-size: 0.75rem !important; /* Fixed 12px */
+  font-size: var(--font-size-lg) !important; /* 14px - improved readability */
   padding: 2px 4px !important; /* Fixed padding */
 }
 
@@ -576,14 +576,14 @@ div.table-content-area {
 }
 
 .standard-page-size-selector .MuiSelect-select {
-  font-size: 0.75rem !important; /* Fixed 12px */
+  font-size: var(--font-size-lg) !important; /* 14px - improved readability */
   padding: 4px 8px !important; /* Fixed padding */
   min-width: 70px !important;
 }
 
 /* Pagination Component - STANDARDIZED */
 .standard-pagination .MuiPaginationItem-root {
-  font-size: 0.75rem !important; /* Fixed 12px */
+  font-size: var(--font-size-lg) !important; /* 14px - improved readability */
   min-width: 28px !important; /* Fixed width */
   height: 28px !important; /* Fixed height */
   margin: 0 2px !important; /* Fixed margin */

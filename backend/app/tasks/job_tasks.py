@@ -1,10 +1,9 @@
 """
-Celery tasks for job execution
+Celery tasks for job execution - SIMPLIFIED
 """
 
 import asyncio
 import logging
-import json
 from datetime import datetime, timezone
 from typing import List
 
@@ -23,7 +22,7 @@ logger = logging.getLogger(__name__)
 @celery_app.task(bind=True, name="app.tasks.job_tasks.execute_job_task")
 def execute_job_task(self, execution_id: int, target_ids: List[int]):
     """
-    Celery task to execute a job on targets
+    Celery task to execute a job on targets - SIMPLIFIED
     """
     task_start_time = datetime.now(timezone.utc)
     logger.info(f"🚀 CELERY TASK STARTED: execution_id={execution_id}, target_ids={target_ids}")
@@ -52,10 +51,7 @@ def execute_job_task(self, execution_id: int, target_ids: List[int]):
         
         if not targets:
             logger.error(f"❌ ERROR: No targets found for execution {execution_id}")
-            job_service.update_execution_status(
-                execution_id,
-                ExecutionStatus.FAILED
-            )
+            job_service.update_execution_status(execution_id, ExecutionStatus.FAILED)
             return {"status": "failed", "error": "No targets found"}
         
         logger.info(f"⚡ Starting job execution on {len(targets)} targets...")
@@ -66,7 +62,7 @@ def execute_job_task(self, execution_id: int, target_ids: List[int]):
         
         logger.info(f"✅ Job execution completed: {result}")
         
-        # Record successful task completion (non-fatal if it fails)
+        # Record successful task completion
         task_end_time = datetime.now(timezone.utc)
         duration = (task_end_time - task_start_time).total_seconds()
         
@@ -74,60 +70,51 @@ def execute_job_task(self, execution_id: int, target_ids: List[int]):
             monitoring_service.record_task_completion(
                 task_id=self.request.id,
                 task_name=self.name,
-                status='success',
-                started_at=task_start_time,
-                completed_at=task_end_time,
                 duration=duration,
-                worker_name=self.request.hostname,
-                queue_name='job_execution',
-                result=json.dumps({"execution_id": execution_id, "targets_processed": len(target_ids)}),
-                args=json.dumps([execution_id, target_ids])
+                status="success"
             )
-        except Exception as monitor_e:
-            logger.warning(f"⚠️ Failed to record task completion (non-fatal): {monitor_e}")
+        except Exception as e:
+            logger.error(f"Error recording task completion: {str(e)}")
         
-        # Return result for Celery
-        return {
-            "status": "completed",
-            "execution_id": execution_id,
-            "result": result
-        }
+        # Update job status based on execution results
+        job = execution.job
+        if result.get('failed_targets', 0) > 0:
+            job.status = JobStatus.FAILED
+        else:
+            job.status = JobStatus.COMPLETED
+        
+        job.completed_at = datetime.now(timezone.utc)
+        db.commit()
+        
+        logger.info(f"🔚 Celery task completed for execution {execution_id}")
+        return {"status": "success", "result": result}
         
     except Exception as e:
         logger.error(f"❌ ERROR in Celery task execution {execution_id}: {str(e)}")
-        import traceback
-        error_traceback = traceback.format_exc()
-        logger.error(error_traceback)
-        
-        # Record failed task completion
-        task_end_time = datetime.now(timezone.utc)
-        duration = (task_end_time - task_start_time).total_seconds()
         
         try:
-            monitoring_service.record_task_completion(
-                task_id=self.request.id,
-                task_name=self.name,
-                status='failure',
-                started_at=task_start_time,
-                completed_at=task_end_time,
-                duration=duration,
-                worker_name=self.request.hostname,
-                queue_name='job_execution',
-                exception=str(e),
-                traceback=error_traceback,
-                args=json.dumps([execution_id, target_ids])
-            )
-        except Exception as monitor_e:
-            logger.error(f"Failed to record task failure: {monitor_e}")
-        
-        # Mark execution as failed
-        try:
-            job_service.update_execution_status(
-                execution_id,
-                ExecutionStatus.FAILED
-            )
+            # Update execution status to failed
+            job_service.update_execution_status(execution_id, ExecutionStatus.FAILED)
+            
+            # Update job status to failed
+            execution = job_service.get_job_execution(execution_id)
+            if execution:
+                job = execution.job
+                job.status = JobStatus.FAILED
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+                
         except Exception as inner_e:
             logger.error(f"❌ Failed to mark execution as failed: {str(inner_e)}")
+        
+        try:
+            monitoring_service.record_task_failure(
+                task_id=self.request.id,
+                task_name=self.name,
+                error=str(e)
+            )
+        except Exception as e:
+            logger.error(f"Failed to record task failure: {str(e)}")
         
         return {"status": "failed", "error": str(e)}
         
@@ -139,7 +126,7 @@ def execute_job_task(self, execution_id: int, target_ids: List[int]):
 @celery_app.task(bind=True, name="app.tasks.job_tasks.check_scheduled_jobs")
 def check_scheduled_jobs(self):
     """
-    Periodic task to check for scheduled jobs that are ready to execute
+    Periodic task to check for scheduled jobs that are ready to execute - SIMPLIFIED
     """
     logger.info("🔍 Checking for scheduled jobs...")
     
@@ -176,18 +163,16 @@ def check_scheduled_jobs(self):
                 )
                 
                 # Get target IDs for this job
-                target_ids = job_service.get_job_target_ids(job.id)
+                target_ids = [jt.target_id for jt in job.targets]
                 
-                # Queue the job execution task
-                task = execute_job_task.delay(execution.id, target_ids)
-                logger.info(f"✅ Job {job.name} execution queued: execution_id={execution.id}, task_id={task.id}, targets={target_ids}")
+                # Queue the execution task
+                execute_job_task.delay(execution.id, target_ids)
                 
                 executed_count += 1
+                logger.info(f"✅ Job {job.name} execution queued: execution_id={execution.id}, task_id={execute_job_task.request.id}, targets={target_ids}")
                 
             except Exception as e:
-                logger.error(f"❌ Error executing scheduled job {job.id}: {str(e)}")
-                
-                # Update job status to failed
+                logger.error(f"❌ Failed to execute scheduled job {job.name}: {str(e)}")
                 job.status = JobStatus.FAILED
                 job.completed_at = datetime.now(timezone.utc)
                 db.commit()
@@ -197,17 +182,7 @@ def check_scheduled_jobs(self):
         
     except Exception as e:
         logger.error(f"❌ Error in scheduled job check: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
         return {"status": "failed", "error": str(e)}
+        
     finally:
         db.close()
-
-
-@celery_app.task(bind=True, name="app.tasks.job_tasks.test_task")
-def test_task(self, message: str):
-    """
-    Simple test task to verify Celery is working
-    """
-    logger.info(f"🧪 Test task received: {message}")
-    return {"status": "success", "message": f"Test task completed: {message}"}

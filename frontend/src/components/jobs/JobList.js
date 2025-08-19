@@ -14,7 +14,6 @@ import {
   Box,
   Typography,
   Button,
-  Checkbox,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -41,7 +40,7 @@ import JobScheduleModal from './JobScheduleModal';
 import JobEditModal from './JobEditModal';
 import JobExecutionHistoryModal from './JobExecutionHistoryModal';
 import { formatLocalDateTime } from '../../utils/timeUtils';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useAlert } from '../layout/BottomStatusBar';
 import { ViewDetailsAction, EditAction, DeleteAction, PlayAction, StopAction } from '../common/StandardActions';
 import { getStatusRowStyling, getTableCellStyle } from '../../utils/tableUtils';
@@ -56,13 +55,13 @@ const JobList = ({
     onDeleteJob
 }) => {
     const theme = useTheme();
-    const { token } = useAuth();
+    const { token } = useSessionAuth();
     const { addAlert } = useAlert();
     
     // State for filtering, sorting, and pagination
     const [columnFilters, setColumnFilters] = useState({});
-    const [sortField, setSortField] = useState('name');
-    const [sortDirection, setSortDirection] = useState('asc');
+    const [sortField, setSortField] = useState('scheduled_at');
+    const [sortDirection, setSortDirection] = useState('desc');
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(25);
 
@@ -74,14 +73,19 @@ const JobList = ({
     const [jobToEdit, setJobToEdit] = useState(null);
     const [jobToViewHistory, setJobToViewHistory] = useState(null);
     
-    // Bulk operations and termination states
-    const [selectedJobs, setSelectedJobs] = useState(new Set());
+    // Termination states
     const [showTerminateDialog, setShowTerminateDialog] = useState(false);
     const [jobsToTerminate, setJobsToTerminate] = useState([]);
     const [terminateReason, setTerminateReason] = useState('');
     const [terminateLoading, setTerminateLoading] = useState(false);
 
     // Helper functions
+    const formatJobStatus = useCallback((status) => {
+        if (!status) return 'Unknown';
+        // Remove "JobStatus." prefix if present
+        return status.replace(/^JobStatus\./, '');
+    }, []);
+
     const formatDateWithBothTimezones = useCallback((dateString) => {
         if (!dateString) return { local: 'Never', utc: 'Never' };
         
@@ -177,62 +181,106 @@ const JobList = ({
             }
         });
 
-        // Sort the filtered results
+        // Sort the filtered results with multi-level sorting
         const sorted = filtered.sort((a, b) => {
-            let aValue = a[sortField];
-            let bValue = b[sortField];
+            // If user clicked a column header, use single-field sorting
+            if (sortField !== 'scheduled_at' || sortDirection !== 'desc') {
+                return applySingleFieldSort(a, b, sortField, sortDirection);
+            }
+            
+            // Default multi-level sorting: scheduled_at (desc) then last_execution (desc)
+            
+            // Primary sort: Scheduled At (descending - most recent scheduled time first)
+            const aScheduled = a.scheduled_at;
+            const bScheduled = b.scheduled_at;
+            
+            // Handle null scheduled dates (put unscheduled jobs at the end)
+            if (!aScheduled && !bScheduled) {
+                // Both unscheduled, sort by last run (descending - most recent first)
+                return sortByLastExecution(a, b, 'desc');
+            }
+            if (!aScheduled) return 1; // a goes to end
+            if (!bScheduled) return -1; // b goes to end
+            
+            const aScheduledDate = new Date(aScheduled);
+            const bScheduledDate = new Date(bScheduled);
+            
+            // Handle invalid scheduled dates
+            if (isNaN(aScheduledDate.getTime()) && isNaN(bScheduledDate.getTime())) {
+                return sortByLastExecution(a, b, 'desc');
+            }
+            if (isNaN(aScheduledDate.getTime())) return 1;
+            if (isNaN(bScheduledDate.getTime())) return -1;
+            
+            // Compare scheduled dates (descending - most recent first)
+            const scheduledDiff = bScheduledDate - aScheduledDate;
+            if (scheduledDiff !== 0) return scheduledDiff;
+            
+            // Secondary sort: Last Run (descending - most recent first)
+            return sortByLastExecution(a, b, 'desc');
+        });
+        
+        // Helper function for single field sorting (when user clicks column headers)
+        function applySingleFieldSort(a, b, field, direction) {
+            let aValue = a[field];
+            let bValue = b[field];
             
             // Handle null/undefined values
             if (aValue == null && bValue == null) return 0;
-            if (aValue == null) return sortDirection === 'asc' ? 1 : -1;
-            if (bValue == null) return sortDirection === 'asc' ? -1 : 1;
+            if (aValue == null) return direction === 'asc' ? 1 : -1;
+            if (bValue == null) return direction === 'asc' ? -1 : 1;
             
             // Handle date fields
-            if (sortField === 'created_at' || sortField === 'updated_at' || sortField === 'scheduled_at') {
+            if (field === 'created_at' || field === 'updated_at' || field === 'scheduled_at') {
                 const aDate = new Date(aValue);
                 const bDate = new Date(bValue);
                 
                 // Handle invalid dates
                 if (isNaN(aDate.getTime()) && isNaN(bDate.getTime())) return 0;
-                if (isNaN(aDate.getTime())) return sortDirection === 'asc' ? 1 : -1;
-                if (isNaN(bDate.getTime())) return sortDirection === 'asc' ? -1 : 1;
+                if (isNaN(aDate.getTime())) return direction === 'asc' ? 1 : -1;
+                if (isNaN(bDate.getTime())) return direction === 'asc' ? -1 : 1;
                 
-                return sortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+                return direction === 'asc' ? aDate - bDate : bDate - aDate;
             }
             
             // Handle last_execution field (nested object)
-            if (sortField === 'last_execution') {
-                const aExec = aValue?.started_at;
-                const bExec = bValue?.started_at;
-                
-                // Handle null executions
-                if (!aExec && !bExec) return 0;
-                if (!aExec) return sortDirection === 'asc' ? 1 : -1;
-                if (!bExec) return sortDirection === 'asc' ? -1 : 1;
-                
-                const aDate = new Date(aExec);
-                const bDate = new Date(bExec);
-                
-                return sortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+            if (field === 'last_execution') {
+                return sortByLastExecution(a, b, direction);
             }
             
             // Handle numeric fields
-            if (sortField === 'priority' || sortField === 'timeout' || sortField === 'retry_count') {
+            if (field === 'priority' || field === 'timeout' || field === 'retry_count') {
                 const aNum = Number(aValue);
                 const bNum = Number(bValue);
-                return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+                return direction === 'asc' ? aNum - bNum : bNum - aNum;
             }
             
             // Handle string fields
             const aStr = String(aValue).toLowerCase();
             const bStr = String(bValue).toLowerCase();
             
-            if (sortDirection === 'asc') {
+            if (direction === 'asc') {
                 return aStr.localeCompare(bStr);
             } else {
                 return bStr.localeCompare(aStr);
             }
-        });
+        }
+        
+        // Helper function for sorting by last execution
+        function sortByLastExecution(a, b, direction) {
+            const aExec = a.last_execution?.started_at;
+            const bExec = b.last_execution?.started_at;
+            
+            // Handle null executions
+            if (!aExec && !bExec) return 0;
+            if (!aExec) return direction === 'asc' ? 1 : -1;
+            if (!bExec) return direction === 'asc' ? -1 : 1;
+            
+            const aDate = new Date(aExec);
+            const bDate = new Date(bExec);
+            
+            return direction === 'asc' ? aDate - bDate : bDate - aDate;
+        }
         
         return sorted;
     }, [jobs, columnFilters, sortField, sortDirection, formatDateWithBothTimezones]);
@@ -293,10 +341,32 @@ const JobList = ({
         setShowEditModal(true);
     }, []);
 
-    const handleEditSubmit = useCallback(async (updatedJob) => {
-        await onUpdateJob(updatedJob);
-        setShowEditModal(false);
-        setJobToEdit(null);
+    const handleEditSubmit = useCallback(async (jobId, submitData, scheduleConfig) => {
+        // Combine the data in the format expected by onUpdateJob
+        const updatedJob = {
+            id: jobId,
+            ...submitData,
+            // Add schedule config fields if present
+            ...(scheduleConfig && {
+                schedule_config: scheduleConfig,
+                schedule_type: scheduleConfig.scheduleType || 'once',
+                recurring_type: scheduleConfig.recurringType || 'daily',
+                interval: scheduleConfig.interval || 1,
+                time: scheduleConfig.time || '09:00',
+                days_of_week: scheduleConfig.daysOfWeek || [],
+                day_of_month: scheduleConfig.dayOfMonth || 1,
+                max_executions: scheduleConfig.maxExecutions || null,
+                cron_expression: scheduleConfig.cronExpression || ''
+            })
+        };
+        
+        const success = await onUpdateJob(updatedJob);
+        if (success !== false) {
+            setShowEditModal(false);
+            setJobToEdit(null);
+            return true;
+        }
+        return false;
     }, [onUpdateJob]);
 
     const handleDeleteClick = useCallback(async (job, e) => {
@@ -312,29 +382,7 @@ const JobList = ({
         setShowHistoryModal(true);
     }, []);
 
-    // Bulk selection handlers
-    const handleSelectJob = useCallback((jobId, checked) => {
-        setSelectedJobs(prev => {
-            const newSet = new Set(prev);
-            if (checked) {
-                newSet.add(jobId);
-            } else {
-                newSet.delete(jobId);
-            }
-            return newSet;
-        });
-    }, []);
 
-    const handleSelectAll = useCallback((checked) => {
-        if (checked) {
-            const runningJobIds = filteredAndSortedJobs
-                .filter(job => job.status === 'running')
-                .map(job => job.id);
-            setSelectedJobs(new Set(runningJobIds));
-        } else {
-            setSelectedJobs(new Set());
-        }
-    }, [filteredAndSortedJobs]);
 
     // Termination handlers
     const handleTerminateJob = useCallback(async (job, e) => {
@@ -344,12 +392,7 @@ const JobList = ({
         setTerminateReason('');
     }, []);
 
-    const handleBulkTerminate = useCallback(() => {
-        const jobsToTerminateList = filteredAndSortedJobs.filter(job => selectedJobs.has(job.id));
-        setJobsToTerminate(jobsToTerminateList);
-        setShowTerminateDialog(true);
-        setTerminateReason('');
-    }, [filteredAndSortedJobs, selectedJobs]);
+
 
     const executeTermination = useCallback(async () => {
         setTerminateLoading(true);
@@ -358,7 +401,7 @@ const JobList = ({
 
         for (const job of jobsToTerminate) {
             try {
-                const response = await fetch(`/api/v2/jobs/${job.id}/terminate`, {
+                const response = await fetch(`/api/v3/jobs/${job.id}/terminate`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -382,7 +425,6 @@ const JobList = ({
         setTerminateLoading(false);
         setShowTerminateDialog(false);
         setJobsToTerminate([]);
-        setSelectedJobs(new Set());
 
         // Show results
         if (successCount > 0) {
@@ -398,18 +440,10 @@ const JobList = ({
         }
     }, [jobsToTerminate, terminateReason, token, addAlert]);
 
-    // Computed values for bulk operations
+    // Computed values
     const runningJobs = useMemo(() => {
         return filteredAndSortedJobs.filter(job => job.status === 'running');
     }, [filteredAndSortedJobs]);
-
-    const allRunningSelected = useMemo(() => {
-        return runningJobs.length > 0 && runningJobs.every(job => selectedJobs.has(job.id));
-    }, [runningJobs, selectedJobs]);
-
-    const someRunningSelected = useMemo(() => {
-        return runningJobs.some(job => selectedJobs.has(job.id));
-    }, [runningJobs, selectedJobs]);
 
     // Sortable header component
     const SortableHeader = ({ field, children, ...props }) => (
@@ -456,33 +490,7 @@ const JobList = ({
 
     return (
         <div className="table-content-area">
-            {/* Bulk Actions */}
-            {selectedJobs.size > 0 && (
-                <Box sx={{ 
-                    mb: 2, 
-                    p: 2, 
-                    backgroundColor: 'warning.light', 
-                    borderRadius: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexShrink: 0
-                }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {selectedJobs.size} running job{selectedJobs.size > 1 ? 's' : ''} selected
-                    </Typography>
-                    <Button
-                        variant="contained"
-                        color="error"
-                        size="small"
-                        startIcon={<StopIcon />}
-                        onClick={handleBulkTerminate}
-                        disabled={terminateLoading}
-                    >
-                        {terminateLoading ? 'Terminating...' : 'Terminate Selected'}
-                    </Button>
-                </Box>
-            )}
+
 
             <TableContainer 
                 component={Paper} 
@@ -493,10 +501,8 @@ const JobList = ({
                     <TableHead>
                         {/* Column Headers Row */}
                         <TableRow sx={{ backgroundColor: 'grey.100' }}>
-                            <TableCell className="standard-table-header">Select</TableCell>
                             <SortableHeader field="name" className="standard-table-header">Job Name</SortableHeader>
                             <SortableHeader field="job_serial" className="standard-table-header">Job Serial</SortableHeader>
-                            <SortableHeader field="job_type" className="standard-table-header">Type</SortableHeader>
                             <SortableHeader field="status" className="standard-table-header">Status</SortableHeader>
                             <SortableHeader field="created_at" className="standard-table-header">Created</SortableHeader>
                             <SortableHeader field="last_execution" className="standard-table-header">Last Run</SortableHeader>
@@ -506,7 +512,6 @@ const JobList = ({
                         
                         {/* Column Filters Row */}
                         <TableRow sx={{ backgroundColor: 'grey.50' }}>
-                            <TableCell className="standard-filter-cell"></TableCell>
                             <TableCell className="standard-filter-cell">
                                 <TextField
                                     size="small"
@@ -524,42 +529,6 @@ const JobList = ({
                                     onChange={(e) => handleColumnFilterChange('job_serial', e.target.value)}
                                     className="standard-filter-input"
                                 />
-                            </TableCell>
-                            <TableCell className="standard-filter-cell">
-                                <FormControl size="small" fullWidth>
-                                    <Select
-                                        value={columnFilters.job_type || ''}
-                                        onChange={(e) => handleColumnFilterChange('job_type', e.target.value)}
-                                        displayEmpty
-                                        sx={{
-                                            '& .MuiSelect-select': {
-                                                padding: '2px 4px',
-                                                fontFamily: 'monospace',
-                                                fontSize: '0.75rem'
-                                            }
-                                        }}
-                                        MenuProps={{
-                                            PaperProps: {
-                                                sx: {
-                                                    '& .MuiMenuItem-root': {
-                                                        fontFamily: 'monospace',
-                                                        fontSize: '0.75rem',
-                                                        minHeight: 'auto',
-                                                        padding: '4px 8px'
-                                                    }
-                                                }
-                                            }
-                                        }}
-                                    >
-                                        <MenuItem value="">
-                                            <em>All Types</em>
-                                        </MenuItem>
-                                        <MenuItem value="command">Command</MenuItem>
-                                        <MenuItem value="script">Script</MenuItem>
-                                        <MenuItem value="file_transfer">File Transfer</MenuItem>
-                                        <MenuItem value="composite">Composite</MenuItem>
-                                    </Select>
-                                </FormControl>
                             </TableCell>
                             <TableCell className="standard-filter-cell">
                                 <FormControl size="small" fullWidth>
@@ -659,17 +628,6 @@ const JobList = ({
                                             }
                                         }}
                                     >
-                                        {/* Checkbox Column */}
-                                        <TableCell className="standard-table-cell">
-                                            <Checkbox
-                                                checked={selectedJobs.has(job.id)}
-                                                onChange={(e) => handleSelectJob(job.id, e.target.checked)}
-                                                disabled={job.status !== 'running'}
-                                                size="small"
-                                                onClick={(e) => e.stopPropagation()}
-                                            />
-                                        </TableCell>
-                                        
                                         {/* Job Name */}
                                         <TableCell className="standard-table-cell" sx={{ fontWeight: 'bold' }}>
                                             {job.name}
@@ -680,14 +638,9 @@ const JobList = ({
                                             {job.job_serial || `ID-${job.id}`}
                                         </TableCell>
                                         
-                                        {/* Type */}
-                                        <TableCell className="standard-table-cell">
-                                            {getJobTypeLabel(job.job_type)}
-                                        </TableCell>
-                                        
                                         {/* Status */}
                                         <TableCell className="standard-table-cell">
-                                            {job.status}
+                                            {formatJobStatus(job.status)}
                                         </TableCell>
                                         
                                         {/* Created */}

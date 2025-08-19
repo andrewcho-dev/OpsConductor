@@ -16,7 +16,6 @@ PHASE 1 & 2 IMPROVEMENTS:
 
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, Response
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Union
@@ -25,14 +24,13 @@ from pydantic import BaseModel, Field, validator
 # Import service layer
 from app.services.metrics_management_service import MetricsManagementService, MetricsManagementError
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger, RequestLogger
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # PHASE 1: COMPREHENSIVE PYDANTIC MODELS
 
@@ -372,64 +370,19 @@ router = APIRouter(
 
 # PHASE 2: ENHANCED DEPENDENCY FUNCTIONS
 
-def get_current_user(credentials = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user with enhanced error handling."""
-    try:
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            logger.warning("Invalid token in metrics management request")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error": "invalid_token",
-                    "message": "Invalid or expired token",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        user_id = payload.get("user_id")
-        from app.services.user_service import UserService
-        user = UserService.get_user_by_id(db, user_id)
-        
-        if not user:
-            logger.warning(f"User not found for token: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "user_not_found",
-                    "message": "User not found",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting current user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "internal_error",
-                "message": "Internal error during authentication",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+# Local get_current_user removed - using centralized auth_dependencies
 
 
-def require_metrics_permissions(current_user = Depends(get_current_user)):
+def require_metrics_permissions(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Require metrics viewing permissions."""
-    if current_user.role not in ["administrator", "operator"]:
+    if current_user["role"] not in ["administrator", "operator"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "insufficient_permissions",
                 "message": "Insufficient permissions to access metrics data",
                 "required_roles": ["administrator", "operator"],
-                "user_role": current_user.role,
+                "user_role": current_user["role"],
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
@@ -468,7 +421,7 @@ async def get_system_metrics(
     """Enhanced system metrics with service layer and comprehensive analysis"""
     
     request_logger = RequestLogger(logger, "get_system_metrics")
-    request_logger.log_request_start("GET", "/api/v2/metrics/system", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/metrics/system", current_user["username"])
     
     try:
         # Initialize service layer
@@ -476,8 +429,8 @@ async def get_system_metrics(
         
         # Get system metrics through service layer (with caching)
         metrics_result = await metrics_mgmt_service.get_system_metrics(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = SystemMetricsResponse(**metrics_result)
@@ -489,7 +442,7 @@ async def get_system_metrics(
             extra={
                 "health_status": metrics_result.get("health_status", "unknown"),
                 "metrics_count": len(metrics_result.get("metrics", {})),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -503,7 +456,7 @@ async def get_system_metrics(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -524,7 +477,7 @@ async def get_system_metrics(
             "System metrics retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -563,7 +516,7 @@ async def get_application_metrics(
     """Enhanced application metrics with service layer and performance analysis"""
     
     request_logger = RequestLogger(logger, "get_application_metrics")
-    request_logger.log_request_start("GET", "/api/v2/metrics/application", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/metrics/application", current_user["username"])
     
     try:
         # Initialize service layer
@@ -571,8 +524,8 @@ async def get_application_metrics(
         
         # Get application metrics through service layer (with caching)
         metrics_result = await metrics_mgmt_service.get_application_metrics(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = ApplicationMetricsResponse(**metrics_result)
@@ -584,7 +537,7 @@ async def get_application_metrics(
             extra={
                 "health_status": metrics_result.get("health_status", "unknown"),
                 "performance_score": metrics_result.get("performance_score", 0),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -598,7 +551,7 @@ async def get_application_metrics(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -619,7 +572,7 @@ async def get_application_metrics(
             "Application metrics retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -658,7 +611,7 @@ async def get_performance_metrics(
     """Enhanced performance metrics with service layer and optimization insights"""
     
     request_logger = RequestLogger(logger, "get_performance_metrics")
-    request_logger.log_request_start("GET", "/api/v2/metrics/performance", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/metrics/performance", current_user["username"])
     
     try:
         # Initialize service layer
@@ -666,8 +619,8 @@ async def get_performance_metrics(
         
         # Get performance metrics through service layer (with caching)
         metrics_result = await metrics_mgmt_service.get_performance_metrics(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = PerformanceMetricsResponse(**metrics_result)
@@ -679,7 +632,7 @@ async def get_performance_metrics(
             extra={
                 "performance_grade": metrics_result.get("performance_grade", "unknown"),
                 "optimization_opportunities": len(metrics_result.get("optimization_opportunities", [])),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -693,7 +646,7 @@ async def get_performance_metrics(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -714,7 +667,7 @@ async def get_performance_metrics(
             "Performance metrics retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -755,7 +708,7 @@ async def get_analytics_data(
     """Enhanced analytics data with service layer and comprehensive insights"""
     
     request_logger = RequestLogger(logger, f"get_analytics_data_{time_range}")
-    request_logger.log_request_start("GET", "/api/v2/metrics/analytics", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/metrics/analytics", current_user["username"])
     
     try:
         # Parse metric types
@@ -770,8 +723,8 @@ async def get_analytics_data(
         analytics_result = await metrics_mgmt_service.get_analytics_data(
             time_range=time_range,
             metric_types=metric_types_list,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = AnalyticsDataResponse(**analytics_result)
@@ -784,7 +737,7 @@ async def get_analytics_data(
                 "time_range": time_range,
                 "data_points": len(analytics_result.get("data_points", [])),
                 "insights": len(analytics_result.get("insights", [])),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -799,7 +752,7 @@ async def get_analytics_data(
                 "time_range": time_range,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -821,7 +774,7 @@ async def get_analytics_data(
             extra={
                 "time_range": time_range,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -860,7 +813,7 @@ async def get_dashboard_metrics(
     """Enhanced dashboard metrics with service layer and consolidated overview"""
     
     request_logger = RequestLogger(logger, "get_dashboard_metrics")
-    request_logger.log_request_start("GET", "/api/v2/metrics/dashboard", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/metrics/dashboard", current_user["username"])
     
     try:
         # Initialize service layer
@@ -868,8 +821,8 @@ async def get_dashboard_metrics(
         
         # Get dashboard metrics through service layer (with caching)
         dashboard_result = await metrics_mgmt_service.get_dashboard_metrics(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = DashboardMetricsResponse(**dashboard_result)
@@ -881,7 +834,7 @@ async def get_dashboard_metrics(
             extra={
                 "overall_health": dashboard_result.get("overall_health", "unknown"),
                 "critical_alerts": len(dashboard_result.get("critical_alerts", [])),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -895,7 +848,7 @@ async def get_dashboard_metrics(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -916,7 +869,7 @@ async def get_dashboard_metrics(
             "Dashboard metrics retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -956,7 +909,7 @@ async def export_metrics_data(
     """Enhanced metrics export with service layer and comprehensive formatting"""
     
     request_logger = RequestLogger(logger, f"export_metrics_{export_request.export_format}")
-    request_logger.log_request_start("POST", "/api/v2/metrics/export", current_user.username)
+    request_logger.log_request_start("POST", "/api/v2/metrics/export", current_user["username"])
     
     try:
         # Initialize service layer
@@ -967,8 +920,8 @@ async def export_metrics_data(
             export_format=export_request.export_format,
             time_range=export_request.time_range,
             metric_types=export_request.metric_types,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = MetricsExportResponse(**export_result)
@@ -981,7 +934,7 @@ async def export_metrics_data(
                 "export_format": export_request.export_format,
                 "time_range": export_request.time_range,
                 "data_size": export_result.get("data_size", 0),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -996,7 +949,7 @@ async def export_metrics_data(
                 "export_format": export_request.export_format,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1018,7 +971,7 @@ async def export_metrics_data(
             extra={
                 "export_format": export_request.export_format,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         

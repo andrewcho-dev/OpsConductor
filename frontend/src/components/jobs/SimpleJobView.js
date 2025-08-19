@@ -3,7 +3,7 @@
  * Clean, intuitive design focusing on essential job operations
  */
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useAlert } from '../layout/BottomStatusBar';
 import { apiService } from '../../services/apiService';
 import {
@@ -48,7 +48,7 @@ import {
 } from '@mui/icons-material';
 
 const SimpleJobView = ({ jobs, onRefresh, stats }) => {
-  const { token } = useAuth();
+  const { token } = useSessionAuth();
   const { addAlert } = useAlert();
   
   const [selectedJob, setSelectedJob] = useState(null);

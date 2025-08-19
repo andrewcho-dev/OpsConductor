@@ -16,7 +16,7 @@ import {
   VisibilityOff,
 } from '@mui/icons-material';
 
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 const LoginScreen = () => {
   const [username, setUsername] = useState('');
@@ -24,7 +24,7 @@ const LoginScreen = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { login } = useAuth();
+  const { login } = useSessionAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -73,46 +73,25 @@ const LoginScreen = () => {
         >
           <Box
             sx={{
-              width: 64,
-              height: 64,
+              width: 240,
+              height: 240,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              mb: 2,
+              mb: 1.5,
             }}
           >
             <Box
               component="img"
-              src="/logo.svg"
+              src="/OpsConductor dark on light 640.svg"
               alt="OpsConductor Logo"
               sx={{
                 width: '100%',
                 height: '100%',
+                objectFit: 'contain',
               }}
             />
           </Box>
-
-          <Typography 
-            component="h1" 
-            variant="h4" 
-            sx={{ 
-              fontWeight: 600,
-              color: '#003c82',
-              mb: 0.5,
-            }}
-          >
-            OpsConductor
-          </Typography>
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              color: '#666',
-              fontWeight: 300,
-              mb: 3,
-            }}
-          >
-            Lite
-          </Typography>
 
           {error && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
@@ -195,10 +174,10 @@ const LoginScreen = () => {
           }}
         >
           <Typography variant="body2" sx={{ mb: 1 }}>
-            © 2025 Enabled Enterprises LLC. All rights reserved.
-          </Typography>
-          <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
             OpsConductor Enterprise Automation Platform
+          </Typography>
+          <Typography variant="body2">
+            © 2025 Enabled Enterprises LLC. All rights reserved.
           </Typography>
         </Box>
       </Box>

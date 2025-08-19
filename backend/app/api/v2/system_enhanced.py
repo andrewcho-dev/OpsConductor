@@ -16,7 +16,6 @@ PHASE 1 & 2 IMPROVEMENTS:
 
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Union
@@ -25,14 +24,13 @@ from pydantic import BaseModel, Field, validator, EmailStr
 # Import service layer
 from app.services.system_management_service import SystemManagementService, SystemManagementError
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger, RequestLogger
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # PHASE 1: COMPREHENSIVE PYDANTIC MODELS
 
@@ -211,7 +209,8 @@ class SystemConfigurationUpdateRequest(BaseModel):
                 },
                 "security": {
                     "jwt_expiry": 7200,
-                    "session_timeout": 1800
+                    "inactivity_timeout_minutes": 60,
+                    "warning_time_minutes": 2
                 },
                 "logging": {
                     "level": "INFO",
@@ -417,64 +416,19 @@ router = APIRouter(
 
 # PHASE 2: ENHANCED DEPENDENCY FUNCTIONS
 
-def get_current_user(credentials = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user with enhanced error handling."""
-    try:
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            logger.warning("Invalid token in system management request")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error": "invalid_token",
-                    "message": "Invalid or expired token",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        user_id = payload.get("user_id")
-        from app.services.user_service import UserService
-        user = UserService.get_user_by_id(db, user_id)
-        
-        if not user:
-            logger.warning(f"User not found for token: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "user_not_found",
-                    "message": "User not found",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting current user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "internal_error",
-                "message": "Internal error during authentication",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+# Local get_current_user removed - using centralized auth_dependencies
 
 
-def require_admin_permissions(current_user = Depends(get_current_user)):
+def require_admin_permissions(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Require administrator permissions for system management."""
-    if current_user.role != "administrator":
+    if current_user["role"] != "administrator":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "insufficient_permissions",
                 "message": "Administrator permissions required for system management",
                 "required_role": "administrator",
-                "user_role": current_user.role,
+                "user_role": current_user["role"],
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
@@ -513,7 +467,7 @@ async def get_system_status(
     """Enhanced system status with service layer and comprehensive monitoring"""
     
     request_logger = RequestLogger(logger, "get_system_status")
-    request_logger.log_request_start("GET", "/api/v2/system/status", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/system/status", current_user["username"])
     
     try:
         # Initialize service layer
@@ -521,8 +475,8 @@ async def get_system_status(
         
         # Get system status through service layer (with caching)
         status_result = await system_mgmt_service.get_system_status(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = SystemStatusResponse(**status_result)
@@ -534,7 +488,7 @@ async def get_system_status(
             extra={
                 "health_status": status_result.get("health_status", "unknown"),
                 "uptime": status_result.get("uptime", "unknown"),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -548,7 +502,7 @@ async def get_system_status(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -569,7 +523,7 @@ async def get_system_status(
             "System status retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -608,7 +562,7 @@ async def get_system_configuration(
     """Enhanced system configuration with service layer and comprehensive settings"""
     
     request_logger = RequestLogger(logger, "get_system_configuration")
-    request_logger.log_request_start("GET", "/api/v2/system/configuration", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/system/configuration", current_user["username"])
     
     try:
         # Initialize service layer
@@ -616,8 +570,8 @@ async def get_system_configuration(
         
         # Get system configuration through service layer (with caching)
         config_result = await system_mgmt_service.get_system_configuration(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = SystemConfigurationResponse(**config_result)
@@ -629,7 +583,7 @@ async def get_system_configuration(
             extra={
                 "config_sections": len(config_result),
                 "configuration_version": config_result.get("configuration_version", "unknown"),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -643,7 +597,7 @@ async def get_system_configuration(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -664,7 +618,7 @@ async def get_system_configuration(
             "System configuration retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -707,7 +661,7 @@ async def update_system_configuration(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, "update_system_configuration")
-    request_logger.log_request_start("PUT", "/api/v2/system/configuration", current_user.username)
+    request_logger.log_request_start("PUT", "/api/v2/system/configuration", current_user["username"])
     
     try:
         # Initialize service layer
@@ -716,8 +670,8 @@ async def update_system_configuration(
         # Update system configuration through service layer
         update_result = await system_mgmt_service.update_system_configuration(
             config_updates=config_updates.model_dump(exclude_none=True),
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -731,7 +685,7 @@ async def update_system_configuration(
             extra={
                 "updated_keys": update_result.get("updated_keys", []),
                 "backup_id": update_result.get("backup_id", "unknown"),
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -745,7 +699,7 @@ async def update_system_configuration(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -766,7 +720,7 @@ async def update_system_configuration(
             "System configuration update error via service layer",
             extra={
                 "error": str(e),
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -809,7 +763,7 @@ async def get_system_logs(
     """Enhanced system logs with service layer and comprehensive filtering"""
     
     request_logger = RequestLogger(logger, f"get_system_logs_{log_level}")
-    request_logger.log_request_start("GET", "/api/v2/system/logs", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/system/logs", current_user["username"])
     
     try:
         # Initialize service layer
@@ -821,8 +775,8 @@ async def get_system_logs(
             limit=limit,
             start_time=start_time,
             end_time=end_time,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = SystemLogsResponse(**logs_result)
@@ -834,7 +788,7 @@ async def get_system_logs(
             extra={
                 "log_level": log_level,
                 "logs_count": logs_result.get("total_logs", 0),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -849,7 +803,7 @@ async def get_system_logs(
                 "log_level": log_level,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -871,7 +825,7 @@ async def get_system_logs(
             extra={
                 "log_level": log_level,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -910,7 +864,7 @@ async def get_system_health(
     """Enhanced system health with service layer and comprehensive monitoring"""
     
     request_logger = RequestLogger(logger, "get_system_health")
-    request_logger.log_request_start("GET", "/api/v2/system/health", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/system/health", current_user["username"])
     
     try:
         # Initialize service layer
@@ -918,8 +872,8 @@ async def get_system_health(
         
         # Get system health through service layer (with caching)
         health_result = await system_mgmt_service.get_system_health(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = SystemHealthResponse(**health_result)
@@ -931,7 +885,7 @@ async def get_system_health(
             extra={
                 "overall_health": health_result.get("overall_health", "unknown"),
                 "health_checks": len(health_result.get("health_checks", {})),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -945,7 +899,7 @@ async def get_system_health(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -966,7 +920,7 @@ async def get_system_health(
             "System health check error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -985,7 +939,8 @@ async def get_system_health(
 class SystemInfoCompatResponse(BaseModel):
     """Response model for system info (frontend compatibility)"""
     timezone: Dict[str, Any] = Field(..., description="Timezone information")
-    session_timeout: int = Field(..., description="Session timeout in seconds")
+    inactivity_timeout_minutes: int = Field(..., description="Inactivity timeout in minutes")
+    warning_time_minutes: int = Field(..., description="Warning time in minutes")
     max_concurrent_jobs: int = Field(..., description="Maximum concurrent jobs")
     log_retention_days: int = Field(..., description="Log retention in days")
     uptime: str = Field(..., description="System uptime")
@@ -999,7 +954,8 @@ class SystemInfoCompatResponse(BaseModel):
                     "current_utc_offset": "-05:00",
                     "is_dst_active": True
                 },
-                "session_timeout": 28800,
+                "inactivity_timeout_minutes": 60,
+                "warning_time_minutes": 2,
                 "max_concurrent_jobs": 50,
                 "log_retention_days": 30,
                 "uptime": "5d 12h 30m"
@@ -1055,14 +1011,26 @@ class TimezoneUpdateRequest(BaseModel):
         }
 
 
-class SessionTimeoutUpdateRequest(BaseModel):
-    """Request model for session timeout updates"""
-    timeout_seconds: int = Field(..., description="Session timeout in seconds", ge=60, le=86400)
+class InactivityTimeoutUpdateRequest(BaseModel):
+    """Request model for inactivity timeout updates"""
+    timeout_minutes: int = Field(..., description="Inactivity timeout in minutes", ge=5, le=480)
     
     class Config:
         json_schema_extra = {
             "example": {
-                "timeout_seconds": 28800
+                "timeout_minutes": 60
+            }
+        }
+
+
+class WarningTimeUpdateRequest(BaseModel):
+    """Request model for warning time updates"""
+    warning_minutes: int = Field(..., description="Warning time in minutes before timeout", ge=1, le=10)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "warning_minutes": 2
             }
         }
 
@@ -1134,7 +1102,7 @@ async def get_system_info(
     """Get system information for frontend compatibility"""
     
     request_logger = RequestLogger(logger, "get_system_info")
-    request_logger.log_request_start("GET", "/api/v2/system/info", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/system/info", current_user["username"])
     
     try:
         # Use the existing system service
@@ -1152,7 +1120,7 @@ async def get_system_info(
             "System info retrieval successful",
             extra={
                 "timezone": system_info.get("timezone", {}).get("current", "unknown"),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1165,7 +1133,7 @@ async def get_system_info(
             "System info retrieval error",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1204,7 +1172,7 @@ async def get_timezones(
     """Get available timezones"""
     
     request_logger = RequestLogger(logger, "get_timezones")
-    request_logger.log_request_start("GET", "/api/v2/system/timezones", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/system/timezones", current_user["username"])
     
     try:
         # Use the existing system service
@@ -1222,7 +1190,7 @@ async def get_timezones(
             "Timezones retrieval successful",
             extra={
                 "timezone_count": len(timezones),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1235,7 +1203,7 @@ async def get_timezones(
             "Timezones retrieval error",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1274,7 +1242,7 @@ async def get_current_time(
     """Get current system time"""
     
     request_logger = RequestLogger(logger, "get_current_time")
-    request_logger.log_request_start("GET", "/api/v2/system/current-time", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/system/current-time", current_user["username"])
     
     try:
         # Use the existing system service
@@ -1300,7 +1268,7 @@ async def get_current_time(
             extra={
                 "timezone": system_service.get_timezone(),
                 "is_dst": system_service.is_dst_active(),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1313,7 +1281,7 @@ async def get_current_time(
             "Current time retrieval error",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1352,7 +1320,7 @@ async def update_timezone(
     """Update system timezone"""
     
     request_logger = RequestLogger(logger, "update_timezone")
-    request_logger.log_request_start("PUT", "/api/v2/system/timezone", current_user.username)
+    request_logger.log_request_start("PUT", "/api/v2/system/timezone", current_user["username"])
     
     try:
         # Use the existing system service
@@ -1385,7 +1353,7 @@ async def update_timezone(
             extra={
                 "old_timezone": system_service.get_timezone(),
                 "new_timezone": request_data.timezone,
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1401,7 +1369,7 @@ async def update_timezone(
             extra={
                 "error": str(e),
                 "timezone": request_data.timezone,
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1415,64 +1383,66 @@ async def update_timezone(
         )
 
 
+
 @router.put(
-    "/session-timeout",
+    "/inactivity-timeout",
     response_model=SettingUpdateResponse,
     status_code=status.HTTP_200_OK,
-    summary="Update Session Timeout",
+    summary="Update Inactivity Timeout",
     description="""
-    Update the user session timeout setting.
+    Update the user inactivity timeout setting for activity-based sessions.
     
     **Features:**
-    - Range validation (60s - 86400s)
+    - Range validation (5-480 minutes)
+    - Controls when sessions expire due to inactivity
     - Immediate effect
     - Audit logging
     """,
     responses={
-        200: {"description": "Session timeout updated successfully", "model": SettingUpdateResponse}
+        200: {"description": "Inactivity timeout updated successfully", "model": SettingUpdateResponse}
     }
 )
-async def update_session_timeout(
-    request_data: SessionTimeoutUpdateRequest,
+async def update_inactivity_timeout(
+    request_data: InactivityTimeoutUpdateRequest,
     current_user = Depends(require_admin_permissions),
     db: Session = Depends(get_db)
 ) -> SettingUpdateResponse:
-    """Update session timeout"""
+    """Update inactivity timeout for activity-based sessions"""
     
-    request_logger = RequestLogger(logger, "update_session_timeout")
-    request_logger.log_request_start("PUT", "/api/v2/system/session-timeout", current_user.username)
+    request_logger = RequestLogger(logger, "update_inactivity_timeout")
+    request_logger.log_request_start("PUT", "/api/v2/system/inactivity-timeout", current_user["username"])
     
     try:
-        # Use the existing system service
+        # Store in system configuration
         from app.services.system_service import SystemService
         system_service = SystemService(db)
         
-        # Update session timeout
-        success = system_service.set_session_timeout(request_data.timeout_seconds)
+        # Store the setting (we'll add this method to SystemService)
+        success = system_service.set_inactivity_timeout(request_data.timeout_minutes)
         
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "error": "invalid_timeout",
-                    "message": f"Invalid session timeout: {request_data.timeout_seconds} (must be 60-86400 seconds)",
+                    "message": f"Invalid inactivity timeout: {request_data.timeout_minutes} (must be 5-480 minutes)",
                     "timestamp": datetime.utcnow().isoformat()
                 }
             )
         
         response = SettingUpdateResponse(
             success=True,
-            message=f"Session timeout updated to {request_data.timeout_seconds} seconds",
+            message=f"Inactivity timeout updated to {request_data.timeout_minutes} minutes",
             updated_at=datetime.utcnow()
         )
         
         request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
         
         logger.info(
-            "Session timeout update successful",
+            "Inactivity timeout update successful",
             extra={
-                "new_timeout": request_data.timeout_seconds,
-                "updated_by": current_user.username
+                "new_timeout_minutes": request_data.timeout_minutes,
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1484,11 +1454,11 @@ async def update_session_timeout(
         request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
         
         logger.error(
-            "Session timeout update error",
+            "Inactivity timeout update error",
             extra={
                 "error": str(e),
-                "timeout": request_data.timeout_seconds,
-                "updated_by": current_user.username
+                "timeout_minutes": request_data.timeout_minutes,
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1496,7 +1466,95 @@ async def update_session_timeout(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": "internal_server_error",
-                "message": "An internal error occurred while updating session timeout",
+                "message": "An internal error occurred while updating inactivity timeout",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.put(
+    "/warning-time",
+    response_model=SettingUpdateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Warning Time",
+    description="""
+    Update the warning time before session timeout.
+    
+    **Features:**
+    - Range validation (1-10 minutes)
+    - Controls when to show warning before timeout
+    - Immediate effect
+    - Audit logging
+    """,
+    responses={
+        200: {"description": "Warning time updated successfully", "model": SettingUpdateResponse}
+    }
+)
+async def update_warning_time(
+    request_data: WarningTimeUpdateRequest,
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> SettingUpdateResponse:
+    """Update warning time before session timeout"""
+    
+    request_logger = RequestLogger(logger, "update_warning_time")
+    request_logger.log_request_start("PUT", "/api/v2/system/warning-time", current_user["username"])
+    
+    try:
+        # Store in system configuration
+        from app.services.system_service import SystemService
+        system_service = SystemService(db)
+        
+        # Store the setting (we'll add this method to SystemService)
+        success = system_service.set_warning_time(request_data.warning_minutes)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "invalid_warning_time",
+                    "message": f"Invalid warning time: {request_data.warning_minutes} (must be 1-10 minutes)",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+        
+        response = SettingUpdateResponse(
+            success=True,
+            message=f"Warning time updated to {request_data.warning_minutes} minutes",
+            updated_at=datetime.utcnow()
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Warning time update successful",
+            extra={
+                "new_warning_minutes": request_data.warning_minutes,
+                "updated_by": current_user["username"]
+            }
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Warning time update error",
+            extra={
+                "error": str(e),
+                "warning_minutes": request_data.warning_minutes,
+                "updated_by": current_user["username"]
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while updating warning time",
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
@@ -1527,7 +1585,7 @@ async def update_max_concurrent_jobs(
     """Update max concurrent jobs"""
     
     request_logger = RequestLogger(logger, "update_max_concurrent_jobs")
-    request_logger.log_request_start("PUT", "/api/v2/system/max-concurrent-jobs", current_user.username)
+    request_logger.log_request_start("PUT", "/api/v2/system/max-concurrent-jobs", current_user["username"])
     
     try:
         # Use the existing system service
@@ -1559,7 +1617,7 @@ async def update_max_concurrent_jobs(
             "Max concurrent jobs update successful",
             extra={
                 "new_max_jobs": request_data.max_jobs,
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1575,7 +1633,7 @@ async def update_max_concurrent_jobs(
             extra={
                 "error": str(e),
                 "max_jobs": request_data.max_jobs,
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1614,7 +1672,7 @@ async def update_log_retention(
     """Update log retention"""
     
     request_logger = RequestLogger(logger, "update_log_retention")
-    request_logger.log_request_start("PUT", "/api/v2/system/log-retention", current_user.username)
+    request_logger.log_request_start("PUT", "/api/v2/system/log-retention", current_user["username"])
     
     try:
         # Use the existing system service
@@ -1646,7 +1704,7 @@ async def update_log_retention(
             "Log retention update successful",
             extra={
                 "new_retention_days": request_data.retention_days,
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1662,7 +1720,7 @@ async def update_log_retention(
             extra={
                 "error": str(e),
                 "retention_days": request_data.retention_days,
-                "updated_by": current_user.username
+                "updated_by": current_user["username"]
             }
         )
         
@@ -1746,7 +1804,7 @@ async def restart_container(
     """Restart a Docker container"""
     
     request_logger = RequestLogger(logger, f"restart_container_{container_name}")
-    request_logger.log_request_start("POST", f"/api/v2/system/containers/{container_name}/restart", current_user.username)
+    request_logger.log_request_start("POST", f"/api/v2/system/containers/{container_name}/restart", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1755,8 +1813,8 @@ async def restart_container(
         # Restart container through service layer
         result = await system_mgmt_service.restart_container(
             container_name=container_name,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = ContainerActionResponse(
@@ -1773,7 +1831,7 @@ async def restart_container(
             "Container restart successful",
             extra={
                 "container_name": container_name,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1788,7 +1846,7 @@ async def restart_container(
                 "container_name": container_name,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1810,7 +1868,7 @@ async def restart_container(
             extra={
                 "container_name": container_name,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1854,7 +1912,7 @@ async def reload_service(
     """Reload a system service"""
     
     request_logger = RequestLogger(logger, f"reload_service_{service_name}")
-    request_logger.log_request_start("POST", f"/api/v2/system/services/{service_name}/reload", current_user.username)
+    request_logger.log_request_start("POST", f"/api/v2/system/services/{service_name}/reload", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1863,8 +1921,8 @@ async def reload_service(
         # Reload service through service layer
         result = await system_mgmt_service.reload_service(
             service_name=service_name,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = ServiceActionResponse(
@@ -1881,7 +1939,7 @@ async def reload_service(
             "Service reload successful",
             extra={
                 "service_name": service_name,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1896,7 +1954,7 @@ async def reload_service(
                 "service_name": service_name,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1918,7 +1976,7 @@ async def reload_service(
             extra={
                 "service_name": service_name,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -2030,7 +2088,7 @@ async def get_eligible_email_targets(
     """Get eligible email targets for system notifications"""
     
     request_logger = RequestLogger(logger, "get_eligible_email_targets")
-    request_logger.log_request_start("GET", "/api/v2/system/email-targets/eligible", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/system/email-targets/eligible", current_user["username"])
     
     try:
         from app.services.notification_service import NotificationService
@@ -2046,7 +2104,7 @@ async def get_eligible_email_targets(
             "Eligible email targets retrieved successfully",
             extra={
                 "target_count": len(eligible_targets),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -2059,7 +2117,7 @@ async def get_eligible_email_targets(
             "Failed to get eligible email targets",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -2092,7 +2150,7 @@ async def get_email_target_config(
     """Get current email target configuration"""
     
     request_logger = RequestLogger(logger, "get_email_target_config")
-    request_logger.log_request_start("GET", "/api/v2/system/email-target/config", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/system/email-target/config", current_user["username"])
     
     try:
         from app.services.notification_service import NotificationService
@@ -2109,7 +2167,7 @@ async def get_email_target_config(
             extra={
                 "is_configured": config.get("is_configured", False),
                 "target_id": config.get("target_id"),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -2122,7 +2180,7 @@ async def get_email_target_config(
             "Failed to get email target configuration",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -2161,7 +2219,7 @@ async def set_email_target_config(
     """Set email target configuration"""
     
     request_logger = RequestLogger(logger, "set_email_target_config")
-    request_logger.log_request_start("PUT", "/api/v2/system/email-target/config", current_user.username)
+    request_logger.log_request_start("PUT", "/api/v2/system/email-target/config", current_user["username"])
     
     try:
         from app.services.notification_service import NotificationService
@@ -2178,7 +2236,7 @@ async def set_email_target_config(
             extra={
                 "target_id": request_data.target_id,
                 "is_configured": config.get("is_configured", False),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -2192,7 +2250,7 @@ async def set_email_target_config(
             extra={
                 "target_id": request_data.target_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -2213,7 +2271,7 @@ async def set_email_target_config(
             extra={
                 "target_id": request_data.target_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -2246,7 +2304,7 @@ async def test_email_target(
     """Test email target by sending a test email"""
     
     request_logger = RequestLogger(logger, "test_email_target")
-    request_logger.log_request_start("POST", "/api/v2/system/email-target/test", current_user.username)
+    request_logger.log_request_start("POST", "/api/v2/system/email-target/test", current_user["username"])
     
     try:
         from app.services.notification_service import NotificationService
@@ -2259,7 +2317,7 @@ async def test_email_target(
         result = notification_service.send_email(
             to_emails=[test_email],
             subject="OpsConductor Email Test",
-            body=f"This is a test email from OpsConductor.\n\nSent by: {current_user.username}\nTime: {datetime.utcnow().isoformat()}\nTest email sent to: {test_email}\n\nIf you received this email, your email target configuration is working correctly!",
+            body=f"This is a test email from OpsConductor.\n\nSent by: {current_user['username']}\nTime: {datetime.utcnow().isoformat()}\nTest email sent to: {test_email}\n\nIf you received this email, your email target configuration is working correctly!",
             template_name="email_test"
         )
         
@@ -2270,7 +2328,7 @@ async def test_email_target(
             extra={
                 "success": result.get("success", False),
                 "test_email": test_email,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -2288,7 +2346,7 @@ async def test_email_target(
             "Failed to test email target",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         

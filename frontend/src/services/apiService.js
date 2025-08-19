@@ -25,70 +25,17 @@ class ApiService {
       const fullUrl = url.startsWith('/api/') ? url : `${this.baseURL}${url}`;
       const response = await fetch(fullUrl, config);
       
-      // If we get a 401, try to refresh the token
-      if (response.status === 401 && !options._retry) {
-        console.log('🔄 Got 401, attempting token refresh...');
-        const refreshSuccess = await this.refreshToken();
-        
-        if (refreshSuccess) {
-          // Retry the original request with new token
-          const newToken = localStorage.getItem('access_token');
-          const retryConfig = {
-            ...config,
-            headers: {
-              ...config.headers,
-              'Authorization': `Bearer ${newToken}`
-            },
-            _retry: true // Prevent infinite retry loops
-          };
-          
-          console.log('🔄 Retrying request with new token...');
-          return await fetch(fullUrl, retryConfig);
-        } else {
-          // Refresh failed, force logout
-          console.log('❌ Token refresh failed, logging out...');
-          this.forceLogout();
-          throw new Error('Authentication failed');
-        }
+      // If we get a 401, session has expired - force logout immediately
+      if (response.status === 401) {
+        console.log('❌ Got 401 - Session expired, logging out...');
+        this.forceLogout();
+        throw new Error('Session expired');
       }
       
       return response;
     } catch (error) {
       console.error('API request failed:', error);
       throw error;
-    }
-  }
-
-  async refreshToken() {
-    try {
-      const refresh_token = localStorage.getItem('refresh_token');
-      if (!refresh_token) {
-        console.log('❌ No refresh token available');
-        return false;
-      }
-
-      console.log('🔄 Attempting to refresh token...');
-      const response = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${refresh_token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('access_token', data.access_token);
-        localStorage.setItem('refresh_token', data.refresh_token);
-        console.log('✅ Token refreshed successfully');
-        return true;
-      } else {
-        console.log('❌ Token refresh failed:', response.status);
-        return false;
-      }
-    } catch (error) {
-      console.error('❌ Token refresh error:', error);
-      return false;
     }
   }
 

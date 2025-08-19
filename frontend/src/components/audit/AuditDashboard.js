@@ -298,7 +298,6 @@ function AuditDashboard() {
           >
             {paginatedEvents.length} of {totalFilteredRecords} records {totalFilteredRecords > pageSize ? `(Page ${currentPage} of ${totalPages})` : ''}
             {enriching && <span style={{ marginLeft: '8px', color: '#1976d2' }}>• Enriching...</span>}
-            <span style={{ marginLeft: '8px', color: '#ff9800' }}>• Sample Data (200 events)</span>
           </Typography>
           
           {/* Export/Save Actions */}
@@ -574,7 +573,7 @@ function AuditDashboard() {
           
           {/* Show pagination info on the right */}
           <Typography variant="body2" className="standard-pagination-info">
-            Showing {startIndex + 1}-{Math.min(endIndex, totalFilteredRecords)} of {totalFilteredRecords} results (sample data)
+            Showing {startIndex + 1}-{Math.min(endIndex, totalFilteredRecords)} of {totalFilteredRecords} results
           </Typography>
         </div>
       </div>

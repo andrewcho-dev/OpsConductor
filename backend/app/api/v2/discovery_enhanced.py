@@ -16,7 +16,6 @@ PHASE 1 & 2 IMPROVEMENTS:
 
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Union
@@ -25,14 +24,13 @@ from pydantic import BaseModel, Field, validator
 # Import service layer
 from app.services.discovery_management_service import DiscoveryManagementService, DiscoveryManagementError
 from app.database.database import get_db
-from app.core.security import verify_token
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger, RequestLogger
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
 
 # PHASE 1: COMPREHENSIVE PYDANTIC MODELS
 
@@ -426,64 +424,19 @@ router = APIRouter(
 
 # PHASE 2: ENHANCED DEPENDENCY FUNCTIONS
 
-def get_current_user(credentials = Depends(security), 
-                    db: Session = Depends(get_db)):
-    """Get current authenticated user with enhanced error handling."""
-    try:
-        token = credentials.credentials
-        payload = verify_token(token)
-        if not payload:
-            logger.warning("Invalid token in discovery management request")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error": "invalid_token",
-                    "message": "Invalid or expired token",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        user_id = payload.get("user_id")
-        from app.services.user_service import UserService
-        user = UserService.get_user_by_id(db, user_id)
-        
-        if not user:
-            logger.warning(f"User not found for token: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "user_not_found",
-                    "message": "User not found",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        return user
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting current user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "internal_error",
-                "message": "Internal error during authentication",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+# Local get_current_user removed - using centralized auth_dependencies
 
 
-def require_discovery_permissions(current_user = Depends(get_current_user)):
+def require_discovery_permissions(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Require discovery permissions."""
-    if current_user.role not in ["administrator", "operator"]:
+    if current_user["role"] not in ["administrator", "operator"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "insufficient_permissions",
                 "message": "Insufficient permissions to perform network discovery",
                 "required_roles": ["administrator", "operator"],
-                "user_role": current_user.role,
+                "user_role": current_user["role"],
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
@@ -526,7 +479,7 @@ async def start_network_discovery(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, f"start_discovery_{discovery_request.network_range}")
-    request_logger.log_request_start("POST", "/api/v2/discovery/start", current_user.username)
+    request_logger.log_request_start("POST", "/api/v2/discovery/start", current_user["username"])
     
     try:
         # Initialize service layer
@@ -536,8 +489,8 @@ async def start_network_discovery(
         discovery_result = await discovery_mgmt_service.start_network_discovery(
             network_range=discovery_request.network_range,
             discovery_options=discovery_request.discovery_options.model_dump(),
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -551,7 +504,7 @@ async def start_network_discovery(
             extra={
                 "discovery_job_id": discovery_result["discovery_job_id"],
                 "network_range": discovery_request.network_range,
-                "initiated_by": current_user.username
+                "initiated_by": current_user["username"]
             }
         )
         
@@ -566,7 +519,7 @@ async def start_network_discovery(
                 "network_range": discovery_request.network_range,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "initiated_by": current_user.username
+                "initiated_by": current_user["username"]
             }
         )
         
@@ -588,7 +541,7 @@ async def start_network_discovery(
             extra={
                 "network_range": discovery_request.network_range,
                 "error": str(e),
-                "initiated_by": current_user.username
+                "initiated_by": current_user["username"]
             }
         )
         
@@ -632,7 +585,7 @@ async def start_in_memory_discovery(
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     request_logger = RequestLogger(logger, "start_in_memory_discovery")
-    request_logger.log_request_start("POST", "/api/v2/discovery/discover-memory", current_user.username)
+    request_logger.log_request_start("POST", "/api/v2/discovery/discover-memory", current_user["username"])
     
     try:
         # Initialize service layer
@@ -641,8 +594,8 @@ async def start_in_memory_discovery(
         # Start in-memory discovery through service layer
         task_result = await discovery_mgmt_service.start_in_memory_discovery(
             discovery_config=discovery_config,
-            current_user_id=current_user.id,
-            current_username=current_user.username,
+            current_user_id=current_user["id"],
+            current_username=current_user["username"],
             ip_address=client_ip,
             user_agent=user_agent
         )
@@ -655,7 +608,7 @@ async def start_in_memory_discovery(
             "In-memory discovery started successfully",
             extra={
                 "task_id": task_result["task_id"],
-                "initiated_by": current_user.username
+                "initiated_by": current_user["username"]
             }
         )
         
@@ -669,7 +622,7 @@ async def start_in_memory_discovery(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "initiated_by": current_user.username
+                "initiated_by": current_user["username"]
             }
         )
         
@@ -690,7 +643,7 @@ async def start_in_memory_discovery(
             "In-memory discovery start error",
             extra={
                 "error": str(e),
-                "initiated_by": current_user.username
+                "initiated_by": current_user["username"]
             }
         )
         
@@ -729,7 +682,7 @@ async def get_in_memory_discovery_status(
     """Get in-memory discovery task status for frontend compatibility"""
     
     request_logger = RequestLogger(logger, f"get_in_memory_discovery_{task_id}")
-    request_logger.log_request_start("GET", f"/api/v2/discovery/discover-memory/{task_id}", current_user.username)
+    request_logger.log_request_start("GET", f"/api/v2/discovery/discover-memory/{task_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -738,8 +691,8 @@ async def get_in_memory_discovery_status(
         # Get in-memory discovery status through service layer
         status_result = await discovery_mgmt_service.get_in_memory_discovery_status(
             task_id=task_id,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         request_logger.log_request_end(status.HTTP_200_OK, len(str(status_result)))
@@ -749,7 +702,7 @@ async def get_in_memory_discovery_status(
             extra={
                 "task_id": task_id,
                 "status": status_result.get("status"),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -764,7 +717,7 @@ async def get_in_memory_discovery_status(
                 "task_id": task_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -786,7 +739,7 @@ async def get_in_memory_discovery_status(
             extra={
                 "task_id": task_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -826,7 +779,7 @@ async def get_discovery_job_status(
     """Enhanced discovery job status with service layer and comprehensive tracking"""
     
     request_logger = RequestLogger(logger, f"get_discovery_status_{job_id}")
-    request_logger.log_request_start("GET", f"/api/v2/discovery/jobs/{job_id}/status", current_user.username)
+    request_logger.log_request_start("GET", f"/api/v2/discovery/jobs/{job_id}/status", current_user["username"])
     
     try:
         # Initialize service layer
@@ -835,8 +788,8 @@ async def get_discovery_job_status(
         # Get discovery job status through service layer (with caching)
         status_result = await discovery_mgmt_service.get_discovery_job_status(
             job_id=job_id,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = DiscoveryJobStatusResponse(**status_result)
@@ -849,7 +802,7 @@ async def get_discovery_job_status(
                 "job_id": job_id,
                 "status": status_result.get("status", "unknown"),
                 "completion_percentage": status_result.get("completion_percentage", 0),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -864,7 +817,7 @@ async def get_discovery_job_status(
                 "job_id": job_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -888,7 +841,7 @@ async def get_discovery_job_status(
             extra={
                 "job_id": job_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -927,7 +880,7 @@ async def get_network_inventory(
     """Enhanced network inventory with service layer and comprehensive device information"""
     
     request_logger = RequestLogger(logger, "get_network_inventory")
-    request_logger.log_request_start("GET", "/api/v2/discovery/inventory", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/discovery/inventory", current_user["username"])
     
     try:
         # Initialize service layer
@@ -935,8 +888,8 @@ async def get_network_inventory(
         
         # Get network inventory through service layer (with caching)
         inventory_result = await discovery_mgmt_service.get_network_inventory(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = NetworkInventoryResponse(**inventory_result)
@@ -948,7 +901,7 @@ async def get_network_inventory(
             extra={
                 "total_devices": inventory_result.get("total_devices", 0),
                 "inventory_health": inventory_result.get("inventory_health", "unknown"),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -962,7 +915,7 @@ async def get_network_inventory(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -983,7 +936,7 @@ async def get_network_inventory(
             "Network inventory retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1023,7 +976,7 @@ async def get_device_details(
     """Enhanced device details with service layer and comprehensive information"""
     
     request_logger = RequestLogger(logger, f"get_device_details_{device_id}")
-    request_logger.log_request_start("GET", f"/api/v2/discovery/devices/{device_id}", current_user.username)
+    request_logger.log_request_start("GET", f"/api/v2/discovery/devices/{device_id}", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1032,8 +985,8 @@ async def get_device_details(
         # Get device details through service layer (with caching)
         device_result = await discovery_mgmt_service.get_device_details(
             device_id=device_id,
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = DeviceDetailsResponse(**device_result)
@@ -1046,7 +999,7 @@ async def get_device_details(
                 "device_id": device_id,
                 "security_score": device_result.get("security_score", 0),
                 "services_count": len(device_result.get("services", [])),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1061,7 +1014,7 @@ async def get_device_details(
                 "device_id": device_id,
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1085,7 +1038,7 @@ async def get_device_details(
             extra={
                 "device_id": device_id,
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1124,7 +1077,7 @@ async def get_discovery_statistics(
     """Enhanced discovery statistics with service layer and comprehensive analytics"""
     
     request_logger = RequestLogger(logger, "get_discovery_statistics")
-    request_logger.log_request_start("GET", "/api/v2/discovery/statistics", current_user.username)
+    request_logger.log_request_start("GET", "/api/v2/discovery/statistics", current_user["username"])
     
     try:
         # Initialize service layer
@@ -1132,8 +1085,8 @@ async def get_discovery_statistics(
         
         # Get discovery statistics through service layer (with caching)
         stats_result = await discovery_mgmt_service.get_discovery_statistics(
-            current_user_id=current_user.id,
-            current_username=current_user.username
+            current_user_id=current_user["id"],
+            current_username=current_user["username"]
         )
         
         response = DiscoveryStatisticsResponse(**stats_result)
@@ -1145,7 +1098,7 @@ async def get_discovery_statistics(
             extra={
                 "total_jobs": stats_result.get("job_statistics", {}).get("total_jobs", 0),
                 "total_devices": stats_result.get("device_statistics", {}).get("total_devices", 0),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1159,7 +1112,7 @@ async def get_discovery_statistics(
             extra={
                 "error_code": e.error_code,
                 "error_message": e.message,
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         
@@ -1180,7 +1133,7 @@ async def get_discovery_statistics(
             "Discovery statistics retrieval error via service layer",
             extra={
                 "error": str(e),
-                "requested_by": current_user.username
+                "requested_by": current_user["username"]
             }
         )
         

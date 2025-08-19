@@ -3,10 +3,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import UUID
 from app.database.database import Base
 import enum
-import uuid
 
 
 class JobType(str, enum.Enum):
@@ -40,37 +38,11 @@ class ActionType(str, enum.Enum):
     FILE_TRANSFER = "file_transfer"
 
 
-class LogPhase(str, enum.Enum):
-    CREATION = "creation"
-    TARGET_SELECTION = "target_selection"
-    AUTHENTICATION = "authentication"
-    COMMUNICATION = "communication"
-    ACTION_EXECUTION = "action_execution"
-    RESULT_COLLECTION = "result_collection"
-    COMPLETION = "completion"
-
-
-class LogLevel(str, enum.Enum):
-    INFO = "info"
-    WARNING = "warning"
-    ERROR = "error"
-    DEBUG = "debug"
-
-
-class LogCategory(str, enum.Enum):
-    AUTHENTICATION = "authentication"
-    COMMUNICATION = "communication"
-    COMMAND_EXECUTION = "command_execution"
-    FILE_TRANSFER = "file_transfer"
-    SYSTEM = "system"
-
-
 class Job(Base):
+    """Simplified Job model - just basic info with auto-increment ID"""
     __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    job_uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4, index=True)
-    job_serial = Column(String(20), unique=True, nullable=False, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     job_type = Column(
@@ -87,9 +59,9 @@ class Job(Base):
     scheduled_at = Column(DateTime(timezone=True), nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
-    priority = Column(Integer, default=5, nullable=False)  # Priority 1-10, default 5
-    timeout = Column(Integer, nullable=True)  # Timeout in seconds, null = no timeout
-    retry_count = Column(Integer, default=0, nullable=False)  # Number of retries, default 0
+    priority = Column(Integer, default=5, nullable=False)
+    timeout = Column(Integer, nullable=True)
+    retry_count = Column(Integer, default=0, nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -101,6 +73,7 @@ class Job(Base):
 
 
 class JobTarget(Base):
+    """Which targets this job should run on"""
     __tablename__ = "job_targets"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -114,6 +87,7 @@ class JobTarget(Base):
 
 
 class JobAction(Base):
+    """Actions to perform in this job"""
     __tablename__ = "job_actions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -133,13 +107,12 @@ class JobAction(Base):
 
 
 class JobExecution(Base):
+    """Each time a job runs, create one execution record"""
     __tablename__ = "job_executions"
 
     id = Column(Integer, primary_key=True, index=True)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
-    execution_uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4, index=True)
-    execution_serial = Column(String(50), unique=True, nullable=False, index=True)
-    execution_number = Column(Integer, nullable=False)
+    execution_number = Column(Integer, nullable=False)  # 1, 2, 3, 4... per job
     status = Column(
         Enum(ExecutionStatus, name='execution_status', values_callable=lambda obj: [e.value for e in obj]), 
         nullable=False, default=ExecutionStatus.SCHEDULED
@@ -147,50 +120,25 @@ class JobExecution(Base):
     scheduled_at = Column(DateTime(timezone=True), nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    total_targets = Column(Integer, nullable=False, default=0)
+    successful_targets = Column(Integer, nullable=False, default=0)
+    failed_targets = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     job = relationship("Job", back_populates="executions")
-    branches = relationship("JobExecutionBranch", back_populates="execution", cascade="all, delete-orphan")
-    logs = relationship("JobExecutionLog", back_populates="execution", cascade="all, delete-orphan")
+    results = relationship("JobExecutionResult", back_populates="execution", cascade="all, delete-orphan")
 
 
-class JobExecutionBranch(Base):
-    __tablename__ = "job_execution_branches"
+class JobExecutionResult(Base):
+    """One record per target per action per execution - FLAT and SIMPLE"""
+    __tablename__ = "job_execution_results"
 
     id = Column(Integer, primary_key=True, index=True)
-    job_execution_id = Column(Integer, ForeignKey("job_executions.id"), nullable=False)
+    execution_id = Column(Integer, ForeignKey("job_executions.id"), nullable=False)
     target_id = Column(Integer, ForeignKey("universal_targets.id"), nullable=False)
-    branch_uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4, index=True)
-    branch_serial = Column(String(100), unique=True, nullable=False, index=True)
-    branch_id = Column(String(10), nullable=False)  # 001, 002, 003, etc.
-    target_serial_ref = Column(String(50), nullable=True, index=True)  # Reference to target serial
-    status = Column(
-        Enum(ExecutionStatus, name='execution_status', values_callable=lambda obj: [e.value for e in obj]), 
-        nullable=False, default=ExecutionStatus.SCHEDULED
-    )
-    scheduled_at = Column(DateTime(timezone=True), nullable=True)
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-    result_output = Column(Text, nullable=True)
-    result_error = Column(Text, nullable=True)
-    exit_code = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    execution = relationship("JobExecution", back_populates="branches")
-    target = relationship("UniversalTarget")
-    logs = relationship("JobExecutionLog", back_populates="branch", cascade="all, delete-orphan")
-    action_results = relationship("JobActionResult", back_populates="branch", cascade="all, delete-orphan")
-
-
-class JobActionResult(Base):
-    __tablename__ = "job_action_results"
-
-    id = Column(Integer, primary_key=True, index=True)
-    branch_id = Column(Integer, ForeignKey("job_execution_branches.id"), nullable=False)
+    target_name = Column(String(255), nullable=False)  # Denormalized for easy searching
     action_id = Column(Integer, ForeignKey("job_actions.id"), nullable=False)
-    action_serial = Column(String(100), unique=True, nullable=False, index=True)  # J20250000001.0001.0001.0001
     action_order = Column(Integer, nullable=False)
     action_name = Column(String(255), nullable=False)
     action_type = Column(
@@ -203,32 +151,14 @@ class JobActionResult(Base):
     )
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
-    execution_time_ms = Column(Integer, nullable=True)  # Execution time in milliseconds
-    result_output = Column(Text, nullable=True)
-    result_error = Column(Text, nullable=True)
+    execution_time_ms = Column(Integer, nullable=True)
+    output_text = Column(Text, nullable=True)
+    error_text = Column(Text, nullable=True)
     exit_code = Column(Integer, nullable=True)
-    command_executed = Column(Text, nullable=True)  # The actual command that was executed
+    command_executed = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    branch = relationship("JobExecutionBranch", back_populates="action_results")
+    execution = relationship("JobExecution", back_populates="results")
+    target = relationship("UniversalTarget")
     action = relationship("JobAction")
-
-
-class JobExecutionLog(Base):
-    __tablename__ = "job_execution_logs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    job_execution_id = Column(Integer, ForeignKey("job_executions.id"), nullable=True)
-    branch_id = Column(Integer, ForeignKey("job_execution_branches.id"), nullable=True)
-    log_phase = Column(Enum(LogPhase, name='logphase', values_callable=lambda obj: [e.value for e in obj]), nullable=False)
-    log_level = Column(Enum(LogLevel, name='loglevel', values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=LogLevel.INFO)
-    log_category = Column(Enum(LogCategory, name='logcategory', values_callable=lambda obj: [e.value for e in obj]), nullable=False)
-    log_message = Column(Text, nullable=False)
-    log_details = Column(JSON, nullable=True)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    execution = relationship("JobExecution", back_populates="logs")
-    branch = relationship("JobExecutionBranch", back_populates="logs")

@@ -156,7 +156,7 @@ async def test_jobs_api_enhanced():
             if hasattr(route, 'methods'):
                 methods.extend(route.methods)
         
-        expected_methods = ['POST', 'GET']
+        expected_methods = ['POST', 'GET"]
         for method in expected_methods:
             if method in methods:
                 print(f"✅ HTTP method '{method}' available")
@@ -378,7 +378,7 @@ async def test_jobs_api_enhanced():
         print("✅ AuditService imported successfully")
         
         # Test that services have required methods
-        job_service_methods = ['create_job', 'get_jobs', 'get_job_by_id']
+        job_service_methods = ['create_job', 'get_jobs', 'get_job_by_id"]
         for method in job_service_methods:
             if hasattr(JobService, method):
                 print(f"✅ JobService has method: {method}")

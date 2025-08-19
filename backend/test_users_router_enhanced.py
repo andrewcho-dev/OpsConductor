@@ -151,7 +151,7 @@ async def test_users_router_enhanced():
             if hasattr(route, 'methods'):
                 methods.extend(route.methods)
         
-        expected_methods = ['POST', 'GET', 'PUT', 'DELETE']
+        expected_methods = ['POST', 'GET', 'PUT', 'DELETE"]
         for method in expected_methods:
             if method in methods:
                 print(f"✅ HTTP method '{method}' available")

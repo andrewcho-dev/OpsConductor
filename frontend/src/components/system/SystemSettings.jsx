@@ -40,7 +40,8 @@ const SystemSettings = () => {
   const [timezones, setTimezones] = useState({});
   const [currentTime, setCurrentTime] = useState(null);
   const [selectedTimezone, setSelectedTimezone] = useState('UTC');
-  const [sessionTimeout, setSessionTimeout] = useState(28800);
+  const [inactivityTimeout, setInactivityTimeout] = useState(60); // minutes
+  const [warningTime, setWarningTime] = useState(2); // minutes
   const [maxJobs, setMaxJobs] = useState(50);
   const [logRetention, setLogRetention] = useState(30);
   const [loading, setLoading] = useState(true);
@@ -73,7 +74,8 @@ const SystemSettings = () => {
     if (Object.keys(originalSettings).length > 0) {
       const currentSettings = {
         timezone: selectedTimezone,
-        sessionTimeout: sessionTimeout,
+        inactivityTimeout: inactivityTimeout,
+        warningTime: warningTime,
         maxJobs: maxJobs,
         logRetention: logRetention
       };
@@ -86,7 +88,7 @@ const SystemSettings = () => {
       });
       setHasUnsavedChanges(hasChanges);
     }
-  }, [selectedTimezone, sessionTimeout, maxJobs, logRetention, originalSettings]);
+  }, [selectedTimezone, inactivityTimeout, warningTime, maxJobs, logRetention, originalSettings]);
 
   const loadAllSystemData = async () => {
     setLoading(true);
@@ -117,26 +119,30 @@ const SystemSettings = () => {
       
       // Extract settings from response with fallbacks
       const newTimezone = response.data.timezone?.current || 'UTC';
-      const newSessionTimeout = response.data.session_timeout || 28800;
+      const newInactivityTimeout = response.data.inactivity_timeout_minutes || 60;
+      const newWarningTime = response.data.warning_time_minutes || 2;
       const newMaxJobs = response.data.max_concurrent_jobs || 50;
       const newLogRetention = response.data.log_retention_days || 30;
       
       console.log('Loading saved settings from API:', {
         timezone: newTimezone,
-        sessionTimeout: newSessionTimeout,
+        inactivityTimeout: newInactivityTimeout,
+        warningTime: newWarningTime,
         maxJobs: newMaxJobs,
         logRetention: newLogRetention
       });
       
       setSelectedTimezone(newTimezone);
-      setSessionTimeout(newSessionTimeout);
+      setInactivityTimeout(newInactivityTimeout);
+      setWarningTime(newWarningTime);
       setMaxJobs(newMaxJobs);
       setLogRetention(newLogRetention);
       
       // Store original settings for change detection
       const originalSettings = {
         timezone: newTimezone,
-        sessionTimeout: newSessionTimeout,
+        inactivityTimeout: newInactivityTimeout,
+        warningTime: newWarningTime,
         maxJobs: newMaxJobs,
         logRetention: newLogRetention
       };
@@ -149,14 +155,16 @@ const SystemSettings = () => {
       
       // Set default values if loading fails
       setSelectedTimezone('UTC');
-      setSessionTimeout(28800);
+      setInactivityTimeout(60);
+      setWarningTime(2);
       setMaxJobs(50);
       setLogRetention(30);
       
       // Also set original settings so change detection works
       const defaultSettings = {
         timezone: 'UTC',
-        sessionTimeout: 28800,
+        inactivityTimeout: 60,
+        warningTime: 2,
         maxJobs: 50,
         logRetention: 30
       };
@@ -318,9 +326,14 @@ const SystemSettings = () => {
           data: { timezone: selectedTimezone }
         },
         {
-          name: 'Session Timeout',
-          endpoint: '/v2/system/session-timeout',
-          data: { timeout_seconds: sessionTimeout }
+          name: 'Inactivity Timeout',
+          endpoint: '/v2/system/inactivity-timeout',
+          data: { timeout_minutes: inactivityTimeout }
+        },
+        {
+          name: 'Warning Time',
+          endpoint: '/v2/system/warning-time',
+          data: { warning_minutes: warningTime }
         },
         {
           name: 'Max Concurrent Jobs',
@@ -373,7 +386,8 @@ const SystemSettings = () => {
         // Update original settings to current values so change detection works correctly
         const newOriginalSettings = {
           timezone: selectedTimezone,
-          sessionTimeout: sessionTimeout,
+          inactivityTimeout: inactivityTimeout,
+          warningTime: warningTime,
           maxJobs: maxJobs,
           logRetention: logRetention
         };
@@ -597,20 +611,31 @@ const SystemSettings = () => {
               <TextField
                 fullWidth
                 size="small"
-                label="Session Timeout (seconds)"
+                label="Inactivity Timeout (5-480 min)"
                 type="number"
-                value={sessionTimeout}
-                onChange={(e) => setSessionTimeout(parseInt(e.target.value))}
-                inputProps={{ min: 60, max: 86400 }}
+                value={inactivityTimeout}
+                onChange={(e) => setInactivityTimeout(parseInt(e.target.value))}
+                inputProps={{ min: 5, max: 480 }}
+                sx={{ 
+                  mb: 2,
+                  '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+                  '& .MuiInputBase-input': { fontSize: '0.8rem' }
+                }}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                label="Warning Time (1-10 min)"
+                type="number"
+                value={warningTime}
+                onChange={(e) => setWarningTime(parseInt(e.target.value))}
+                inputProps={{ min: 1, max: 10 }}
                 sx={{ 
                   mb: 1,
                   '& .MuiInputLabel-root': { fontSize: '0.8rem' },
                   '& .MuiInputBase-input': { fontSize: '0.8rem' }
                 }}
               />
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                Range: 60 seconds to 24 hours
-              </Typography>
             </div>
 
             {/* Job Management */}
