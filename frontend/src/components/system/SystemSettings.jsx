@@ -623,7 +623,7 @@ const SystemSettings = () => {
                 }}
               />
               <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', mb: 2, display: 'block' }}>
-                Range: 5 minutes to 8 hours (session expires after inactivity)
+                Range: 5-480 minutes
               </Typography>
               <TextField
                 fullWidth
@@ -640,7 +640,7 @@ const SystemSettings = () => {
                 }}
               />
               <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                Range: 1-10 minutes (warning shown before timeout)
+                Range: 1-10 minutes
               </Typography>
             </div>
 
