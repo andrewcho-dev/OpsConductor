@@ -8,7 +8,7 @@ export const usersApi = apiSlice.injectEndpoints({
     // Get users with pagination and filtering
     getUsers: builder.query({
       query: ({ page = 1, pageSize = 25, role = '', status = '', search = '' } = {}) => ({
-        url: '/api/v1/users/',
+        url: '/users/',
         params: {
           skip: (page - 1) * pageSize,
           limit: pageSize,
@@ -23,7 +23,7 @@ export const usersApi = apiSlice.injectEndpoints({
 
     // Get user by ID
     getUserById: builder.query({
-      query: (id) => `/api/v1/users/${id}`,
+      query: (id) => `/users/${id}`,
       providesTags: (result, error, id) => [{ type: 'User', id }],
       transformResponse: (response) => response.data || response,
     }),
@@ -31,7 +31,7 @@ export const usersApi = apiSlice.injectEndpoints({
     // Create new user
     createUser: builder.mutation({
       query: (userData) => ({
-        url: '/api/v1/users/',
+        url: '/users/',
         method: 'POST',
         body: userData,
       }),
@@ -42,7 +42,7 @@ export const usersApi = apiSlice.injectEndpoints({
     // Update user
     updateUser: builder.mutation({
       query: ({ id, ...userData }) => ({
-        url: `/api/v1/users/${id}`,
+        url: `/users/${id}`,
         method: 'PUT',
         body: userData,
       }),
@@ -56,7 +56,7 @@ export const usersApi = apiSlice.injectEndpoints({
     // Change password
     changePassword: builder.mutation({
       query: ({ id, currentPassword, newPassword }) => ({
-        url: `/api/v1/users/${id}/change-password`,
+        url: `/users/${id}/change-password`,
         method: 'POST',
         body: {
           current_password: currentPassword,
@@ -69,7 +69,7 @@ export const usersApi = apiSlice.injectEndpoints({
     // Deactivate user
     deactivateUser: builder.mutation({
       query: (id) => ({
-        url: `/api/v1/users/${id}/deactivate`,
+        url: `/users/${id}/deactivate`,
         method: 'POST',
       }),
       invalidatesTags: (result, error, id) => [
@@ -82,7 +82,7 @@ export const usersApi = apiSlice.injectEndpoints({
     // Activate user
     activateUser: builder.mutation({
       query: (id) => ({
-        url: `/api/v1/users/${id}/activate`,
+        url: `/users/${id}/activate`,
         method: 'POST',
       }),
       invalidatesTags: (result, error, id) => [
@@ -95,7 +95,7 @@ export const usersApi = apiSlice.injectEndpoints({
     // Delete user (if implemented)
     deleteUser: builder.mutation({
       query: (id) => ({
-        url: `/api/v1/users/${id}`,
+        url: `/users/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['User'],

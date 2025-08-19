@@ -108,7 +108,7 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
         offset: '0'
       });
       
-      const response = await apiCall(`/api/v2/log-viewer/search?${params}`);
+      const response = await apiCall(`/logs/entries?${params}`);
       const actionResults = response.results || [];
       
       // Sort actions by branch and action order

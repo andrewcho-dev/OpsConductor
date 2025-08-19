@@ -15,7 +15,7 @@ export const targetsApi = apiSlice.injectEndpoints({
         status = '',
         tags = []
       } = {}) => ({
-        url: '/api/v1/targets/',
+        url: '/targets/',
         params: {
           skip: (page - 1) * pageSize,
           limit: pageSize,
@@ -31,7 +31,7 @@ export const targetsApi = apiSlice.injectEndpoints({
 
     // Get target by ID
     getTargetById: builder.query({
-      query: (id) => `/api/v1/targets/${id}`,
+      query: (id) => `/targets/${id}`,
       providesTags: (result, error, id) => [{ type: 'Target', id }],
       transformResponse: (response) => response.data || response,
     }),
@@ -39,7 +39,7 @@ export const targetsApi = apiSlice.injectEndpoints({
     // Create new target
     createTarget: builder.mutation({
       query: (targetData) => ({
-        url: '/api/v1/targets/',
+        url: '/targets/',
         method: 'POST',
         body: targetData,
       }),
@@ -50,7 +50,7 @@ export const targetsApi = apiSlice.injectEndpoints({
     // Update target
     updateTarget: builder.mutation({
       query: ({ id, ...targetData }) => ({
-        url: `/api/v1/targets/${id}`,
+        url: `/targets/${id}`,
         method: 'PUT',
         body: targetData,
       }),
@@ -64,7 +64,7 @@ export const targetsApi = apiSlice.injectEndpoints({
     // Delete target
     deleteTarget: builder.mutation({
       query: (id) => ({
-        url: `/api/v1/targets/${id}`,
+        url: `/targets/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Target'],
@@ -73,7 +73,7 @@ export const targetsApi = apiSlice.injectEndpoints({
     // Test target connection
     testTargetConnection: builder.mutation({
       query: (id) => ({
-        url: `/api/v1/targets/${id}/test`,
+        url: `/targets/${id}/test`,
         method: 'POST',
       }),
       invalidatesTags: (result, error, id) => [{ type: 'Target', id }],
@@ -82,7 +82,7 @@ export const targetsApi = apiSlice.injectEndpoints({
     // Bulk test connections
     bulkTestConnections: builder.mutation({
       query: (targetIds) => ({
-        url: '/api/v1/targets/bulk/test',
+        url: '/targets/bulk/test',
         method: 'POST',
         body: targetIds,
       }),
@@ -92,7 +92,7 @@ export const targetsApi = apiSlice.injectEndpoints({
     // Bulk update targets
     bulkUpdateTargets: builder.mutation({
       query: ({ targetIds, updateData }) => ({
-        url: '/api/v1/targets/bulk/update',
+        url: '/targets/bulk/update',
         method: 'POST',
         body: {
           target_ids: targetIds,
@@ -104,7 +104,7 @@ export const targetsApi = apiSlice.injectEndpoints({
 
     // Get target statistics
     getTargetStatistics: builder.query({
-      query: () => '/api/v1/targets/statistics/overview',
+      query: () => '/targets/statistics/overview',
       providesTags: ['TargetStats'],
       transformResponse: (response) => response.data || response,
     }),
@@ -112,7 +112,7 @@ export const targetsApi = apiSlice.injectEndpoints({
     // Get targets needing health check
     getTargetsNeedingHealthCheck: builder.query({
       query: (minutesSinceLastCheck = 30) => ({
-        url: '/api/v1/targets/health/check',
+        url: '/targets/health/check',
         params: { minutes_since_last_check: minutesSinceLastCheck },
       }),
       providesTags: ['TargetHealth'],
@@ -122,7 +122,7 @@ export const targetsApi = apiSlice.injectEndpoints({
     // Perform health checks
     performHealthChecks: builder.mutation({
       query: () => ({
-        url: '/api/v1/targets/health/perform',
+        url: '/targets/health/perform',
         method: 'POST',
       }),
       invalidatesTags: ['Target', 'TargetHealth'],
@@ -130,7 +130,7 @@ export const targetsApi = apiSlice.injectEndpoints({
 
     // Get target types
     getTargetTypes: builder.query({
-      query: () => '/api/v1/targets/types',
+      query: () => '/targets/types',
       transformResponse: (response) => response.target_types || [],
     }),
   }),

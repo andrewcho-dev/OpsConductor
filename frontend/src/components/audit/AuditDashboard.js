@@ -63,7 +63,8 @@ function AuditDashboard() {
       setError(null);
       
       // Fetch events with pagination
-      const eventsResponse = await fetch(`/api/v1/audit/events?page=${currentPage}&limit=${pageSize}&sort=${sortField}&order=${sortDirection}`, {
+      const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const eventsResponse = await fetch(`${baseUrl}/audit/events?page=${currentPage}&limit=${pageSize}&sort=${sortField}&order=${sortDirection}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json'
@@ -98,7 +99,7 @@ function AuditDashboard() {
       }
 
       // Fetch event types for filtering
-      const typesResponse = await fetch('/api/v1/audit/event-types', {
+      const typesResponse = await fetch(`${baseUrl}/audit/event-types`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json'
@@ -142,7 +143,8 @@ function AuditDashboard() {
   // Handle export
   const handleExport = async (format) => {
     try {
-      const response = await fetch(`/api/v1/audit/export?format=${format}`, {
+      const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${baseUrl}/audit/export?format=${format}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json'

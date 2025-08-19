@@ -19,6 +19,7 @@ import time
 import json
 import asyncio
 import ipaddress
+import os
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from functools import wraps
@@ -243,7 +244,7 @@ class DiscoveryManagementService:
                 "started_at": datetime.utcnow().isoformat(),
                 "initiated_by": current_username,
                 "discovery_options": discovery_options,
-                "progress_url": f"/api/v2/discovery/jobs/{discovery_job['id']}/progress"
+                "progress_url": f"{os.getenv('API_BASE_URL', '/api/v3')}/discovery/jobs/{discovery_job['id']}/progress"
             }
             
             logger.info(

@@ -24,7 +24,7 @@ const DirectScheduleTest = () => {
   
   // Create a direct API client
   const api = axios.create({
-    baseURL: '/api',
+    baseURL: process.env.REACT_APP_API_URL || '/api/v3',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`

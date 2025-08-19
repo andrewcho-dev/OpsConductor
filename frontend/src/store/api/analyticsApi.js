@@ -7,7 +7,7 @@ export const analyticsApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     // Get dashboard metrics
     getDashboardMetrics: builder.query({
-      query: () => '/api/v1/analytics/dashboard',
+      query: () => '/analytics/dashboard',
       providesTags: ['Analytics'],
       transformResponse: (response) => response.data || response,
     }),
@@ -15,7 +15,7 @@ export const analyticsApi = apiSlice.injectEndpoints({
     // Get job performance analysis
     getJobPerformanceAnalysis: builder.query({
       query: (jobId = null) => ({
-        url: '/api/v1/analytics/jobs/performance',
+        url: '/analytics/jobs/performance',
         params: jobId ? { job_id: jobId } : {},
       }),
       providesTags: ['JobPerformance'],
@@ -24,7 +24,7 @@ export const analyticsApi = apiSlice.injectEndpoints({
 
     // Get system health report
     getSystemHealthReport: builder.query({
-      query: () => '/api/v1/analytics/system/health',
+      query: () => '/analytics/system/health',
       providesTags: ['SystemHealth'],
       transformResponse: (response) => response.data || response,
     }),
@@ -32,7 +32,7 @@ export const analyticsApi = apiSlice.injectEndpoints({
     // Get execution trends
     getExecutionTrends: builder.query({
       query: (days = 30) => ({
-        url: '/api/v1/analytics/trends/executions',
+        url: '/analytics/trends/executions',
         params: { days },
       }),
       providesTags: ['ExecutionTrends'],
@@ -41,7 +41,7 @@ export const analyticsApi = apiSlice.injectEndpoints({
 
     // Get summary report
     getSummaryReport: builder.query({
-      query: () => '/api/v1/analytics/reports/summary',
+      query: () => '/analytics/reports/summary',
       providesTags: ['SummaryReport'],
       transformResponse: (response) => response.data || response,
     }),
