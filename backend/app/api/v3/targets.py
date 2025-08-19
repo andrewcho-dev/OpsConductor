@@ -50,7 +50,7 @@ async def list_targets(
     limit: int = Query(100, ge=1, le=1000),
     search: str = Query(None),
     target_type: str = Query(None),
-    status: str = Query(None),
+    target_status: str = Query(None),
     tags: str = Query(None),
     current_user: Dict[str, Any] = Depends(get_current_user),
     target_service: UniversalTargetService = Depends(get_target_service)
@@ -60,14 +60,21 @@ async def list_targets(
         # Parse tags if provided
         tag_list = tags.split(',') if tags else []
         
-        summaries = target_service.get_targets_summary(
-            skip=skip,
-            limit=limit,
-            search=search,
-            target_type=target_type,
-            status=status,
-            tags=tag_list
-        )
+        # Get all targets and apply filtering manually
+        # TODO: Implement proper filtering in the service layer
+        summaries = target_service.get_targets_summary()
+        
+        # Apply basic filtering (this should be moved to service layer)
+        if search:
+            summaries = [s for s in summaries if search.lower() in s.get('name', '').lower() or search.lower() in s.get('hostname', '').lower()]
+        if target_type:
+            summaries = [s for s in summaries if s.get('target_type') == target_type]
+        if target_status:
+            summaries = [s for s in summaries if s.get('status') == target_status]
+        
+        # Apply pagination
+        total = len(summaries)
+        summaries = summaries[skip:skip + limit]
         return summaries
     except Exception as e:
         raise HTTPException(
