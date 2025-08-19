@@ -174,10 +174,10 @@ const LoginScreen = () => {
           }}
         >
           <Typography variant="body2" sx={{ mb: 1 }}>
-            © 2025 Enabled Enterprises LLC. All rights reserved.
-          </Typography>
-          <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
             OpsConductor Enterprise Automation Platform
+          </Typography>
+          <Typography variant="body2">
+            © 2025 Enabled Enterprises LLC. All rights reserved.
           </Typography>
         </Box>
       </Box>
