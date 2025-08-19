@@ -611,24 +611,21 @@ const SystemSettings = () => {
               <TextField
                 fullWidth
                 size="small"
-                label="Inactivity Timeout (minutes)"
+                label="Inactivity Timeout (5-480 min)"
                 type="number"
                 value={inactivityTimeout}
                 onChange={(e) => setInactivityTimeout(parseInt(e.target.value))}
                 inputProps={{ min: 5, max: 480 }}
                 sx={{ 
-                  mb: 1,
+                  mb: 2,
                   '& .MuiInputLabel-root': { fontSize: '0.8rem' },
                   '& .MuiInputBase-input': { fontSize: '0.8rem' }
                 }}
               />
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', mb: 2, display: 'block' }}>
-                Range: 5-480 minutes
-              </Typography>
               <TextField
                 fullWidth
                 size="small"
-                label="Warning Time (minutes)"
+                label="Warning Time (1-10 min)"
                 type="number"
                 value={warningTime}
                 onChange={(e) => setWarningTime(parseInt(e.target.value))}
@@ -639,9 +636,6 @@ const SystemSettings = () => {
                   '& .MuiInputBase-input': { fontSize: '0.8rem' }
                 }}
               />
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                Range: 1-10 minutes
-              </Typography>
             </div>
 
             {/* Job Management */}
