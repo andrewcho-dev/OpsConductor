@@ -211,7 +211,8 @@ class SystemConfigurationUpdateRequest(BaseModel):
                 },
                 "security": {
                     "jwt_expiry": 7200,
-                    "session_timeout": 1800
+                    "inactivity_timeout_minutes": 60,
+                    "warning_time_minutes": 2
                 },
                 "logging": {
                     "level": "INFO",
@@ -985,7 +986,8 @@ async def get_system_health(
 class SystemInfoCompatResponse(BaseModel):
     """Response model for system info (frontend compatibility)"""
     timezone: Dict[str, Any] = Field(..., description="Timezone information")
-    session_timeout: int = Field(..., description="Session timeout in seconds")
+    inactivity_timeout_minutes: int = Field(..., description="Inactivity timeout in minutes")
+    warning_time_minutes: int = Field(..., description="Warning time in minutes")
     max_concurrent_jobs: int = Field(..., description="Maximum concurrent jobs")
     log_retention_days: int = Field(..., description="Log retention in days")
     uptime: str = Field(..., description="System uptime")
@@ -999,7 +1001,8 @@ class SystemInfoCompatResponse(BaseModel):
                     "current_utc_offset": "-05:00",
                     "is_dst_active": True
                 },
-                "session_timeout": 28800,
+                "inactivity_timeout_minutes": 60,
+                "warning_time_minutes": 2,
                 "max_concurrent_jobs": 50,
                 "log_retention_days": 30,
                 "uptime": "5d 12h 30m"
@@ -1051,18 +1054,6 @@ class TimezoneUpdateRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "timezone": "America/New_York"
-            }
-        }
-
-
-class SessionTimeoutUpdateRequest(BaseModel):
-    """Request model for session timeout updates"""
-    timeout_seconds: int = Field(..., description="Session timeout in seconds", ge=60, le=86400)
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "timeout_seconds": 28800
             }
         }
 
@@ -1438,92 +1429,6 @@ async def update_timezone(
             }
         )
 
-
-@router.put(
-    "/session-timeout",
-    response_model=SettingUpdateResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Update Session Timeout",
-    description="""
-    Update the user session timeout setting.
-    
-    **Features:**
-    - Range validation (60s - 86400s)
-    - Immediate effect
-    - Audit logging
-    """,
-    responses={
-        200: {"description": "Session timeout updated successfully", "model": SettingUpdateResponse}
-    }
-)
-async def update_session_timeout(
-    request_data: SessionTimeoutUpdateRequest,
-    current_user = Depends(require_admin_permissions),
-    db: Session = Depends(get_db)
-) -> SettingUpdateResponse:
-    """Update session timeout"""
-    
-    request_logger = RequestLogger(logger, "update_session_timeout")
-    request_logger.log_request_start("PUT", "/api/v2/system/session-timeout", current_user.username)
-    
-    try:
-        # Use the existing system service
-        from app.services.system_service import SystemService
-        system_service = SystemService(db)
-        
-        # Update session timeout
-        success = system_service.set_session_timeout(request_data.timeout_seconds)
-        
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "error": "invalid_timeout",
-                    "message": f"Invalid session timeout: {request_data.timeout_seconds} (must be 60-86400 seconds)",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            )
-        
-        response = SettingUpdateResponse(
-            success=True,
-            message=f"Session timeout updated to {request_data.timeout_seconds} seconds",
-            updated_at=datetime.utcnow()
-        )
-        
-        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
-        
-        logger.info(
-            "Session timeout update successful",
-            extra={
-                "new_timeout": request_data.timeout_seconds,
-                "updated_by": current_user.username
-            }
-        )
-        
-        return response
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
-        
-        logger.error(
-            "Session timeout update error",
-            extra={
-                "error": str(e),
-                "timeout": request_data.timeout_seconds,
-                "updated_by": current_user.username
-            }
-        )
-        
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "internal_server_error",
-                "message": "An internal error occurred while updating session timeout",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
 
 
 @router.put(
