@@ -16,7 +16,7 @@ import {
   VisibilityOff,
 } from '@mui/icons-material';
 
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 const LoginScreen = () => {
   const [username, setUsername] = useState('');
@@ -24,7 +24,7 @@ const LoginScreen = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { login } = useAuth();
+  const { login } = useSessionAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();

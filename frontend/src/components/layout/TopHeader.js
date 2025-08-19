@@ -17,12 +17,12 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import Logo from '../common/Logo';
 
 const TopHeader = () => {
-  const { user, logout } = useAuth();
+  const { user, logout } = useSessionAuth();
   const { getTheme } = useTheme();
   const navigate = useNavigate();
   const theme = getTheme();

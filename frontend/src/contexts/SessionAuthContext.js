@@ -183,7 +183,9 @@ export const SessionAuthProvider = ({ children }) => {
     loading,
     login,
     logout,
-    extendSession
+    extendSession,
+    // Backward compatibility - provide token for existing components
+    token: localStorage.getItem('access_token')
   };
 
   return (

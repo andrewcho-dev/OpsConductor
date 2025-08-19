@@ -1,10 +1,10 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { CircularProgress, Box } from '@mui/material';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 const ProtectedRoute = ({ children, requireAdmin = false }) => {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, user, loading } = useSessionAuth();
 
   if (loading) {
     return (

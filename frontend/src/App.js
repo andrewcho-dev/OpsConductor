@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store/store';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SessionAuthProvider, useSessionAuth } from './contexts/SessionAuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AlertProvider } from './components/layout/BottomStatusBar';
 import AppLayout from './components/layout/AppLayout';
@@ -21,7 +21,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import './styles/dashboard.css';
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useSessionAuth();
 
   return (
     <Routes>
@@ -132,11 +132,11 @@ function App() {
   return (
     <Provider store={store}>
       <ThemeProvider>
-        <AuthProvider>
+        <SessionAuthProvider>
           <AlertProvider>
             <AppContent />
           </AlertProvider>
-        </AuthProvider>
+        </SessionAuthProvider>
       </ThemeProvider>
     </Provider>
   );
