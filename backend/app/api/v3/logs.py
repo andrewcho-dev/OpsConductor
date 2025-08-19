@@ -14,7 +14,8 @@ from app.database.database import get_db
 from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger
 
-router = APIRouter(prefix=f"{os.getenv(\'API_BASE_URL\', \'/api/v3\')}/logs", tags=["Logs v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v3")
+router = APIRouter(prefix=f"{api_base_url}/logs", tags=["Logs v3"])
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
@@ -427,7 +428,7 @@ async def export_logs(
             "filters": search_request.dict(),
             "estimated_entries": 1500,
             "estimated_size": "2.5 MB",
-            "download_url": ff"{os.getenv(\'API_BASE_URL\', \'/api/v3\')}/logs/download/export_{format}_{datetime.now().timestamp()}.{format}",
+            "download_url": f"{os.getenv('API_BASE_URL', '/api/v3')}/logs/download/export_{format}_{datetime.now().timestamp()}.{format}",
             "expires_at": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
             "created_at": datetime.now(timezone.utc).isoformat()
         }

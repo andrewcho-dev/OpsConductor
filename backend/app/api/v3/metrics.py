@@ -14,7 +14,8 @@ from app.database.database import get_db
 from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger
 
-router = APIRouter(prefix=f"{os.getenv(\'API_BASE_URL\', \'/api/v3\')}/metrics", tags=["Metrics v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v3")
+router = APIRouter(prefix=f"{api_base_url}/metrics", tags=["Metrics v3"])
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
@@ -343,7 +344,7 @@ async def export_metrics(
             "metric_type": metric_type,
             "format": format,
             "days": days,
-            "export_url": ff"{os.getenv(\'API_BASE_URL\', \'/api/v3\')}/metrics/download/{metric_type}_{format}_{days}days.{format}",
+            "export_url": f"{os.getenv('API_BASE_URL', '/api/v3')}/metrics/download/{metric_type}_{format}_{days}days.{format}",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "estimated_size": "2.5 MB",
             "record_count": 10080  # Mock count

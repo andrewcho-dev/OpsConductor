@@ -20,7 +20,8 @@ from app.core.auth_dependencies import get_current_user, get_current_user_option
 from app.core.logging import get_structured_logger
 from app.core.config import settings
 
-router = APIRouter(prefix=f"{os.getenv(\'API_BASE_URL\', \'/api/v3\')}/system", tags=["System v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v3")
+router = APIRouter(prefix=f"{api_base_url}/system", tags=["System v3"])
 
 # Configure structured logger
 logger = get_structured_logger(__name__)

@@ -3,7 +3,7 @@ Data Export API v3 - Consolidated from v1/data_export.py
 All data export and import endpoints in v3 structure
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form, BackgroundTasks, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
@@ -17,7 +17,8 @@ from app.database.database import get_db
 from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger
 
-router = APIRouter(prefix=f"{os.getenv(\'API_BASE_URL\', \'/api/v3\')}/data-export", tags=["Data Export v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v3")
+router = APIRouter(prefix=f"{api_base_url}/data-export", tags=["Data Export v3"])
 
 # Configure structured logger
 logger = get_structured_logger(__name__)

@@ -31,7 +31,8 @@ from app.schemas.target_schemas import (
 )
 from app.models.universal_target_models import UniversalTarget
 
-router = APIRouter(prefix=f"{os.getenv(\'API_BASE_URL\', \'/api/v3\')}/targets", tags=["Targets v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v3")
+router = APIRouter(prefix=f"{api_base_url}/targets", tags=["Targets v3"])
 
 logger = logging.getLogger(__name__)
 

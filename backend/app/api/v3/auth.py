@@ -23,7 +23,8 @@ from app.core.session_security import (
 )
 from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 
-router = APIRouter(prefix=f"{os.getenv(\'API_BASE_URL\', \'/api/v3\')}/auth", tags=["Auth v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v3")
+router = APIRouter(prefix=f"{api_base_url}/auth", tags=["Auth v3"])
 security = HTTPBearer()
 
 

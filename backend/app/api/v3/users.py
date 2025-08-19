@@ -17,7 +17,8 @@ from app.services.user_service import UserService
 from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 from app.core.auth_dependencies import get_current_user, require_admin_role
 
-router = APIRouter(prefix=f"{os.getenv(\'API_BASE_URL\', \'/api/v3\')}/users", tags=["Users v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v3")
+router = APIRouter(prefix=f"{api_base_url}/users", tags=["Users v3"])
 
 
 @router.post("/", response_model=UserResponse)
