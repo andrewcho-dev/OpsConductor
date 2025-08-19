@@ -120,7 +120,15 @@ async def login_with_session(
         )
     
     # Create session
-    session_data = create_user_session(user.id, client_ip, user_agent)
+    user_data = {
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "is_active": user.is_active,
+        "client_ip": client_ip,
+        "user_agent": user_agent
+    }
+    session_data = await create_user_session(user.id, user_data)
     
     # Log successful login
     await audit_service.log_event(
@@ -163,7 +171,7 @@ async def logout(
     
     if session_id:
         # Destroy session
-        destroy_user_session(session_id)
+        await destroy_user_session(session_id)
         
         # Log logout
         await audit_service.log_event(
@@ -199,7 +207,7 @@ async def refresh_token(
         user_agent = request.headers.get("user-agent", "unknown")
         
         # Verify the refresh token is actually a session token
-        session_data = verify_session_token(refresh_request.refresh_token)
+        session_data = await verify_session_token(refresh_request.refresh_token)
         if not session_data:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -207,16 +215,17 @@ async def refresh_token(
             )
         
         # Extend the session
-        extended_session = extend_user_session(session_data["session_id"], client_ip, user_agent)
-        if not extended_session:
+        session_extended = await extend_user_session(session_data["session_id"])
+        if not session_extended:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Failed to refresh session"
             )
         
+        # Return the same token since sessions don't need token refresh
         return SessionToken(
-            access_token=extended_session["access_token"],
-            session_id=extended_session["session_id"],
+            access_token=refresh_request.refresh_token,
+            session_id=session_data["session_id"],
             token_type="bearer"
         )
         
@@ -239,7 +248,7 @@ async def get_session_status_endpoint(
             detail="No active session"
         )
     
-    status_info = get_session_status(session_id)
+    status_info = await get_session_status(session_id)
     if not status_info:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -266,7 +275,7 @@ async def extend_session(
             detail="Cannot extend another user's session"
         )
     
-    extended_session = extend_user_session(extend_request.session_id, client_ip, user_agent)
+    extended_session = await extend_user_session(extend_request.session_id)
     if not extended_session:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -293,7 +302,7 @@ async def log_session_activity(
     user_agent = request.headers.get("user-agent", "unknown")
     
     # Extend the session based on activity
-    extended_session = extend_user_session(session_id, client_ip, user_agent)
+    extended_session = await extend_user_session(session_id)
     if not extended_session:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
