@@ -1067,6 +1067,30 @@ class SessionTimeoutUpdateRequest(BaseModel):
         }
 
 
+class InactivityTimeoutUpdateRequest(BaseModel):
+    """Request model for inactivity timeout updates"""
+    timeout_minutes: int = Field(..., description="Inactivity timeout in minutes", ge=5, le=480)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "timeout_minutes": 60
+            }
+        }
+
+
+class WarningTimeUpdateRequest(BaseModel):
+    """Request model for warning time updates"""
+    warning_minutes: int = Field(..., description="Warning time in minutes before timeout", ge=1, le=10)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "warning_minutes": 2
+            }
+        }
+
+
 class MaxJobsUpdateRequest(BaseModel):
     """Request model for max concurrent jobs updates"""
     max_jobs: int = Field(..., description="Maximum concurrent jobs", ge=1, le=1000)
@@ -1497,6 +1521,182 @@ async def update_session_timeout(
             detail={
                 "error": "internal_server_error",
                 "message": "An internal error occurred while updating session timeout",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.put(
+    "/inactivity-timeout",
+    response_model=SettingUpdateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Inactivity Timeout",
+    description="""
+    Update the user inactivity timeout setting for activity-based sessions.
+    
+    **Features:**
+    - Range validation (5-480 minutes)
+    - Controls when sessions expire due to inactivity
+    - Immediate effect
+    - Audit logging
+    """,
+    responses={
+        200: {"description": "Inactivity timeout updated successfully", "model": SettingUpdateResponse}
+    }
+)
+async def update_inactivity_timeout(
+    request_data: InactivityTimeoutUpdateRequest,
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> SettingUpdateResponse:
+    """Update inactivity timeout for activity-based sessions"""
+    
+    request_logger = RequestLogger(logger, "update_inactivity_timeout")
+    request_logger.log_request_start("PUT", "/api/v2/system/inactivity-timeout", current_user.username)
+    
+    try:
+        # Store in system configuration
+        from app.services.system_service import SystemService
+        system_service = SystemService(db)
+        
+        # Store the setting (we'll add this method to SystemService)
+        success = system_service.set_inactivity_timeout(request_data.timeout_minutes)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "invalid_timeout",
+                    "message": f"Invalid inactivity timeout: {request_data.timeout_minutes} (must be 5-480 minutes)",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+        
+        response = SettingUpdateResponse(
+            success=True,
+            message=f"Inactivity timeout updated to {request_data.timeout_minutes} minutes",
+            updated_at=datetime.utcnow()
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Inactivity timeout update successful",
+            extra={
+                "new_timeout_minutes": request_data.timeout_minutes,
+                "updated_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Inactivity timeout update error",
+            extra={
+                "error": str(e),
+                "timeout_minutes": request_data.timeout_minutes,
+                "updated_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while updating inactivity timeout",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@router.put(
+    "/warning-time",
+    response_model=SettingUpdateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Warning Time",
+    description="""
+    Update the warning time before session timeout.
+    
+    **Features:**
+    - Range validation (1-10 minutes)
+    - Controls when to show warning before timeout
+    - Immediate effect
+    - Audit logging
+    """,
+    responses={
+        200: {"description": "Warning time updated successfully", "model": SettingUpdateResponse}
+    }
+)
+async def update_warning_time(
+    request_data: WarningTimeUpdateRequest,
+    current_user = Depends(require_admin_permissions),
+    db: Session = Depends(get_db)
+) -> SettingUpdateResponse:
+    """Update warning time before session timeout"""
+    
+    request_logger = RequestLogger(logger, "update_warning_time")
+    request_logger.log_request_start("PUT", "/api/v2/system/warning-time", current_user.username)
+    
+    try:
+        # Store in system configuration
+        from app.services.system_service import SystemService
+        system_service = SystemService(db)
+        
+        # Store the setting (we'll add this method to SystemService)
+        success = system_service.set_warning_time(request_data.warning_minutes)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "invalid_warning_time",
+                    "message": f"Invalid warning time: {request_data.warning_minutes} (must be 1-10 minutes)",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+        
+        response = SettingUpdateResponse(
+            success=True,
+            message=f"Warning time updated to {request_data.warning_minutes} minutes",
+            updated_at=datetime.utcnow()
+        )
+        
+        request_logger.log_request_end(status.HTTP_200_OK, len(str(response)))
+        
+        logger.info(
+            "Warning time update successful",
+            extra={
+                "new_warning_minutes": request_data.warning_minutes,
+                "updated_by": current_user.username
+            }
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        request_logger.log_request_end(status.HTTP_500_INTERNAL_SERVER_ERROR, 0)
+        
+        logger.error(
+            "Warning time update error",
+            extra={
+                "error": str(e),
+                "warning_minutes": request_data.warning_minutes,
+                "updated_by": current_user.username
+            }
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_server_error",
+                "message": "An internal error occurred while updating warning time",
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
