@@ -135,7 +135,9 @@ const CeleryMonitorPage = () => {
 
       if (workerResponse.ok) {
         const workerData = await workerResponse.json();
-        const workers = workerData.workers || [];
+        // Convert workers object to array
+        const workersObj = workerData.workers || {};
+        const workers = Object.values(workersObj);
         setWorkerStats({
           workers: workers,
           total_workers: workers.length,
