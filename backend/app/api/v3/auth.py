@@ -167,7 +167,7 @@ async def logout(
     user_agent = request.headers.get("user-agent", "unknown")
     
     # Get session ID from current user context
-    session_id = current_user.get("session_id")
+    session_id = current_user.get("session_info", {}).get("session_id")
     
     if session_id:
         # Destroy session
@@ -241,7 +241,7 @@ async def get_session_status_endpoint(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get current session status."""
-    session_id = current_user.get("session_id")
+    session_id = current_user.get("session_info", {}).get("session_id")
     if not session_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -291,7 +291,7 @@ async def log_session_activity(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Log user activity to extend session."""
-    session_id = current_user.get("session_id")
+    session_id = current_user.get("session_info", {}).get("session_id")
     if not session_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
