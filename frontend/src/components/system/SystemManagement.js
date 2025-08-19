@@ -188,7 +188,7 @@ const SystemManagement = () => {
     const actionKey = `${action}_${target || 'system'}`;
     setActionLoading(prev => ({ ...prev, [actionKey]: true }));
     try {
-      await axios.post('/api/system-management/action', {
+      await axios.post('/api/v3/system-management/action', {
         action,
         target,
       });
@@ -207,7 +207,7 @@ const SystemManagement = () => {
 
   const handleToggleAutoHeal = async (enabled) => {
     try {
-      await axios.post('/api/system-management/auto-heal/toggle', null, {
+      await axios.post('/api/v3/system-management/auto-heal/toggle', null, {
         params: { enabled }
       });
       setAutoHealEnabled(enabled);
