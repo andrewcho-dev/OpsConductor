@@ -64,14 +64,19 @@ async def login_with_session(
         # Log failed login attempt
         await audit_service.log_event(
             event_type=AuditEventType.LOGIN_FAILED,
-            severity=AuditSeverity.HIGH,
             user_id=None,
+            resource_type="authentication",
+            resource_id=user_credentials.username,
+            action="login_attempt",
             details={
                 "username": user_credentials.username,
                 "client_ip": client_ip,
                 "user_agent": user_agent,
                 "reason": "invalid_credentials"
-            }
+            },
+            severity=AuditSeverity.HIGH,
+            ip_address=client_ip,
+            user_agent=user_agent
         )
         
         raise HTTPException(
@@ -84,14 +89,19 @@ async def login_with_session(
     if not user.is_active:
         await audit_service.log_event(
             event_type=AuditEventType.LOGIN_FAILED,
-            severity=AuditSeverity.HIGH,
             user_id=user.id,
+            resource_type="authentication",
+            resource_id=user.username,
+            action="login_attempt",
             details={
                 "username": user.username,
                 "client_ip": client_ip,
                 "user_agent": user_agent,
                 "reason": "account_disabled"
-            }
+            },
+            severity=AuditSeverity.HIGH,
+            ip_address=client_ip,
+            user_agent=user_agent
         )
         
         raise HTTPException(
@@ -115,17 +125,40 @@ async def login_with_session(
     # Log successful login
     await audit_service.log_event(
         event_type=AuditEventType.LOGIN_SUCCESS,
-        severity=AuditSeverity.INFO,
         user_id=user.id,
+        resource_type="authentication",
+        resource_id=user.username,
+        action="login_success",
         details={
             "username": user.username,
             "client_ip": client_ip,
             "user_agent": user_agent,
             "session_id": session_info["session_id"]
-        }
+        },
+        severity=AuditSeverity.INFO,
+        ip_address=client_ip,
+        user_agent=user_agent
     )
     
     return SessionToken(**session_info)
+
+
+# Dependency to get current user from session token
+async def get_current_user_session(
+    credentials: HTTPBearer = Depends(security)
+) -> Dict[str, Any]:
+    """Get current user from session token."""
+    token = credentials.credentials
+    user_info = await verify_session_token(token)
+    
+    if not user_info:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    return user_info
 
 
 @router.post("/logout")
@@ -147,12 +180,16 @@ async def logout_session(
     # Log logout
     await audit_service.log_event(
         event_type=AuditEventType.LOGOUT,
-        severity=AuditSeverity.INFO,
         user_id=user_id,
+        resource_type="authentication",
+        resource_id=str(user_id),
+        action="logout",
         details={
             "client_ip": client_ip,
             "session_id": session_id
-        }
+        },
+        severity=AuditSeverity.INFO,
+        ip_address=client_ip
     )
     
     return {"message": "Successfully logged out"}
@@ -213,20 +250,3 @@ async def get_current_user_info(
         }
     }
 
-
-# Dependency to get current user from session
-async def get_current_user_session(
-    credentials: HTTPBearer = Depends(security)
-) -> Dict[str, Any]:
-    """Get current user from session token."""
-    token = credentials.credentials
-    user_info = await verify_session_token(token)
-    
-    if not user_info:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    return user_info

@@ -17,6 +17,9 @@ from app.models.user_models import User
 class AuditEventType(Enum):
     """Types of audit events."""
     USER_LOGIN = "user_login"
+    LOGIN_SUCCESS = "login_success"
+    LOGIN_FAILED = "login_failed"
+    LOGOUT = "logout"
     USER_LOGOUT = "user_logout"
     USER_CREATED = "user_created"
     USER_UPDATED = "user_updated"
@@ -40,6 +43,7 @@ class AuditEventType(Enum):
 
 class AuditSeverity(Enum):
     """Severity levels for audit events."""
+    INFO = "info"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
