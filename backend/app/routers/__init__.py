@@ -1,2 +1,2 @@
 # Routers module
-from . import auth, users, universal_targets
+from . import users, universal_targets

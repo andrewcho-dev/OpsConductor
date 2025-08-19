@@ -17,11 +17,11 @@ from typing import List
 from app.shared.middleware.error_handler import ErrorHandlingMiddleware, RequestLoggingMiddleware
 
 from app.database.database import engine, Base
-from app.routers import users, auth, universal_targets, audit, auth_session
+from app.routers import users, universal_targets, audit, auth_session
 # Legacy routers removed - consolidated into V2 APIs
 # Legacy system_health and system_management removed - consolidated into V2 APIs
 from app.core.config import settings
-from app.core.security import verify_token
+from app.core.session_security import verify_session_token
 
 # Import models to ensure they are registered with SQLAlchemy
 from app.models import notification_models, user_models, job_models, analytics_models, job_schedule_models, discovery_models
@@ -101,7 +101,7 @@ app.add_middleware(
 # Security
 security = HTTPBearer()
 
-# Dependency to verify JWT token
+# Dependency to verify session token
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not credentials:
         raise HTTPException(
@@ -111,18 +111,17 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         )
     
     token = credentials.credentials
-    user = verify_token(token)
+    user = await verify_session_token(token)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
+            detail="Invalid or expired session",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
 
 # Include routers
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(auth_session.router, prefix="/auth", tags=["Session Authentication"])
+app.include_router(auth_session.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(universal_targets.router, tags=["Universal Targets"])
 app.include_router(audit.router, tags=["Audit v1"])

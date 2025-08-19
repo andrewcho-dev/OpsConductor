@@ -113,29 +113,5 @@ async def extend_user_session(session_id: str) -> bool:
     return await session_manager.extend_session(session_id)
 
 
-# Legacy JWT functions for backward compatibility with jobs/system tokens
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Create JWT access token (for system/job tokens only)."""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
-        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
-    )
-    return encoded_jwt
-
-
-def verify_token(token: str) -> Optional[dict]:
-    """Verify JWT token (for system/job tokens only)."""
-    try:
-        payload = jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
-        )
-        return payload
-    except JWTError:
-        return None
+# Legacy JWT functions removed - all authentication now uses session-based system
+# The main verify_token function in app.core.security handles compatibility
