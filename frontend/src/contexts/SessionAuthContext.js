@@ -109,11 +109,13 @@ export const SessionAuthProvider = ({ children }) => {
       }
 
       const data = await response.json();
+      console.log('🔐 Login response data:', data);
       
       // Store token
       localStorage.setItem('access_token', data.access_token);
       
       // Set session ID
+      console.log('🔑 Session ID from response:', data.session_id);
       sessionService.setSessionId(data.session_id);
       
       // Get user data
