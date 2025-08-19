@@ -622,6 +622,66 @@ class AuditService:
         except Exception:
             return 0
 
+    async def get_events(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """Get audit events with pagination and filtering."""
+        try:
+            from app.shared.infrastructure.cache import cache_service
+            
+            recent_key = "audit_recent_entries"
+            recent_entry_ids = await cache_service.get(recent_key) or []
+            
+            matching_events = []
+            
+            for entry_id in recent_entry_ids:
+                entry = await cache_service.get(f"audit_entry:{entry_id}")
+                if not entry:
+                    continue
+                
+                # Apply filters if provided
+                if filters:
+                    # Event type filter
+                    if filters.get('event_type') and entry.get('event_type') != filters['event_type']:
+                        continue
+                    
+                    # User ID filter
+                    if filters.get('user_id') and entry.get('user_id') != filters['user_id']:
+                        continue
+                    
+                    # Resource type filter
+                    if filters.get('resource_type') and entry.get('resource_type') != filters['resource_type']:
+                        continue
+                    
+                    # Severity filter
+                    if filters.get('severity') and entry.get('severity') != filters['severity']:
+                        continue
+                    
+                    # Date range filters
+                    if filters.get('start_date') or filters.get('end_date'):
+                        entry_time = datetime.fromisoformat(entry["timestamp"].replace('Z', '+00:00'))
+                        if filters.get('start_date') and entry_time < filters['start_date']:
+                            continue
+                        if filters.get('end_date') and entry_time > filters['end_date']:
+                            continue
+                
+                matching_events.append(entry)
+            
+            # Sort by timestamp (newest first)
+            matching_events.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+            
+            # Apply pagination
+            paginated_events = matching_events[skip:skip + limit]
+            
+            return paginated_events
+            
+        except Exception as e:
+            logger.error(f"Failed to get audit events: {str(e)}")
+            return []
+
 
 # Convenience functions for common audit events
 async def audit_user_login(user_id: int, ip_address: str, user_agent: str, audit_service: AuditService):
@@ -668,3 +728,4 @@ async def audit_security_violation(user_id: Optional[int], violation_type: str, 
         },
         severity=AuditSeverity.HIGH
     )
+
