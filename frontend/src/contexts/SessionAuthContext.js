@@ -73,10 +73,18 @@ export const SessionAuthProvider = ({ children }) => {
     sessionService.addEventListener('timeout', handleSessionTimeout);
     sessionService.addEventListener('extend', handleSessionExtend);
 
+    // Listen for force logout events from API service
+    const handleForceLogout = () => {
+      handleLogout();
+    };
+    
+    window.addEventListener('forceLogout', handleForceLogout);
+
     return () => {
       sessionService.removeEventListener('warning', handleSessionWarning);
       sessionService.removeEventListener('timeout', handleSessionTimeout);
       sessionService.removeEventListener('extend', handleSessionExtend);
+      window.removeEventListener('forceLogout', handleForceLogout);
     };
   }, []);
 
