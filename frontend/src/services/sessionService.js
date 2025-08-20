@@ -74,7 +74,7 @@ class SessionService {
       
       // Fetch system settings to get configurable timeout values
       const apiUrl = process.env.REACT_APP_API_URL || '';
-      fetch(`${apiUrl}/system/settings`, {
+      fetch(`${apiUrl}/api/system/settings`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,

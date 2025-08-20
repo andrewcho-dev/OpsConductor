@@ -175,7 +175,7 @@ class GeneratedReport(Base):
     # Report metadata
     report_period_start = Column(DateTime(timezone=True), nullable=False)
     report_period_end = Column(DateTime(timezone=True), nullable=False)
-    generated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    generated_by = Column(Integer, nullable=True)
     
     # Report data
     report_data = Column(JSONB, nullable=True)  # For JSON reports
@@ -191,4 +191,4 @@ class GeneratedReport(Base):
 
     # Relationships
     template = relationship("ReportTemplate")
-    generated_by_user = relationship("User", foreign_keys=[generated_by])
+    

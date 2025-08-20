@@ -1,5 +1,5 @@
 # Models module
-from .user_models import User, UserSession
+# User and UserSession models are now handled by the auth-service microservice
 from .universal_target_models import UniversalTarget, TargetCommunicationMethod, TargetCredential
 from .system_models import SystemSetting, TimezoneManager
 from .notification_models import (

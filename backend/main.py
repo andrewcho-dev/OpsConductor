@@ -25,7 +25,7 @@ from app.core.config import settings
 from app.core.auth_dependencies import get_current_user
 
 # Import models to ensure they are registered with SQLAlchemy
-from app.models import notification_models, user_models, job_models, analytics_models, job_schedule_models, discovery_models
+from app.models import notification_models, job_models, analytics_models, job_schedule_models, discovery_models
 
 # Create database tables
 Base.metadata.create_all(bind=engine)

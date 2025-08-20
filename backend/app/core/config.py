@@ -11,10 +11,6 @@ class Settings(BaseSettings):
     
     # Security - NO HARDCODED VALUES!
     SECRET_KEY: str
-    JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours for a full work day
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # Auth Service
     AUTH_SERVICE_URL: str = "http://opsconductor-auth-service:8000"

@@ -27,8 +27,8 @@ class AuditService {
     try {
       const baseUrl = process.env.REACT_APP_API_URL || '';
       const url = userIds 
-        ? `${baseUrl}/audit/lookups/users?user_ids=${userIds.join(',')}`
-        : `${baseUrl}/audit/lookups/users`;
+        ? `${baseUrl}/api/audit/lookups/users?user_ids=${userIds.join(',')}`
+        : `${baseUrl}/api/audit/lookups/users`;
       
       const response = await fetch(url, {
         headers: this.getAuthHeaders()
@@ -74,8 +74,8 @@ class AuditService {
     try {
       const baseUrl = process.env.REACT_APP_API_URL || '';
       const url = targetIds 
-        ? `${baseUrl}/audit/lookups/targets?target_ids=${targetIds.join(',')}`
-        : `${baseUrl}/audit/lookups/targets`;
+        ? `${baseUrl}/api/audit/lookups/targets?target_ids=${targetIds.join(',')}`
+        : `${baseUrl}/api/audit/lookups/targets`;
       
       const response = await fetch(url, {
         headers: this.getAuthHeaders()

@@ -11,7 +11,8 @@ from enum import Enum
 
 from app.shared.infrastructure.container import injectable
 from app.shared.infrastructure.cache import cached
-from app.models.user_models import User
+# User model is now handled by auth-service microservice
+# TODO: Replace User model usage with auth service API calls
 
 
 class AuditEventType(Enum):

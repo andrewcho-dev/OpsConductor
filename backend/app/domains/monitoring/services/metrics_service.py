@@ -13,7 +13,8 @@ from app.shared.infrastructure.container import injectable
 from app.shared.infrastructure.cache import cache_service, cached
 from app.models.job_models import Job, JobExecution, ExecutionStatus, JobStatus
 from app.models.universal_target_models import UniversalTarget
-from app.models.user_models import User
+# User model is now handled by auth-service microservice
+from app.clients.auth_service_client import auth_client
 
 
 @injectable()

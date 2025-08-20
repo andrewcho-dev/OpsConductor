@@ -13,7 +13,7 @@ import logging
 from app.database.database import get_db
 from app.core.auth_dependencies import get_current_user
 from app.domains.audit.services.audit_service import AuditService
-from app.services.user_service import UserService
+from app.clients.auth_service_client import auth_client
 from app.services.universal_target_service import UniversalTargetService
 
 api_base_url = os.getenv("API_BASE_URL", "/api/v3")
@@ -57,8 +57,6 @@ async def get_user_lookups(
 ):
     """Get user lookup data for audit enrichment."""
     try:
-        user_service = UserService()
-        
         if user_ids:
             # Parse comma-separated user IDs
             user_id_list = [int(uid.strip()) for uid in user_ids.split(',') if uid.strip().isdigit()]
@@ -66,28 +64,29 @@ async def get_user_lookups(
             
             for user_id in user_id_list:
                 try:
-                    user = user_service.get_user(db, user_id)
+                    user = await auth_client.get_user_by_id(user_id)
                     if user:
                         users_data[str(user_id)] = {
-                            "id": user.id,
-                            "username": user.username,
-                            "email": user.email,
-                            "role": user.role,
-                            "is_active": user.is_active
+                            "id": user["id"],
+                            "username": user["username"],
+                            "email": user["email"],
+                            "role": user["role"],
+                            "is_active": user["is_active"]
                         }
                 except Exception as e:
                     logger.warning(f"Failed to get user {user_id}: {str(e)}")
                     continue
         else:
             # Get all users
-            users = user_service.get_users(db, skip=0, limit=1000)  # Reasonable limit
+            users_response = await auth_client.get_users(skip=0, limit=1000)  # Reasonable limit
+            users = users_response.get("users", [])
             users_data = {
-                str(user.id): {
-                    "id": user.id,
-                    "username": user.username,
-                    "email": user.email,
-                    "role": user.role,
-                    "is_active": user.is_active
+                str(user["id"]): {
+                    "id": user["id"],
+                    "username": user["username"],
+                    "email": user["email"],
+                    "role": user["role"],
+                    "is_active": user["is_active"]
                 }
                 for user in users
             }

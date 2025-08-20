@@ -6,8 +6,6 @@ echo "🔧 Standardizing all datatable pages..."
 
 # Files to fix
 files=(
-  "/home/enabledrm/frontend/src/components/users/UserManagementSimplified.js"
-  "/home/enabledrm/frontend/src/features/users/components/UserList.jsx"
   "/home/enabledrm/frontend/src/components/targets/UniversalTargetList.js"
   "/home/enabledrm/frontend/src/components/jobs/JobList.js"
   "/home/enabledrm/frontend/src/components/system/SystemManagement.js"

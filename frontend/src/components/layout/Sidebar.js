@@ -24,10 +24,9 @@ import {
   Dashboard as DashboardIcon,
   AutoAwesome as AutoAwesomeIcon,
   Speed as SpeedIcon,
-
-
   MonitorHeart as MonitorHeartIcon,
   Security as SecurityIcon,
+  VpnKey as VpnKeyIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
@@ -82,6 +81,12 @@ const Sidebar = () => {
       text: 'User Management',
       icon: <PeopleIcon />,
       path: '/users',
+      roles: ['administrator']
+    },
+    {
+      text: 'Auth Configuration',
+      icon: <VpnKeyIcon />,
+      path: '/auth-config',
       roles: ['administrator']
     },
     {

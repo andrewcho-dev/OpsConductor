@@ -12,13 +12,13 @@ import targetsSlice from './slices/targetsSlice';
 
 // Import API slices
 import { apiSlice } from './api/apiSlice';
-import { usersApi } from './api/usersApi';
+
 
 export const store = configureStore({
   reducer: {
     // API slices
     [apiSlice.reducerPath]: apiSlice.reducer,
-    [usersApi.reducerPath]: usersApi.reducer,
+
     
     // Feature slices
     ui: uiSlice,
@@ -30,7 +30,7 @@ export const store = configureStore({
       serializableCheck: {
         ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE'],
       },
-    }).concat(apiSlice.middleware, usersApi.middleware),
+    }).concat(apiSlice.middleware),
   devTools: process.env.NODE_ENV !== 'production',
 });
 

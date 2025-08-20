@@ -43,11 +43,11 @@ class DiscoveryJob(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
     
     # User who created the job
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = Column(Integer, nullable=True)
     
     # Relationships
     discovered_devices = relationship("DiscoveredDevice", back_populates="discovery_job", cascade="all, delete-orphan")
-    creator = relationship("User", foreign_keys=[created_by])
+    
 
 
 class DiscoveredDevice(Base):
@@ -81,7 +81,7 @@ class DiscoveredDevice(Base):
     # Target creation
     target_id = Column(Integer, ForeignKey("universal_targets.id"), nullable=True, index=True)
     imported_at = Column(DateTime(timezone=True), nullable=True)
-    imported_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    imported_by = Column(Integer, nullable=True)
     
     # Timestamps
     discovered_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -89,7 +89,7 @@ class DiscoveredDevice(Base):
     # Relationships
     discovery_job = relationship("DiscoveryJob", back_populates="discovered_devices")
     target = relationship("UniversalTarget", foreign_keys=[target_id])
-    importer = relationship("User", foreign_keys=[imported_by])
+    
 
 
 class DiscoveryTemplate(Base):
@@ -122,8 +122,8 @@ class DiscoveryTemplate(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # User who created the template
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    creator = relationship("User", foreign_keys=[created_by])
+    created_by = Column(Integer, nullable=True)
+    
 
 
 class DiscoverySchedule(Base):
@@ -149,8 +149,8 @@ class DiscoverySchedule(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # User who created the schedule
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = Column(Integer, nullable=True)
     
     # Relationships
     template = relationship("DiscoveryTemplate", foreign_keys=[template_id])
-    creator = relationship("User", foreign_keys=[created_by])
+    

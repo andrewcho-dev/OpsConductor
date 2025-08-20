@@ -10,7 +10,8 @@ from app.shared.infrastructure.container import injectable
 from app.shared.infrastructure.cache import cached
 from app.models.job_models import Job, JobExecution, ExecutionStatus
 from app.models.universal_target_models import UniversalTarget
-from app.models.user_models import User
+# User model is now handled by auth-service microservice
+from app.clients.auth_service_client import auth_client
 
 
 @injectable()
@@ -38,13 +39,16 @@ class AnalyticsService:
         # Total counts
         total_jobs = self.db.query(Job).count()
         total_targets = self.db.query(UniversalTarget).count()
-        total_users = self.db.query(User).count()
+        # Get user stats from auth service
+        user_stats = await auth_client.get_user_stats()
+        total_users = user_stats.get('total_users', 0)
+        active_users = user_stats.get('active_users', 0)
+        
         total_executions = self.db.query(JobExecution).count()
         
         # Active counts
         active_jobs = self.db.query(Job).filter(Job.status == 'active').count()
         online_targets = self.db.query(UniversalTarget).filter(UniversalTarget.status == 'online').count()
-        active_users = self.db.query(User).filter(User.is_active == True).count()
         
         # Recent activity (last 24 hours)
         yesterday = datetime.now(timezone.utc) - timedelta(days=1)
@@ -153,31 +157,27 @@ class AnalyticsService:
         }
     
     async def _get_user_metrics(self) -> Dict[str, Any]:
-        """Get user-related metrics."""
-        # User role distribution
-        user_role_counts = (self.db.query(
-            User.role,
-            func.count(User.id).label('count')
-        ).group_by(User.role).all())
-        
-        # Active vs inactive users
-        active_users = self.db.query(User).filter(User.is_active == True).count()
-        inactive_users = self.db.query(User).filter(User.is_active == False).count()
-        
-        # Recent login activity
-        one_week_ago = datetime.now(timezone.utc) - timedelta(days=7)
-        recent_logins = self.db.query(User).filter(
-            User.last_login >= one_week_ago
-        ).count()
-        
-        return {
-            "role_distribution": {role: count for role, count in user_role_counts},
-            "activity_status": {
-                "active": active_users,
-                "inactive": inactive_users
-            },
-            "recent_logins_7d": recent_logins
-        }
+        """Get user-related metrics from auth service."""
+        try:
+            # Get comprehensive user stats from auth service
+            user_stats = await auth_client.get_user_stats()
+            
+            return {
+                "role_distribution": user_stats.get('role_distribution', {}),
+                "activity_status": {
+                    "active": user_stats.get('active_users', 0),
+                    "inactive": user_stats.get('inactive_users', 0)
+                },
+                "recent_logins_7d": user_stats.get('recent_logins_7d', 0)
+            }
+        except Exception as e:
+            logger.error(f"Failed to get user metrics from auth service: {str(e)}")
+            # Return empty metrics if auth service is unavailable
+            return {
+                "role_distribution": {},
+                "activity_status": {"active": 0, "inactive": 0},
+                "recent_logins_7d": 0
+            }
     
     async def _get_performance_metrics(self) -> Dict[str, Any]:
         """Get system performance metrics."""

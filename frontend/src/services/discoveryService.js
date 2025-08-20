@@ -7,7 +7,7 @@ import apiService from './apiService';
 
 class DiscoveryService {
   constructor() {
-    this.baseUrl = process.env.REACT_APP_API_URL ? `${process.env.REACT_APP_API_URL}/discovery` : '/discovery';
+    this.baseUrl = process.env.REACT_APP_API_URL ? `${process.env.REACT_APP_API_URL}/api/discovery` : '/api/discovery';
   }
 
   // Discovery Jobs

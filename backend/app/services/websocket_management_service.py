@@ -176,10 +176,14 @@ class WebSocketManagementService:
         )
         
         try:
-            from app.core.security import verify_token
+            from app.clients.auth_client import auth_client
             
-            # Verify token
-            user = verify_token(token)
+            # Verify token with auth service
+            validation_result = await auth_client.validate_token(token)
+            if not validation_result or not validation_result.get("valid"):
+                user = None
+            else:
+                user = validation_result.get("user")
             if not user:
                 logger.warning(
                     "WebSocket authentication failed - invalid token",
@@ -195,19 +199,19 @@ class WebSocketManagementService:
             
             # Track authentication success
             await self._track_websocket_activity(
-                user.id, "websocket_authenticated", 
+                user["id"], "websocket_authenticated", 
                 {
                     "user_agent": user_agent,
                     "ip_address": ip_address,
-                    "username": user.username
+                    "username": user["username"]
                 }
             )
             
             logger.info(
                 "WebSocket authentication successful",
                 extra={
-                    "user_id": user.id,
-                    "username": user.username,
+                    "user_id": user["id"],
+                    "username": user["username"],
                     "ip_address": ip_address
                 }
             )

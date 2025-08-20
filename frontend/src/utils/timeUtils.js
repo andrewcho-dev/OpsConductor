@@ -279,7 +279,7 @@ export const getSystemTimezone = async (token = null) => {
     }
     
     const apiBaseUrl = process.env.REACT_APP_API_URL || '';
-    const response = await fetch(`${apiBaseUrl}/system/info`, { headers });
+    const response = await fetch(`${apiBaseUrl}/api/system/info`, { headers });
     if (response.ok) {
       const data = await response.json();
       return data.timezone?.display_name || 'Local Time';

@@ -39,7 +39,7 @@ class DeviceTypeModel(Base):
     # Metadata
     is_system = Column(Boolean, default=True, nullable=False)  # System vs user-defined
     is_active = Column(Boolean, default=True, nullable=False)
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -135,7 +135,7 @@ class DeviceTypeTemplateModel(Base):
     
     # Metadata
     is_public = Column(Boolean, default=False, nullable=False)
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -169,7 +169,7 @@ class DeviceTypeUsageModel(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     device_type_value = Column(String(100), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, nullable=False)
     usage_context = Column(String(100))  # e.g., 'target_creation', 'discovery', 'suggestion'
     usage_count = Column(Integer, default=1)
     last_used = Column(DateTime(timezone=True), server_default=func.now())
@@ -177,8 +177,7 @@ class DeviceTypeUsageModel(Base):
     # Additional context stored as JSON
     context_data = Column(JSON)
     
-    # Relationships
-    user = relationship("User")
+    
     
     def to_dict(self) -> Dict:
         """Convert to dictionary for API responses"""

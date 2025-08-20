@@ -50,7 +50,7 @@ const handleResponse = async (response) => {
  */
 export const getAllTargets = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/targets/`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/`, {
       method: 'GET',
       headers: getAuthHeaders()
     });
@@ -66,7 +66,7 @@ export const getAllTargets = async () => {
  */
 export const getTargetById = async (targetId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/targets/${targetId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/${targetId}`, {
       method: 'GET',
       headers: getAuthHeaders()
     });
@@ -82,7 +82,7 @@ export const getTargetById = async (targetId) => {
  */
 export const createTarget = async (targetData) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/targets/`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(targetData)
@@ -100,7 +100,7 @@ export const createTarget = async (targetData) => {
 export const createTargetComprehensive = async (targetData) => {
   try {
     console.log('Creating target comprehensively:', targetData);
-    const response = await fetch(`${API_BASE_URL}/targets/comprehensive`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/comprehensive`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(targetData)
@@ -119,7 +119,7 @@ export const createTargetComprehensive = async (targetData) => {
  */
 export const updateTarget = async (targetId, targetData) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/targets/${targetId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/${targetId}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(targetData)
@@ -137,7 +137,7 @@ export const updateTarget = async (targetId, targetData) => {
 export const updateTargetComprehensive = async (targetId, targetData) => {
   try {
     console.log(`Comprehensive update for target ${targetId}:`, targetData);
-    const response = await fetch(`${API_BASE_URL}/targets/${targetId}/comprehensive`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/${targetId}/comprehensive`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(targetData)
@@ -156,7 +156,7 @@ export const updateTargetComprehensive = async (targetId, targetData) => {
  */
 export const deleteTarget = async (targetId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/targets/${targetId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/${targetId}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });
@@ -178,7 +178,7 @@ export const deleteTarget = async (targetId) => {
  */
 export const testTargetConnection = async (targetId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/targets/${targetId}/test-connection`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/${targetId}/test-connection`, {
       method: 'POST',
       headers: getAuthHeaders()
     });
@@ -194,7 +194,7 @@ export const testTargetConnection = async (targetId) => {
  */
 export const addCommunicationMethod = async (targetId, methodData) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/targets/${targetId}/communication-methods`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/${targetId}/communication-methods`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(methodData)
@@ -212,7 +212,7 @@ export const addCommunicationMethod = async (targetId, methodData) => {
 export const updateCommunicationMethod = async (targetId, methodId, methodData) => {
   try {
     console.log(`Updating communication method ${methodId} for target ${targetId}:`, methodData);
-    const response = await fetch(`${API_BASE_URL}/targets/${targetId}/communication-methods/${methodId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/${targetId}/communication-methods/${methodId}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(methodData)
@@ -231,7 +231,7 @@ export const updateCommunicationMethod = async (targetId, methodId, methodData) 
  */
 export const deleteCommunicationMethod = async (targetId, methodId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/targets/${targetId}/communication-methods/${methodId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/${targetId}/communication-methods/${methodId}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });
@@ -250,7 +250,7 @@ export const testCommunicationMethod = async (targetId, methodId) => {
     console.log(`🔧 TESTING METHOD: targetId=${targetId}, methodId=${methodId}`);
     console.log(`🔧 URL: ${API_BASE_URL}/targets/${targetId}/communication-methods/${methodId}/test`);
     
-    const response = await fetch(`${API_BASE_URL}/targets/${targetId}/communication-methods/${methodId}/test?cache=${Date.now()}`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/${targetId}/communication-methods/${methodId}/test?cache=${Date.now()}`, {
       method: 'POST',
       headers: getAuthHeaders()
     });
@@ -269,7 +269,7 @@ export const testMethodConfiguration = async (methodConfig) => {
   try {
     console.log(`🔧 TESTING METHOD CONFIG:`, methodConfig);
     
-    const response = await fetch(`${API_BASE_URL}/targets/test-method-config`, {
+    const response = await fetch(`${API_BASE_URL}/api/targets/test-method-config`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({

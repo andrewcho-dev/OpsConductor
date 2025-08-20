@@ -13,7 +13,7 @@ const path = require('path');
 // Page components to validate
 const pageComponents = [
   'src/components/dashboard/Dashboard.js',
-  'src/components/users/UserManagementSimplified.js',
+
   'src/components/targets/UniversalTargetDashboard.js',
   'src/components/jobs/JobDashboard.js',
   'src/components/system/SystemHealthDashboard.js',

@@ -27,7 +27,7 @@ from app.core.cache import get_redis_client
 from app.core.logging import get_structured_logger
 from app.core.config import settings
 from app.services.job_service import JobService
-from app.services.user_service import UserService
+from app.clients.auth_service_client import auth_client
 from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 from app.tasks.job_tasks import execute_job_task
 from app.schemas.job_schemas import JobCreate, JobActionCreate
@@ -159,7 +159,7 @@ class JobsManagementService:
     def __init__(self, db: Session):
         self.db = db
         self.job_service = JobService(db)
-        self.user_service = UserService
+        self.auth_client = auth_client
         self.audit_service = AuditService(db)
         logger.info("Jobs Management Service initialized with enhanced features")
     

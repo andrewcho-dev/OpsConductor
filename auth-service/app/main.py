@@ -4,7 +4,7 @@ import logging
 
 from app.core.config import settings
 from app.database.database import create_tables
-from app.api import auth, users
+from app.api import auth, users, config
 
 # Configure logging
 logging.basicConfig(
@@ -34,6 +34,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(config.router)
 
 
 @app.on_event("startup")

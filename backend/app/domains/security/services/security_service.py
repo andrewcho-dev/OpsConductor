@@ -12,7 +12,8 @@ from enum import Enum
 
 from app.shared.infrastructure.container import injectable
 from app.shared.infrastructure.cache import cache_service, cached
-from app.models.user_models import User
+# User model is now handled by auth-service microservice
+# TODO: Replace User model usage with auth service API calls
 
 
 class ThreatLevel(Enum):

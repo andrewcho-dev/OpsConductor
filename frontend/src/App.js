@@ -10,7 +10,10 @@ import LoginScreen from './components/auth/LoginScreen';
 
 
 import Dashboard from './components/dashboard/Dashboard';
-import UserManagementSimplified from './components/users/UserManagementSimplified';
+
+import EnhancedUserManagement from './components/users/EnhancedUserManagement';
+import UserActivityDashboard from './components/users/UserActivityDashboard';
+import AuthConfigManagement from './components/auth/AuthConfigManagement';
 import UniversalTargetDashboard from './components/targets/UniversalTargetDashboard';
 import JobDashboard from './components/jobs/JobDashboard';
 
@@ -52,7 +55,24 @@ function AppContent() {
                 path="/users" 
                 element={
                   <ProtectedRoute requireAdmin>
-                    <UserManagementSimplified />
+                    <EnhancedUserManagement />
+                  </ProtectedRoute>
+                } 
+              />
+
+              <Route 
+                path="/users/:userId/activity" 
+                element={
+                  <ProtectedRoute requireAdmin>
+                    <UserActivityDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/auth-config" 
+                element={
+                  <ProtectedRoute requireAdmin>
+                    <AuthConfigManagement />
                   </ProtectedRoute>
                 } 
               />
