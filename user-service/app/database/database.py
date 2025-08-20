@@ -14,8 +14,10 @@ logger = logging.getLogger(__name__)
 # Create database engine
 engine = create_engine(
     settings.DATABASE_URL,
-    poolclass=StaticPool,
     pool_pre_ping=True,
+    pool_recycle=3600,  # Recycle connections after 1 hour
+    pool_size=5,        # Number of connections to maintain
+    max_overflow=10,    # Additional connections allowed
     echo=settings.DEBUG
 )
 
@@ -34,8 +36,15 @@ def get_db() -> Session:
     db = SessionLocal()
     try:
         yield db
+    except Exception as e:
+        logger.error(f"Database session error: {e}")
+        db.rollback()
+        raise
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception as e:
+            logger.warning(f"Error closing database session: {e}")
 
 
 def create_tables():

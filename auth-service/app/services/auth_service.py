@@ -68,6 +68,7 @@ class AuthService:
         # Create session data
         user_data = {
             "username": user.username,
+            "role": user.role,  # Include role for JWT token
             "client_ip": client_ip,
             "user_agent": user_agent
         }

@@ -372,16 +372,16 @@ const EnhancedUserManagement = () => {
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Locked Users"
-            value={stats.locked_users || 0}
+            title="Inactive Users"
+            value={stats.inactive_users || 0}
             icon={<LockIcon />}
             color="warning"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Recent Logins (24h)"
-            value={stats.recent_logins_24h || 0}
+            title="Recent Signups"
+            value={stats.recent_signups || 0}
             icon={<HistoryIcon />}
             color="info"
           />
