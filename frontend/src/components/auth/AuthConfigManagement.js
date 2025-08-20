@@ -34,8 +34,8 @@ const AuthConfigManagement = () => {
   const [currentTab, setCurrentTab] = useState(0);
   const [hasChanges, setHasChanges] = useState(false);
   
-  // Configuration state
-  const [config, setConfig] = useState({
+  // Default configuration structure
+  const getDefaultConfig = () => ({
     session: {
       timeout_minutes: 30,
       warning_minutes: 5,
@@ -74,6 +74,9 @@ const AuthConfigManagement = () => {
       require_admin_approval: true
     }
   });
+
+  // Configuration state
+  const [config, setConfig] = useState(getDefaultConfig());
   
   // Original config for comparison
   const [originalConfig, setOriginalConfig] = useState({});
@@ -95,11 +98,32 @@ const AuthConfigManagement = () => {
     setLoading(true);
     try {
       const data = await configService.getAllConfiguration();
-      setConfig(data);
-      setOriginalConfig(JSON.parse(JSON.stringify(data)));
+      // Only update config if we got valid data
+      if (data && typeof data === 'object') {
+        // Merge API data with default config to ensure all fields are present
+        const mergedConfig = {
+          ...getDefaultConfig(),
+          ...data,
+          session: { ...getDefaultConfig().session, ...(data.session || {}) },
+          password: { ...getDefaultConfig().password, ...(data.password || {}) },
+          security: { ...getDefaultConfig().security, ...(data.security || {}) },
+          audit: { ...getDefaultConfig().audit, ...(data.audit || {}) },
+          users: { ...getDefaultConfig().users, ...(data.users || {}) }
+        };
+        setConfig(mergedConfig);
+        setOriginalConfig(JSON.parse(JSON.stringify(mergedConfig)));
+      } else {
+        // Keep default config values and show warning
+        const defaultConfig = getDefaultConfig();
+        setOriginalConfig(JSON.parse(JSON.stringify(defaultConfig)));
+        showNotification('Using default configuration values - API not available', 'warning');
+      }
     } catch (error) {
       console.error('Failed to fetch configuration:', error);
-      showNotification('Failed to load configuration', 'error');
+      // Keep default config values
+      const defaultConfig = getDefaultConfig();
+      setOriginalConfig(JSON.parse(JSON.stringify(defaultConfig)));
+      showNotification('Using default configuration values - API not available', 'warning');
     } finally {
       setLoading(false);
     }
@@ -150,13 +174,19 @@ const AuthConfigManagement = () => {
   };
 
   const updateConfig = (category, field, value) => {
-    setConfig(prev => ({
-      ...prev,
-      [category]: {
-        ...prev[category],
-        [field]: value
+    setConfig(prev => {
+      // Ensure the category exists
+      if (!prev[category]) {
+        prev[category] = {};
       }
-    }));
+      return {
+        ...prev,
+        [category]: {
+          ...prev[category],
+          [field]: value
+        }
+      };
+    });
   };
 
   const TabPanel = ({ children, value, index, ...other }) => (
