@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'user',
     last_login TIMESTAMP WITH TIME ZONE
 );
 
@@ -44,8 +45,21 @@ CREATE INDEX IF NOT EXISTS idx_auth_configurations_key ON auth_configurations(co
 CREATE INDEX IF NOT EXISTS idx_auth_configurations_category ON auth_configurations(category);
 
 -- Insert default admin user (password: admin123)
-INSERT INTO users (username, password_hash)
+INSERT INTO users (username, password_hash, role)
 VALUES (
     'admin',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.F5e'
+    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.F5e',
+    'administrator'
 ) ON CONFLICT (username) DO NOTHING;
+
+-- Add role column to existing users table if it doesn't exist
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'users' AND column_name = 'role') THEN
+        ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user';
+    END IF;
+END $$;
+
+-- Update existing admin user to have administrator role
+UPDATE users SET role = 'administrator' WHERE username = 'admin';

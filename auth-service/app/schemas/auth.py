@@ -23,6 +23,7 @@ class UserInfo(BaseModel):
     """Basic user information for authentication."""
     id: int
     username: str
+    role: str = "user"  # Basic role for menu access
     last_login: Optional[datetime] = None
 
     class Config:

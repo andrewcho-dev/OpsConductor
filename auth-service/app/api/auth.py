@@ -47,6 +47,7 @@ async def login(
     user_info = UserInfo(
         id=user.id,
         username=user.username,
+        role=user.role,
         last_login=user.last_login
     )
     

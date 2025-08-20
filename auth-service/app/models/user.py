@@ -15,6 +15,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False, default="user")  # Basic role for menu access
     last_login = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships for auth service only
