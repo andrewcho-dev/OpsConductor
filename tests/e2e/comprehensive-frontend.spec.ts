@@ -73,7 +73,7 @@ test.describe('OpsConductor Comprehensive Frontend E2E Tests', () => {
         'Universal Targets',
         'Job Management',
         'Job Monitor',
-        'Log Viewer',
+
         'System Health',
         'Audit & Security',
         'User Management',
@@ -341,7 +341,7 @@ test.describe('OpsConductor Comprehensive Frontend E2E Tests', () => {
         { button: 'Universal Targets', url: '/targets', expectedText: 'Universal Targets' },
         { button: 'Job Management', url: '/jobs', expectedText: 'Job Management' },
         { button: 'Job Monitor', url: '/job-monitor', expectedText: 'Job Monitor' },
-        { button: 'Log Viewer', url: '/log-viewer', expectedText: 'Log Viewer' },
+
         { button: 'System Health', url: '/system-health', expectedText: 'System Health Dashboard' },
         { button: 'Audit & Security', url: '/audit', expectedText: 'Audit' },
         { button: 'User Management', url: '/users', expectedText: 'User Management' },

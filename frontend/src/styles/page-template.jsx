@@ -32,7 +32,7 @@ const PageTemplate = () => {
     try {
       setLoading(true);
       // Replace with actual API call
-      const response = await fetch('/api/your-endpoint');
+      const response = await fetch('your-endpoint');
       const result = await response.json();
       setData(result);
       addAlert(`Loaded ${result.length} items successfully`, 'success', 3000);

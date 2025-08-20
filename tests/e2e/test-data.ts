@@ -49,7 +49,7 @@ export const urls = {
   systemSettings: '/system-settings',
   notifications: '/notifications',
   systemHealth: '/system-health',
-  logViewer: '/log-viewer',
+
   celeryMonitor: '/celery-monitor',
   audit: '/audit'
 };

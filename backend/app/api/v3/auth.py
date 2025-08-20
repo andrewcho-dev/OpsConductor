@@ -119,6 +119,11 @@ async def login_with_session(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Update last login timestamp
+    from datetime import datetime, timezone
+    user.last_login = datetime.now(timezone.utc)
+    db.commit()
+    
     # Create session
     user_data = {
         "username": user.username,

@@ -410,6 +410,59 @@ async def get_job_executions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{job_id}/executions/{execution_number}", response_model=ExecutionResponse)
+async def get_execution_details(
+    job_id: int,
+    execution_number: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get execution details - SIMPLIFIED"""
+    try:
+        # Find the execution
+        from app.models.job_models import JobExecution
+        from app.models.universal_target_models import UniversalTarget
+        
+        execution = db.query(JobExecution).filter(
+            JobExecution.job_id == job_id,
+            JobExecution.execution_number == execution_number
+        ).first()
+        
+        if not execution:
+            raise HTTPException(status_code=404, detail="Execution not found")
+        
+        # Calculate duration
+        duration_seconds = None
+        if execution.started_at and execution.completed_at:
+            duration_seconds = (execution.completed_at - execution.started_at).total_seconds()
+        
+        # Get target names
+        target_names = []
+        if execution.results:
+            target_names = list(set([result.target_name for result in execution.results if result.target_name]))
+        
+        return ExecutionResponse(
+            id=execution.id,
+            job_id=execution.job_id,
+            execution_number=execution.execution_number,
+            status=execution.status,
+            total_targets=execution.total_targets,
+            successful_targets=execution.successful_targets,
+            failed_targets=execution.failed_targets,
+            started_at=execution.started_at,
+            completed_at=execution.completed_at,
+            created_at=execution.created_at,
+            duration_seconds=duration_seconds,
+            target_names=target_names
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get execution details for job {job_id}, execution {execution_number}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{job_id}/executions/{execution_number}/results", response_model=List[ExecutionResultResponse])
 async def get_execution_results(
     job_id: int,

@@ -25,7 +25,7 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
     // Try to refresh token
     const refreshResult = await baseQuery(
       {
-        url: '/api/v3/auth/refresh',
+        url: 'auth/refresh',
         method: 'POST',
         body: {
           refresh_token: localStorage.getItem('refresh_token'),

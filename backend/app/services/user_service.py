@@ -72,6 +72,11 @@ class UserService:
     def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
         """Get user by ID."""
         return db.query(User).filter(User.id == user_id).first()
+        
+    @staticmethod
+    def get_user(db: Session, user_id: int) -> Optional[User]:
+        """Get user by ID (alias for get_user_by_id for backward compatibility)."""
+        return UserService.get_user_by_id(db, user_id)
 
     @staticmethod
     def get_user_by_username(db: Session, username: str) -> Optional[User]:
@@ -84,9 +89,39 @@ class UserService:
         return db.query(User).filter(User.email == email).first()
 
     @staticmethod
-    def get_users(db: Session, skip: int = 0, limit: int = 100) -> List[User]:
-        """Get list of users with pagination."""
-        return db.query(User).offset(skip).limit(limit).all()
+    def get_users(db: Session, skip: int = 0, limit: int = 100, search: str = None, 
+                 role: str = None, active_only: bool = None) -> List[User]:
+        """
+        Get list of users with pagination and filtering options.
+        
+        Args:
+            db: Database session
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            search: Search string for username or email
+            role: Filter by role
+            active_only: If True, only return active users
+            
+        Returns:
+            List of users matching the criteria
+        """
+        query = db.query(User)
+        
+        # Apply filters if provided
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                (User.username.ilike(search_term)) | 
+                (User.email.ilike(search_term))
+            )
+            
+        if role:
+            query = query.filter(User.role == role)
+            
+        if active_only:
+            query = query.filter(User.is_active == True)
+            
+        return query.offset(skip).limit(limit).all()
 
     @staticmethod
     def update_user(db: Session, user_id: int, user_data: UserUpdate, current_user_id: Optional[int] = None) -> Optional[User]:

@@ -197,8 +197,28 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
   };
 
   const openInLogViewer = (serial) => {
-    // Open the execution log viewer modal instead of navigating away
-    setLogViewerModal({ open: true, executionSerial: serial });
+    console.log('Opening log viewer for execution serial:', serial);
+    
+    // Ensure the serial is in the correct format (jobId_executionNumber)
+    let formattedSerial = serial;
+    if (!serial.includes('_')) {
+      console.warn('Serial does not contain underscore, attempting to format it');
+      if (job && job.id) {
+        formattedSerial = `${job.id}_${serial}`;
+        console.log('Reformatted serial to:', formattedSerial);
+      }
+    }
+    
+    // Open the execution log viewer modal
+    setLogViewerModal({ 
+      open: true, 
+      executionSerial: formattedSerial 
+    });
+    
+    console.log('Log viewer modal state set:', { 
+      open: true, 
+      executionSerial: formattedSerial 
+    });
   };
 
   const fetchActionResults = async (executionId) => {
@@ -456,7 +476,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
         
         try {
           setLoading(true);
-          const url = `/api/jobs/${job.id}/executions/${executionId}/action-results`;
+          const url = `/api/v3/jobs/${job.id}/executions/${executionId}/results`;
           console.log('📡 Making request to:', url);
           
           const response = await fetch(url, {
@@ -905,7 +925,8 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
         padding: '16px 24px !important',  // Override the CSS !important rule
         paddingBottom: '16px !important'
       }}>
-        <Typography variant="h4" className="page-title">
+        {/* Use component="div" to avoid nesting heading elements */}
+        <Typography variant="h4" className="page-title" component="div">
           Execution History - {job.name}
         </Typography>
         <Box className="page-actions">

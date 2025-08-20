@@ -59,7 +59,8 @@ const JobControlCenter = ({ jobs, onRefresh, token }) => {
 
   const fetchCeleryTasks = async () => {
     try {
-      const response = await fetch('/api/v3/celery/active-tasks', {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${apiBaseUrl}/celery/active-tasks`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -77,7 +78,8 @@ const JobControlCenter = ({ jobs, onRefresh, token }) => {
 
   const fetchJobDetails = async (jobId) => {
     try {
-      const response = await fetch(`/api/jobs/${jobId}`, {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${apiBaseUrl}/jobs/${jobId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

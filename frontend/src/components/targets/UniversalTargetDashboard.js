@@ -109,7 +109,8 @@ const UniversalTargetDashboard = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/targets/health-check-batch', {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${apiBaseUrl}/targets/health-check-batch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

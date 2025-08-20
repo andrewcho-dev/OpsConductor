@@ -44,44 +44,79 @@ const SystemHealthDashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // CRITICAL RULE: NEVER USE MOCK DATA OR TEMPORARY HACKS IN THIS FILE
+  // ‼️ ABSOLUTELY FORBIDDEN: Mock data, temporary workarounds, or fake responses
+  // ‼️ All data MUST come directly from the backend APIs
+  // ‼️ Errors must be handled properly without any fake/mock data
+  // ‼️ See /home/enabledrm/CRITICAL_DEVELOPMENT_RULES.md for complete rules
+  // ‼️ This rule is absolute and must never be violated under any circumstances
+  
   const fetchAllHealthData = async () => {
     if (!refreshing) setRefreshing(true);
     
     try {
       const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const token = localStorage.getItem('access_token');
+      const headers = { 
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      };
+      
       const [overallRes, systemRes, databaseRes, applicationRes] = await Promise.all([
-        fetch(`${baseUrl}/system/health/`, { 
-          headers: { 'Content-Type': 'application/json' }
-        }),
-        fetch(`${baseUrl}/system/health/system`, { 
-          headers: { 'Content-Type': 'application/json' }
-        }),
-        fetch(`${baseUrl}/system/health/database`, { 
-          headers: { 'Content-Type': 'application/json' }
-        }),
-        fetch(`${baseUrl}/system/health/application`, { 
-          headers: { 'Content-Type': 'application/json' }
-        })
+        fetch(`${baseUrl}/system/health/`, { headers }),
+        fetch(`${baseUrl}/system/health/system`, { headers }),
+        fetch(`${baseUrl}/system/health/database`, { headers }),
+        fetch(`${baseUrl}/system/health/application`, { headers })
       ]);
 
-      if (overallRes.ok) {
-        const data = await overallRes.json();
-        setHealthData(data);
+      // Process responses with proper error handling
+      try {
+        if (overallRes.ok) {
+          const data = await overallRes.json();
+          setHealthData(data);
+        } else {
+          console.error('Overall health endpoint error:', overallRes.status, overallRes.statusText);
+          addAlert(`Health API error: ${overallRes.status} ${overallRes.statusText}`, 'error', 5000);
+          // Don't reset existing data if we have it - just keep what we had before
+        }
+      } catch (e) {
+        console.error('Error processing overall health response:', e);
       }
 
-      if (systemRes.ok) {
-        const data = await systemRes.json();
-        setSystemData(data);
+      try {
+        if (systemRes.ok) {
+          const data = await systemRes.json();
+          setSystemData(data);
+        } else {
+          console.error('System health endpoint error:', systemRes.status, systemRes.statusText);
+          // Don't reset existing data if we have it - just keep what we had before
+        }
+      } catch (e) {
+        console.error('Error processing system health response:', e);
       }
 
-      if (databaseRes.ok) {
-        const data = await databaseRes.json();
-        setDatabaseData(data);
+      try {
+        if (databaseRes.ok) {
+          const data = await databaseRes.json();
+          setDatabaseData(data);
+        } else {
+          console.error('Database health endpoint error:', databaseRes.status, databaseRes.statusText);
+          // Don't reset existing data if we have it - just keep what we had before
+        }
+      } catch (e) {
+        console.error('Error processing database health response:', e);
       }
 
-      if (applicationRes.ok) {
-        const data = await applicationRes.json();
-        setApplicationData(data);
+      try {
+        if (applicationRes.ok) {
+          const data = await applicationRes.json();
+          setApplicationData(data);
+        } else {
+          console.error('Application health endpoint error:', applicationRes.status, applicationRes.statusText);
+          // Don't reset existing data if we have it - just keep what we had before
+        }
+      } catch (e) {
+        console.error('Error processing application health response:', e);
       }
 
       setLastUpdated(new Date());
@@ -119,8 +154,17 @@ const SystemHealthDashboard = () => {
         // Refresh health data to show updated volumes
         fetchAllHealthData();
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to prune volumes');
+        console.error('Volume prune error:', response.status, response.statusText);
+        let errorMessage = 'Failed to prune volumes';
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorMessage;
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+        }
+        
+        throw new Error(errorMessage);
       }
     } catch (error) {
       console.error('Error pruning volumes:', error);
@@ -149,15 +193,24 @@ const SystemHealthDashboard = () => {
 
       if (response.ok) {
         const result = await response.json();
-        addAlert(result.message, 'success', 5000);
+        addAlert(result.message || `Service ${serviceName} ${action}ed successfully`, 'success', 5000);
         
         // Refresh health data after action
         setTimeout(() => {
           fetchAllHealthData();
         }, 2000);
       } else {
-        const error = await response.json();
-        addAlert(error.detail || `Failed to ${action} service`, 'error', 5000);
+        console.error(`Service ${action} error:`, response.status, response.statusText);
+        let errorMessage = `Failed to ${action} service`;
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorMessage;
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+        }
+        
+        addAlert(errorMessage, 'error', 5000);
       }
     } catch (error) {
       console.error(`Service ${action} error:`, error);
@@ -166,12 +219,14 @@ const SystemHealthDashboard = () => {
   };
 
   // Calculate system statistics following SystemSettings pattern
+  // IMPORTANT: Proper null/undefined handling without mock data
+  // This ensures the UI doesn't break when data is missing
   const stats = {
     uptime: healthData?.uptime || 'Unknown',
     status: healthData?.status || 'Unknown',
     version: healthData?.version || '1.0.0',
-    cpu: systemData?.cpu?.usage_percent?.toFixed(1) || 'N/A',
-    memory: systemData?.memory?.usage_percent?.toFixed(1) || 'N/A',
+    cpu: systemData?.cpu?.usage_percent ? systemData.cpu.usage_percent.toFixed(1) : 'N/A',
+    memory: systemData?.memory?.usage_percent ? systemData.memory.usage_percent.toFixed(1) : 'N/A',
     containers: healthData?.health_checks?.docker_containers?.details?.summary ? 
       `${healthData.health_checks.docker_containers.details.summary.running}/${healthData.health_checks.docker_containers.details.summary.total}` : 'N/A'
   };

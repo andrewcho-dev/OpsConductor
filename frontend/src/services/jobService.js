@@ -33,7 +33,7 @@ const handleResponse = async (response) => {
  */
 export const getExecutionActionResults = async (jobId, executionId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/executions/${executionId}/action-results`, {
+    const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/executions/${executionId}/results`, {
       method: 'GET',
       headers: getAuthHeaders()
     });

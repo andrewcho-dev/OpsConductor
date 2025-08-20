@@ -67,7 +67,8 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
     try {
       console.log('🔍 Fetching full job details for job ID:', job.id);
-      const response = await fetch(`/api/v3/jobs/${job.id}`, {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${apiBaseUrl}/jobs/${job.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -116,7 +117,8 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
   const fetchTargets = async () => {
     try {
-      const response = await fetch('/api/targets/', {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${apiBaseUrl}/targets/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -133,7 +135,8 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
   const fetchSystemTimezone = async () => {
     try {
-      const response = await fetch('/api/system/info', {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${apiBaseUrl}/system/info`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -219,7 +222,8 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
       setFormData(initialFormData);
 
       // Try to fetch more complete job details from v3 API (includes actions and targets)
-      const response = await fetch(`/api/v3/jobs/${job.id}`, {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const response = await fetch(`${apiBaseUrl}/jobs/${job.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

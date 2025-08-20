@@ -59,7 +59,7 @@ import { useAlert } from '../layout/BottomStatusBar';
 // Import sub-components
 import SimpleJobView from './SimpleJobView';
 import AdvancedJobView from './AdvancedJobView';
-import CeleryMonitor from './CeleryMonitor';
+
 import JobSafetyControls from './JobSafetyControls';
 import JobControlCenter from './JobControlCenter';
 // import JobWorkflowBuilder from './JobWorkflowBuilder'; // TODO: Create this component
@@ -123,7 +123,7 @@ const EnhancedJobDashboard = () => {
 
   const fetchCeleryStats = async () => {
     try {
-      const response = await apiService.get('/api/v3/celery/stats');
+      const response = await apiService.get('celery/stats');
       if (response.ok) {
         const data = await response.json();
         setCeleryStats(data);
@@ -135,7 +135,7 @@ const EnhancedJobDashboard = () => {
 
   const fetchQueueStats = async () => {
     try {
-      const response = await apiService.get('/api/v3/celery/queues');
+      const response = await apiService.get('celery/queues');
       if (response.ok) {
         const data = await response.json();
         setQueueStats(data);
@@ -147,7 +147,7 @@ const EnhancedJobDashboard = () => {
 
   const fetchWorkerStats = async () => {
     try {
-      const response = await apiService.get('/api/v3/celery/workers');
+      const response = await apiService.get('celery/workers');
       if (response.ok) {
         const data = await response.json();
         setWorkerStats(data);
@@ -195,7 +195,7 @@ const EnhancedJobDashboard = () => {
   const health = getCeleryHealth();
 
   const tabLabels = isAdvancedMode ? 
-    ['Jobs', 'Control Center', 'Monitor', 'Workflows', 'Analytics', 'Settings'] :
+    ['Jobs', 'Control Center', 'Workflows', 'Analytics', 'Settings'] :
     ['Jobs', 'Control Center', 'History', 'Settings'];
 
   return (
@@ -417,14 +417,6 @@ const EnhancedJobDashboard = () => {
               />
             )}
             {activeTab === 2 && (
-              <CeleryMonitor 
-                celeryStats={celeryStats}
-                queueStats={queueStats}
-                workerStats={workerStats}
-                onRefresh={fetchAllData}
-              />
-            )}
-            {activeTab === 3 && (
               <Box sx={{ p: 3, textAlign: 'center' }}>
                 <WorkIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
                 <Typography variant="h5" gutterBottom>
@@ -439,7 +431,7 @@ const EnhancedJobDashboard = () => {
                 </Alert>
               </Box>
             )}
-            {activeTab === 4 && (
+            {activeTab === 3 && (
               <Box sx={{ p: 3, textAlign: 'center' }}>
                 <AnalyticsIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
                 <Typography variant="h5" gutterBottom>
@@ -454,7 +446,7 @@ const EnhancedJobDashboard = () => {
                 </Alert>
               </Box>
             )}
-            {activeTab === 5 && (
+            {activeTab === 4 && (
               <Box sx={{ p: 2 }}>
                 <Typography variant="h6">Advanced Settings</Typography>
                 {/* Advanced settings component */}

@@ -13,12 +13,11 @@ import Dashboard from './components/dashboard/Dashboard';
 import UserManagementSimplified from './components/users/UserManagementSimplified';
 import UniversalTargetDashboard from './components/targets/UniversalTargetDashboard';
 import JobDashboard from './components/jobs/JobDashboard';
-import CeleryMonitorPage from './components/jobs/CeleryMonitorPage';
+
 import TestMinutesSchedule from './components/jobs/TestMinutesSchedule';
 import DirectScheduleTest from './components/jobs/DirectScheduleTest';
 import DebugTools from './components/debug/DebugTools';
-import LogViewer from './components/LogViewer';
-import LogViewerTest from './components/LogViewerTest';
+
 import SystemSettings from './components/system/SystemSettings';
 import SystemHealthDashboard from './components/system/SystemHealthDashboard';
 import AuditDashboard from './components/audit/AuditDashboard';
@@ -73,14 +72,7 @@ function AppContent() {
                   </ProtectedRoute>
                 } 
               />
-              <Route 
-                path="/celery-monitor" 
-                element={
-                  <ProtectedRoute>
-                    <CeleryMonitorPage />
-                  </ProtectedRoute>
-                } 
-              />
+
               <Route 
                 path="/test-minutes-schedule" 
                 element={
@@ -107,22 +99,7 @@ function AppContent() {
                   </ProtectedRoute>
                 } 
               />
-              <Route 
-                path="/log-viewer" 
-                element={
-                  <ProtectedRoute>
-                    <LogViewer />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/log-viewer-test" 
-                element={
-                  <ProtectedRoute>
-                    <LogViewerTest />
-                  </ProtectedRoute>
-                } 
-              />
+
               <Route 
                 path="/system-settings" 
                 element={

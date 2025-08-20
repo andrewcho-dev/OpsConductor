@@ -24,8 +24,8 @@ import {
   Dashboard as DashboardIcon,
   AutoAwesome as AutoAwesomeIcon,
   Speed as SpeedIcon,
-  Visibility as VisibilityIcon,
-  FindInPage as FindInPageIcon,
+
+
   MonitorHeart as MonitorHeartIcon,
   Security as SecurityIcon,
 } from '@mui/icons-material';
@@ -64,18 +64,8 @@ const Sidebar = () => {
       path: '/jobs',
       roles: ['administrator', 'user']
     },
-    {
-      text: 'Job Monitor',
-      icon: <VisibilityIcon />,
-      path: '/celery-monitor',
-      roles: ['administrator', 'user']
-    },
-    {
-      text: 'Log Viewer',
-      icon: <FindInPageIcon />,
-      path: '/log-viewer',
-      roles: ['administrator', 'user']
-    },
+
+
     {
       text: 'System Health',
       icon: <MonitorHeartIcon />,

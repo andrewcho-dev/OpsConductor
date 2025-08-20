@@ -48,8 +48,16 @@ const SimpleTargetResultsModal = ({ open, onClose, executionSerial }) => {
   const fetchTargetResults = async () => {
     setLoading(true);
     try {
-      // Get all branches for this execution with detailed action results
-      const response = await fetch(`/api/jobs/executions/${executionSerial}/branches`, {
+      // Parse executionSerial format: "jobId_executionNumber"
+      const [jobId, executionNumber] = executionSerial.split('_');
+      
+      if (!jobId || !executionNumber) {
+        console.error('Invalid execution serial format. Expected format: jobId_executionNumber');
+        return;
+      }
+      
+      // Get execution results using the correct API endpoint
+      const response = await fetch(`/api/v3/jobs/${jobId}/executions/${executionNumber}/results`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -58,8 +66,8 @@ const SimpleTargetResultsModal = ({ open, onClose, executionSerial }) => {
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Target results with action details:', data);
-        setResults(data.branches || []);
+        console.log('Target results:', data);
+        setResults(data || []);
       } else {
         console.error('Failed to fetch target results');
       }

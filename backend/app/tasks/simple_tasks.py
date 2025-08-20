@@ -28,6 +28,29 @@ def health_check(self):
         return {"status": "unhealthy", "error": str(e)}
 
 
+@celery_app.task(bind=True, name="app.tasks.simple_tasks.slow_test_task")
+def slow_test_task(self, duration=10):
+    """Slow test task for monitoring - takes specified seconds to complete"""
+    import time
+    logger.info(f"🐌 Starting slow test task (duration: {duration}s)...")
+    
+    try:
+        for i in range(duration):
+            time.sleep(1)
+            logger.info(f"🐌 Slow task progress: {i+1}/{duration} seconds")
+            
+        return {
+            "status": "completed", 
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "worker": self.request.hostname,
+            "duration": duration,
+            "message": f"Slow task completed after {duration} seconds"
+        }
+    except Exception as e:
+        logger.error(f"❌ Slow task failed: {str(e)}")
+        return {"status": "failed", "error": str(e)}
+
+
 @celery_app.task(bind=True, name="app.tasks.simple_tasks.cleanup_task")
 def cleanup_task(self):
     """Simple cleanup task - NO DATABASE DEPENDENCIES"""

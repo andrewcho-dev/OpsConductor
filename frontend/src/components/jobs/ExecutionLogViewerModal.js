@@ -11,6 +11,7 @@ import {
   LinearProgress,
   Alert,
   Paper,
+  Button,
 
   Table,
   TableBody,
@@ -63,9 +64,13 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
   // API helper
   const apiCall = async (url, options = {}) => {
     try {
-      const response = await authService.api.get(url.replace('/api', ''), options);
+      console.log('Making API call to:', url);
+      // Don't replace /api prefix as it might be needed
+      const response = await authService.api.get(url, options);
+      console.log('API response:', response.data);
       return response.data;
     } catch (error) {
+      console.error('API call failed:', error);
       throw new Error(error.response?.data?.detail || error.message || 'API call failed');
     }
   };
@@ -92,50 +97,100 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
 
   // Fetch execution data
   const fetchExecutionData = useCallback(async () => {
-    if (!executionSerial) return;
+    if (!executionSerial) {
+      console.log('No execution serial provided');
+      return;
+    }
     
+    console.log('Fetching execution data for serial:', executionSerial);
     setLoading(true);
     setError(null);
     
     try {
       // Parse executionSerial format: "jobId_executionNumber"
       const [jobId, executionNumber] = executionSerial.split('_');
+      console.log('Parsed execution serial:', { jobId, executionNumber });
       
-      const params = new URLSearchParams({
-        job_id: jobId,
-        execution_number: executionNumber,
-        limit: '1000', // Get all actions for this execution
-        offset: '0'
-      });
+      if (!jobId || !executionNumber) {
+        throw new Error('Invalid execution serial format. Expected format: jobId_executionNumber');
+      }
       
-      const response = await apiCall(`/logs/entries?${params}`);
-      const actionResults = response.results || [];
-      
-      // Sort actions by branch and action order
-      const sortedActions = actionResults.sort((a, b) => {
-        // First sort by branch_serial
-        if (a.branch_serial !== b.branch_serial) {
-          return a.branch_serial.localeCompare(b.branch_serial);
+      // Use the standard API endpoint as defined in the environment
+      try {
+        console.log(`Fetching execution logs for job ${jobId}, execution ${executionNumber}`);
+        
+        // First try to get the execution details - use relative path since REACT_APP_API_URL already includes /api/v3
+        const executionResponse = await authService.api.get(`jobs/${jobId}/executions/${executionNumber}`);
+        console.log('Execution details response:', executionResponse.data);
+        
+        // The execution details endpoint now exists and returns ExecutionResponse
+        // Try to fetch execution results to get detailed action information
+        try {
+          const resultsResponse = await authService.api.get(`jobs/${jobId}/executions/${executionNumber}/results`);
+          console.log('Execution results response:', resultsResponse.data);
+          
+          // Transform the results to match the expected action format
+          if (resultsResponse.data && Array.isArray(resultsResponse.data)) {
+            const actionEntries = resultsResponse.data.map(result => ({
+              id: result.id,
+              target_name: result.target_name,
+              target_ip: result.target_id, // We don't have IP in results, using target_id as fallback
+              action_name: result.action_name,
+              status: result.status,
+              started_at: result.started_at,
+              finished_at: result.completed_at,
+              exit_code: result.exit_code,
+              result_output: result.output_text,
+              result_error: result.error_text,
+              execution_time_ms: result.execution_time_ms,
+              action_type: result.action_type
+            }));
+            
+            console.log('Processed action entries from results:', actionEntries);
+            setActions(actionEntries);
+            setLastUpdated(new Date());
+            return;
+          }
+        } catch (resultsError) {
+          console.error('Failed to fetch detailed results:', resultsError);
         }
-        // Then by action order within branch
-        if (a.action_serial && b.action_serial) {
-          const aOrder = parseInt(a.action_serial.split('.').pop());
-          const bOrder = parseInt(b.action_serial.split('.').pop());
-          return aOrder - bOrder;
+        
+        // If we can't get detailed results, create a summary entry from execution details
+        if (executionResponse.data) {
+          const executionData = executionResponse.data;
+          const summaryAction = {
+            id: executionData.id || `execution-${jobId}-${executionNumber}`,
+            target_name: executionData.target_names?.join(', ') || 'Multiple Targets',
+            target_ip: executionData.total_targets || 'N/A',
+            action_name: 'Job Execution Summary',
+            status: executionData.status,
+            started_at: executionData.started_at,
+            finished_at: executionData.completed_at,
+            exit_code: null,
+            result_output: `Execution completed on ${executionData.total_targets} targets. ${executionData.successful_targets} successful, ${executionData.failed_targets} failed.`,
+            result_error: executionData.failed_targets > 0 ? `${executionData.failed_targets} targets failed` : null,
+            execution_time_ms: executionData.duration_seconds ? Math.round(executionData.duration_seconds * 1000) : null
+          };
+          
+          console.log('Created summary action from execution data:', summaryAction);
+          setActions([summaryAction]);
+          setLastUpdated(new Date());
+          return;
         }
-        return new Date(a.started_at) - new Date(b.started_at);
-      });
-      
-      setActions(sortedActions);
-      setLastUpdated(new Date());
+        
+      } catch (executionError) {
+        console.error('Failed to fetch execution details:', executionError);
+        throw new Error('Could not fetch execution details');
+      }
       
     } catch (err) {
-      setError(err.message || 'Failed to load execution logs');
+      console.error('Error fetching execution data:', err);
+      setError(`Failed to load execution logs: ${err.message}`);
       setActions([]);
     } finally {
       setLoading(false);
     }
-  }, [executionSerial, token]);
+  }, [executionSerial]);
 
   // Initialize when modal opens
   useEffect(() => {
@@ -204,7 +259,8 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
         padding: '16px 24px !important',
         paddingBottom: '16px !important'
       }}>
-        <Typography variant="h4" className="page-title">
+        {/* Use component="div" to avoid nesting heading elements */}
+        <Typography variant="h4" className="page-title" component="div">
           Execution Logs - {executionSerial}
         </Typography>
         {jobName && (
@@ -213,35 +269,60 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
           </Typography>
         )}
         <Box className="page-actions">
+          {/* Wrap disabled buttons in span for Tooltip */}
           <Tooltip title={expandedRows.size === paginatedActions.length ? "Collapse All" : "Expand All"}>
-            <IconButton 
-              onClick={() => {
-                if (expandedRows.size === paginatedActions.length) {
-                  // Collapse all
-                  setExpandedRows(new Set());
-                } else {
-                  // Expand all
-                  const allIds = new Set(paginatedActions.map(action => action.id));
-                  setExpandedRows(allIds);
+            {loading || paginatedActions.length === 0 ? (
+              <span>
+                <IconButton 
+                  onClick={() => {}}
+                  disabled={true}
+                  size="small"
+                >
+                  {expandedRows.size === paginatedActions.length ? 
+                    <ArrowUpIcon fontSize="small" /> : 
+                    <ArrowDownIcon fontSize="small" />
+                  }
+                </IconButton>
+              </span>
+            ) : (
+              <IconButton 
+                onClick={() => {
+                  if (expandedRows.size === paginatedActions.length) {
+                    // Collapse all
+                    setExpandedRows(new Set());
+                  } else {
+                    // Expand all
+                    const allIds = new Set(paginatedActions.map(action => action.id));
+                    setExpandedRows(allIds);
+                  }
+                }}
+                size="small"
+              >
+                {expandedRows.size === paginatedActions.length ? 
+                  <ArrowUpIcon fontSize="small" /> : 
+                  <ArrowDownIcon fontSize="small" />
                 }
-              }}
-              disabled={loading || paginatedActions.length === 0}
-              size="small"
-            >
-              {expandedRows.size === paginatedActions.length ? 
-                <ArrowUpIcon fontSize="small" /> : 
-                <ArrowDownIcon fontSize="small" />
-              }
-            </IconButton>
+              </IconButton>
+            )}
           </Tooltip>
           <Tooltip title="Refresh">
-            <IconButton 
-              onClick={handleRefresh} 
-              disabled={loading}
-              size="small"
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
+            {loading ? (
+              <span>
+                <IconButton 
+                  disabled={true}
+                  size="small"
+                >
+                  <RefreshIcon fontSize="small" />
+                </IconButton>
+              </span>
+            ) : (
+              <IconButton 
+                onClick={handleRefresh} 
+                size="small"
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            )}
           </Tooltip>
           <Tooltip title="Close">
             <IconButton 
@@ -263,18 +344,49 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
           </Alert>
         )}
 
+        {!loading && actions.length === 0 && !error && (
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              No execution logs found
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              There are no logs available for this execution. This could be because:
+            </Typography>
+            <Box component="ul" sx={{ textAlign: 'left', display: 'inline-block', mt: 2 }}>
+              <Typography component="li" variant="body2" color="text.secondary">
+                The execution is still pending or scheduled
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                The execution did not generate any logs
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                The logs have been purged from the system
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 3 }}>
+              <Button 
+                variant="outlined" 
+                color="primary" 
+                onClick={handleRefresh}
+                startIcon={<RefreshIcon />}
+              >
+                Refresh Logs
+              </Button>
+            </Box>
+          </Box>
+        )}
 
-
-        {/* Standard Datatable */}
-        <StandardDataTable
-          currentPage={page}
-          pageSize={pageSize}
-          totalItems={actions.length}
-          onPageChange={setPage}
-          onPageSizeChange={handlePageSizeChange}
-          itemLabel="actions"
-          className="execution-log-table"
-        >
+        {!loading && actions.length > 0 && (
+          /* Standard Datatable */
+          <StandardDataTable
+            currentPage={page}
+            pageSize={pageSize}
+            totalItems={actions.length}
+            onPageChange={setPage}
+            onPageSizeChange={handlePageSizeChange}
+            itemLabel="actions"
+            className="execution-log-table"
+          >
             <TableHead>
               <TableRow className="standard-header-row">
                 <TableCell className="standard-table-header" sx={{ width: 40 }}>
@@ -312,13 +424,23 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
                     }}
                   >
                     <TableCell className="standard-table-cell">
-                      <IconButton
-                        size="small"
-                        onClick={() => toggleRowExpansion(action.id)}
-                        disabled={!action.result_output && !action.result_error && !action.command_executed}
-                      >
-                        {expandedRows.has(action.id) ? <ArrowUpIcon /> : <ArrowDownIcon />}
-                      </IconButton>
+                      {(!action.result_output && !action.result_error && !action.command_executed) ? (
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={true}
+                          >
+                            <ArrowDownIcon />
+                          </IconButton>
+                        </span>
+                      ) : (
+                        <IconButton
+                          size="small"
+                          onClick={() => toggleRowExpansion(action.id)}
+                        >
+                          {expandedRows.has(action.id) ? <ArrowUpIcon /> : <ArrowDownIcon />}
+                        </IconButton>
+                      )}
                     </TableCell>
                     <TableCell className="standard-table-cell">
                       <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
@@ -481,7 +603,8 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
                 </React.Fragment>
               ))}
             </TableBody>
-        </StandardDataTable>
+          </StandardDataTable>
+        )}
       </DialogContent>
     </Dialog>
   );

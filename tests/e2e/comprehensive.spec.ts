@@ -135,7 +135,7 @@ test.describe('COMPREHENSIVE ENABLEDRM E2E TESTING', () => {
         { link: dashboardPage.usersLink, expectedUrl: '/users' },
         { link: dashboardPage.systemSettingsLink, expectedUrl: '/system-settings' },
         { link: dashboardPage.systemHealthLink, expectedUrl: '/system-health' },
-        { link: dashboardPage.logViewerLink, expectedUrl: '/log-viewer' },
+
         { link: dashboardPage.celeryMonitorLink, expectedUrl: '/celery-monitor' },
         { link: dashboardPage.notificationsLink, expectedUrl: '/notifications' },
         { link: dashboardPage.auditLink, expectedUrl: '/audit' }
@@ -466,53 +466,9 @@ test.describe('COMPREHENSIVE ENABLEDRM E2E TESTING', () => {
     });
   });
 
-  test.describe('9. LOG VIEWER COMPREHENSIVE TESTING', () => {
-    test.beforeEach(async () => {
-      await page.goto('/');
-      await loginPage.login(testAdmin.username, testAdmin.password);
-      await dashboardPage.navigateToLogViewer();
-    });
 
-    test('9.1 Should display log viewer page', async () => {
-      await page.waitForLoadState('networkidle');
-      
-      const pageTitle = page.locator('h1, h2').first();
-      if (await pageTitle.isVisible()) {
-        await expect(pageTitle).toBeVisible();
-      }
-      
-      // Test log content area
-      const logContent = page.locator('.log-content, pre, .logs');
-      if (await logContent.count() > 0) {
-        await expect(logContent.first()).toBeVisible();
-      }
-      
-      await page.screenshot({ path: './test-results/log-viewer-page.png', fullPage: true });
-    });
 
-    test('9.2 Should test log viewer controls', async () => {
-      await page.waitForLoadState('networkidle');
-      
-      // Test log filters
-      const filters = page.locator('select, input[type="date"], .filter');
-      const filterCount = await filters.count();
-      console.log(`Found ${filterCount} log filters`);
-      
-      // Test any control buttons
-      const buttons = page.locator('button');
-      const buttonCount = await buttons.count();
-      
-      for (let i = 0; i < buttonCount; i++) {
-        const button = buttons.nth(i);
-        if (await button.isVisible()) {
-          const buttonText = await button.textContent();
-          console.log(`Found log viewer button: ${buttonText}`);
-        }
-      }
-    });
-  });
-
-  test.describe('10. CELERY MONITOR COMPREHENSIVE TESTING', () => {
+  test.describe('9. CELERY MONITOR COMPREHENSIVE TESTING', () => {
     test.beforeEach(async () => {
       await page.goto('/');
       await loginPage.login(testAdmin.username, testAdmin.password);
@@ -547,7 +503,7 @@ test.describe('COMPREHENSIVE ENABLEDRM E2E TESTING', () => {
     });
   });
 
-  test.describe('11. AUDIT DASHBOARD COMPREHENSIVE TESTING', () => {
+  test.describe('10. AUDIT DASHBOARD COMPREHENSIVE TESTING', () => {
     test.beforeEach(async () => {
       await page.goto('/');
       await loginPage.login(testAdmin.username, testAdmin.password);
@@ -581,7 +537,7 @@ test.describe('COMPREHENSIVE ENABLEDRM E2E TESTING', () => {
     });
   });
 
-  test.describe('12. RESPONSIVE DESIGN TESTING', () => {
+  test.describe('11. RESPONSIVE DESIGN TESTING', () => {
     test.beforeEach(async () => {
       await page.goto('/');
       await loginPage.login(testAdmin.username, testAdmin.password);
@@ -615,7 +571,7 @@ test.describe('COMPREHENSIVE ENABLEDRM E2E TESTING', () => {
     });
   });
 
-  test.describe('13. ACCESSIBILITY TESTING', () => {
+  test.describe('12. ACCESSIBILITY TESTING', () => {
     test.beforeEach(async () => {
       await page.goto('/');
       await loginPage.login(testAdmin.username, testAdmin.password);
@@ -655,7 +611,7 @@ test.describe('COMPREHENSIVE ENABLEDRM E2E TESTING', () => {
     });
   });
 
-  test.describe('14. ERROR HANDLING TESTING', () => {
+  test.describe('13. ERROR HANDLING TESTING', () => {
     test.beforeEach(async () => {
       await page.goto('/');
       await loginPage.login(testAdmin.username, testAdmin.password);
@@ -692,8 +648,8 @@ test.describe('COMPREHENSIVE ENABLEDRM E2E TESTING', () => {
     });
   });
 
-  test.describe('15. PERFORMANCE TESTING', () => {
-    test('15.1 Should load pages within reasonable time', async () => {
+  test.describe('14. PERFORMANCE TESTING', () => {
+    test('14.1 Should load pages within reasonable time', async () => {
       const startTime = Date.now();
       
       await page.goto('/');
@@ -723,7 +679,7 @@ test.describe('COMPREHENSIVE ENABLEDRM E2E TESTING', () => {
     });
   });
 
-  test.describe('16. LOGOUT AND SESSION TESTING', () => {
+  test.describe('15. LOGOUT AND SESSION TESTING', () => {
     test.beforeEach(async () => {
       await page.goto('/');
       await loginPage.login(testAdmin.username, testAdmin.password);

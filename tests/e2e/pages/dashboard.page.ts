@@ -17,7 +17,7 @@ export class DashboardPage extends BasePage {
   readonly notificationsLink: Locator;
   readonly systemHealthLink: Locator;
   readonly auditLink: Locator;
-  readonly logViewerLink: Locator;
+
   readonly celeryMonitorLink: Locator;
 
   // Dashboard metrics
@@ -42,7 +42,7 @@ export class DashboardPage extends BasePage {
     this.notificationsLink = page.locator('a[href="/notifications"], a:has-text("Notifications")').first();
     this.systemHealthLink = page.locator('a[href="/system-health"], a:has-text("System Health")').first();
     this.auditLink = page.locator('a[href="/audit"], a:has-text("Audit")').first();
-    this.logViewerLink = page.locator('a[href="/log-viewer"], a:has-text("Log Viewer")').first();
+
     this.celeryMonitorLink = page.locator('a[href="/celery-monitor"], a:has-text("Celery Monitor")').first();
 
     // Dashboard content
@@ -92,10 +92,7 @@ export class DashboardPage extends BasePage {
     await this.waitForPageLoad();
   }
 
-  async navigateToLogViewer() {
-    await this.logViewerLink.click();
-    await this.waitForPageLoad();
-  }
+
 
   async navigateToCeleryMonitor() {
     await this.celeryMonitorLink.click();

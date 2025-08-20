@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../styles/dashboard.css';
+import authService from '../../services/authService';
 import {
   Typography,
   Button,
@@ -65,22 +66,9 @@ const UserManagement = () => {
   const [sortField, setSortField] = useState('');
   const [sortDirection, setSortDirection] = useState('asc');
 
-  // Sample user data
-  const sampleUsers = [
-    { id: 1, username: 'admin', email: 'admin@opsconductor.com', role: 'administrator', is_active: true, created_at: '2024-01-15T10:30:00Z' },
-    { id: 2, username: 'manager1', email: 'manager1@opsconductor.com', role: 'manager', is_active: true, created_at: '2024-01-16T14:20:00Z' },
-    { id: 3, username: 'user1', email: 'user1@opsconductor.com', role: 'user', is_active: true, created_at: '2024-01-17T09:15:00Z' },
-    { id: 4, username: 'user2', email: 'user2@opsconductor.com', role: 'user', is_active: false, created_at: '2024-01-18T16:45:00Z' },
-    { id: 5, username: 'manager2', email: 'manager2@opsconductor.com', role: 'manager', is_active: true, created_at: '2024-01-19T11:30:00Z' },
-    { id: 6, username: 'user3', email: 'user3@opsconductor.com', role: 'user', is_active: true, created_at: '2024-01-20T13:25:00Z' },
-    { id: 7, username: 'user4', email: 'user4@opsconductor.com', role: 'user', is_active: true, created_at: '2024-01-21T08:10:00Z' },
-    { id: 8, username: 'admin2', email: 'admin2@opsconductor.com', role: 'administrator', is_active: true, created_at: '2024-01-22T15:40:00Z' },
-    { id: 9, username: 'user5', email: 'user5@opsconductor.com', role: 'user', is_active: false, created_at: '2024-01-23T12:55:00Z' },
-    { id: 10, username: 'manager3', email: 'manager3@opsconductor.com', role: 'manager', is_active: true, created_at: '2024-01-24T10:20:00Z' }
-  ];
-
+  // Load users from API on component mount
   useEffect(() => {
-    setUsers(sampleUsers);
+    fetchUsers();
   }, []);
 
   // Sorting logic
@@ -166,13 +154,24 @@ const UserManagement = () => {
     }
   };
 
-  const fetchUsers = () => {
+  const fetchUsers = async () => {
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setUsers(sampleUsers);
+    try {
+      console.log('🔍 Loading users from API...');
+      const response = await authService.api.get('/users');
+      console.log('👥 Users response:', response.data);
+      
+      // Handle both array response and paginated response
+      const usersData = Array.isArray(response.data) ? response.data : response.data.users || [];
+      setUsers(usersData);
+      console.log(`👥 Loaded ${usersData.length} users`);
+    } catch (error) {
+      console.error('❌ Failed to load users:', error);
+      setError('Failed to load users');
+      setUsers([]); // Set empty array on error, NO MOCK DATA
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   // Sortable header component

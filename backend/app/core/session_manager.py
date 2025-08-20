@@ -80,15 +80,22 @@ class SessionManager:
             # Close the database session
             db.close()
             
+            # Ensure minimum timeout of 480 minutes (8 hours)
+            timeout_minutes = max(timeout_minutes, 480)
+            
             # Convert to seconds
             timeout_seconds = timeout_minutes * 60
             warning_seconds = warning_minutes * 60
             
+            logger.info(f"Using session timeout: {timeout_minutes} minutes ({timeout_seconds} seconds)")
             return timeout_seconds, warning_seconds
         except Exception as e:
             logger.error(f"Failed to get timeout settings: {str(e)}")
-            # Use defaults
-            return cls.DEFAULT_SESSION_TIMEOUT_MINUTES * 60, cls.DEFAULT_WARNING_THRESHOLD_MINUTES * 60
+            # Use defaults - minimum 8 hours (480 minutes)
+            default_timeout = max(cls.DEFAULT_SESSION_TIMEOUT_MINUTES, 480) * 60
+            default_warning = cls.DEFAULT_WARNING_THRESHOLD_MINUTES * 60
+            logger.info(f"Using default session timeout: {default_timeout // 60} minutes ({default_timeout} seconds)")
+            return default_timeout, default_warning
     
     @classmethod
     async def create_session(cls, user_id: int, user_data: Dict[str, Any]) -> str:
@@ -97,6 +104,9 @@ class SessionManager:
         
         # Get timeout settings
         timeout_seconds, _ = await cls._get_timeout_settings()
+        
+        # Ensure minimum timeout of 8 hours (480 minutes) to prevent quick expiration
+        timeout_seconds = max(timeout_seconds, 28800)  # 8 hours in seconds
         
         # Generate session ID (can be simple timestamp + user_id for now)
         session_id = f"{user_id}_{int(time.time())}"
@@ -112,7 +122,7 @@ class SessionManager:
             "session_id": session_id
         }
         
-        # Store in Redis with TTL from system settings
+        # Store in Redis with longer TTL to ensure session doesn't expire quickly
         await cache_service.set(
             session_key, 
             json.dumps(session_data), 
@@ -125,6 +135,9 @@ class SessionManager:
             datetime.utcnow().isoformat(),
             ttl=timeout_seconds
         )
+        
+        # Log session creation with timeout
+        logger.info(f"Created new session {session_id} for user {user_id} with timeout {timeout_seconds} seconds")
         
         # Log session creation
         ip_address = user_data.get("client_ip")
@@ -167,8 +180,11 @@ class SessionManager:
         """Update last activity timestamp and extend session."""
         await cache_service.initialize()
         
-        # Get timeout settings
+        # Get timeout settings - use a longer default timeout to prevent quick expiration
         timeout_seconds, _ = await cls._get_timeout_settings()
+        
+        # Ensure minimum timeout of 8 hours (480 minutes) to prevent quick expiration
+        timeout_seconds = max(timeout_seconds, 28800)  # 8 hours in seconds
         
         session_key = f"{cls.SESSION_PREFIX}{session_id}"
         activity_key = f"{cls.ACTIVITY_PREFIX}{session_id}"
@@ -180,6 +196,8 @@ class SessionManager:
         
         # Update activity timestamp
         current_time = datetime.utcnow().isoformat()
+        
+        # Set with longer TTL to ensure session doesn't expire quickly
         await cache_service.set(
             activity_key,
             current_time,
@@ -191,13 +209,18 @@ class SessionManager:
             session_dict = json.loads(session_data)
             session_dict["last_activity"] = current_time
             
+            # Set with longer TTL to ensure session doesn't expire quickly
             await cache_service.set(
                 session_key,
                 json.dumps(session_dict),
                 ttl=timeout_seconds
             )
+            
+            # Log successful session extension
+            logger.info(f"Session {session_id} activity updated, extended for {timeout_seconds} seconds")
             return True
         except json.JSONDecodeError:
+            logger.error(f"Failed to parse session data for {session_id}")
             return False
     
     @classmethod
@@ -253,8 +276,14 @@ class SessionManager:
         # Get timeout settings from system settings
         timeout_seconds, _ = await cls._get_timeout_settings()
         
+        # Ensure minimum timeout of 8 hours (480 minutes) to prevent quick expiration
+        timeout_seconds = max(timeout_seconds, 28800)  # 8 hours in seconds
+        
         if extend_by_seconds is None:
             extend_by_seconds = timeout_seconds
+        else:
+            # Ensure minimum extension time
+            extend_by_seconds = max(extend_by_seconds, 28800)  # 8 hours in seconds
         
         # Update activity
         result = await cls.update_activity(session_id)
