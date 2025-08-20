@@ -142,212 +142,29 @@ export const authService = {
     throw new Error('No access token');
   },
 
-  // Get current user info
-  async getCurrentUser() {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      // Get user info from auth service
-      const response = await authApi.get('/me', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return response.data;
-    }
-    throw new Error('No access token');
-  },
-
-  // USER MANAGEMENT METHODS
-  
-  // Get users with pagination and filtering
-  async getUsers(params = {}) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.get('/users', {
-      headers: { Authorization: `Bearer ${token}` },
-      params
-    });
+  // Validate token
+  async validateToken(token) {
+    const response = await authApi.post('/validate', { token });
     return response.data;
   },
 
-  // Get user statistics
-  async getUserStats() {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.get('/users/stats', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Get user by ID
-  async getUser(userId) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.get(`/users/${userId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Create new user
-  async createUser(userData) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.post('/users', userData, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Update user
-  async updateUser(userId, userData) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.put(`/users/${userId}`, userData, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Delete user
-  async deleteUser(userId) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.delete(`/users/${userId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Change user password
-  async changeUserPassword(userId, passwordData) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.put(`/users/${userId}/password`, passwordData, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Bulk user actions
-  async bulkUserAction(actionData) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.post('/users/bulk-action', actionData, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Validate password
-  async validatePassword(password) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.post('/users/validate-password', { password }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // AUTH CONFIGURATION METHODS
-
-  // Get all configuration
-  async getAllConfig() {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.get('/config', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
+  // AUTH CONFIGURATION METHODS (minimal - only what auth service provides)
 
   // Get session configuration
   async getSessionConfig() {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.get('/config/session', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await authApi.get('/config/session');
     return response.data;
   },
 
   // Get password policy
   async getPasswordPolicy() {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.get('/config/password', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await authApi.get('/config/password');
     return response.data;
   },
 
   // Get security configuration
   async getSecurityConfig() {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.get('/config/security', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Get audit configuration
-  async getAuditConfig() {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.get('/config/audit', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Get user management configuration
-  async getUserManagementConfig() {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.get('/config/users', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Update configuration batch
-  async updateConfigBatch(updates) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.put('/config/batch', { updates }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Update session configuration
-  async updateSessionConfig(config) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.put('/config/session', config, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Update password policy
-  async updatePasswordPolicy(policy) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.put('/config/password', policy, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Update security configuration
-  async updateSecurityConfig(config) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.put('/config/security', config, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Update audit configuration
-  async updateAuditConfig(config) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.put('/config/audit', config, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  },
-
-  // Update user management configuration
-  async updateUserManagementConfig(config) {
-    const token = localStorage.getItem('access_token');
-    const response = await authApi.put('/config/users', config, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await authApi.get('/config/security');
     return response.data;
   },
 }; 

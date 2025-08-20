@@ -30,20 +30,29 @@ export const SessionAuthProvider = ({ children }) => {
       const token = localStorage.getItem('access_token');
       if (token) {
         try {
-          const response = await fetch(`${authUrl}/me`, {
+          const response = await fetch(`${authUrl}/validate`, {
+            method: 'POST',
             headers: {
-              'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
-            }
+            },
+            body: JSON.stringify({ token })
           });
 
           if (response.ok) {
-            const userData = await response.json();
-            setUser(userData);
-            setIsAuthenticated(true);
-            sessionService.setSessionId(userData.session_info?.session_id);
+            const validationData = await response.json();
+            if (validationData.valid && validationData.user) {
+              setUser(validationData.user);
+              setIsAuthenticated(true);
+              // Set session ID if available
+              if (validationData.session_id) {
+                sessionService.setSessionId(validationData.session_id);
+              }
+            } else {
+              // Token is invalid, clear it
+              localStorage.removeItem('access_token');
+            }
           } else {
-            // Token is invalid
+            // Token validation failed, clear it
             localStorage.removeItem('access_token');
           }
         } catch (error) {
@@ -124,27 +133,11 @@ export const SessionAuthProvider = ({ children }) => {
       console.log('🔑 Session ID from response:', data.session_id);
       sessionService.setSessionId(data.session_id);
       
-      // Get user data from auth service
-      console.log('🔍 FULL TOKEN being sent to /me endpoint:', data.access_token);
-      console.log('🔍 Token length:', data.access_token.length);
-      const userResponse = await fetch(`${authUrl}/me`, {
-        headers: {
-          'Authorization': `Bearer ${data.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (userResponse.ok) {
-        const userData = await userResponse.json();
-        setUser(userData);
-        setIsAuthenticated(true);
-        return { success: true };
-      } else {
-        console.error('❌ /me endpoint failed:', userResponse.status, await userResponse.text());
-        // If /me fails, clear the token and try again
-        localStorage.removeItem('access_token');
-        throw new Error(`Failed to get user data: ${userResponse.status}`);
-      }
+      // Use user data from login response (no need for separate /me call)
+      console.log('🔍 User data from login response:', data.user);
+      setUser(data.user);
+      setIsAuthenticated(true);
+      return { success: true };
 
     } catch (error) {
       console.error('Login error:', error);
