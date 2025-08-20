@@ -3,12 +3,22 @@ import axios from 'axios';
 // Create axios instance with base configuration
 // Get the base URL from environment - keep it relative
 const apiBaseUrl = process.env.REACT_APP_API_URL || '';
+const authBaseUrl = process.env.REACT_APP_AUTH_URL || '/api/auth';
 
 // Log the API base URL for debugging
 console.log('🌐 Using API base URL:', apiBaseUrl);
+console.log('🔐 Using Auth base URL:', authBaseUrl);
 
 const api = axios.create({
   baseURL: apiBaseUrl,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Create separate axios instance for auth service
+const authApi = axios.create({
+  baseURL: authBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -73,44 +83,16 @@ To fix this, either:
     
     const originalRequest = error.config;
 
-    // Handle 401 Unauthorized errors with token refresh
+    // Handle 401 Unauthorized errors - redirect to login (no refresh tokens in session-based auth)
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      console.log('🔄 Attempting token refresh...');
+      console.log('🚪 Session expired, redirecting to login...');
 
-      try {
-        const refresh_token = localStorage.getItem('refresh_token');
-        if (!refresh_token) {
-          throw new Error('No refresh token');
-        }
-
-        // Use relative URL for refresh
-        const refreshUrl = `${apiBaseUrl}/auth/refresh`;
-        console.log('🔄 Refresh token URL:', refreshUrl);
-        const response = await axios.post(
-          refreshUrl,
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${refresh_token}`,
-            },
-          }
-        );
-
-        const { access_token, refresh_token: new_refresh_token } = response.data;
-        localStorage.setItem('access_token', access_token);
-        localStorage.setItem('refresh_token', new_refresh_token);
-
-        // Retry original request with new token
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
-        return api(originalRequest);
-      } catch (refreshError) {
-        // Refresh failed, redirect to login
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
-      }
+      // Clear tokens and redirect to login
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token'); // Remove any old refresh tokens
+      window.location.href = '/login';
+      return Promise.reject(error);
     }
 
     return Promise.reject(error);
@@ -123,10 +105,10 @@ export const authService = {
 
   // Login user
   async login(username, password) {
-    console.log('Making login request to:', '/auth/login');
-    console.log('Base URL:', api.defaults.baseURL);
+    console.log('Making login request to:', '/login');
+    console.log('Auth Base URL:', authApi.defaults.baseURL);
     console.log('Window location:', window.location.origin);
-    const response = await api.post('/auth/login', {
+    const response = await authApi.post('/login', {
       username,
       password,
     });
@@ -135,23 +117,43 @@ export const authService = {
 
   // Logout user
   async logout() {
-    const response = await api.post('/auth/logout');
-    return response.data;
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      const response = await authApi.post('/logout', {}, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return response.data;
+    }
   },
 
-  // Refresh token
-  async refreshToken(refresh_token) {
-    const response = await api.post('/auth/refresh', {}, {
-      headers: {
-        Authorization: `Bearer ${refresh_token}`,
-      },
-    });
-    return response.data;
+  // Session extension (replaces refresh token in session-based auth)
+  async extendSession() {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      const response = await authApi.post('/session/extend', {}, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return response.data;
+    }
+    throw new Error('No access token');
   },
 
   // Get current user info
   async getCurrentUser() {
-    const response = await api.get('/auth/me');
-    return response.data;
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      // Get user info from auth service
+      const response = await authApi.get('/me', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return response.data;
+    }
+    throw new Error('No access token');
   },
 }; 

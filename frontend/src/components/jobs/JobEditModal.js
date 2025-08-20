@@ -67,7 +67,7 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
     try {
       console.log('🔍 Fetching full job details for job ID:', job.id);
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/jobs/${job.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -117,7 +117,7 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
   const fetchTargets = async () => {
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/targets/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -135,7 +135,7 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
 
   const fetchSystemTimezone = async () => {
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/system/info`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -222,7 +222,7 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
       setFormData(initialFormData);
 
       // Try to fetch more complete job details from v3 API (includes actions and targets)
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/jobs/${job.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -249,7 +249,7 @@ const JobEditModal = ({ open, job, onClose, onSubmit }) => {
         if (finalTargetIds.length === 0) {
           console.log('🔍 No targets found, trying to fetch from job targets endpoint...');
           try {
-            const targetsResponse = await fetch(`/api/v3/jobs/${job.id}/targets`, {
+            const targetsResponse = await fetch(`${process.env.REACT_APP_API_URL || ''}/jobs/${job.id}/targets`, {
               headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'

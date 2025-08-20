@@ -5,21 +5,22 @@ import { configureStore } from '@reduxjs/toolkit';
 import { setupListeners } from '@reduxjs/toolkit/query/react';
 
 // Import slices
-import authSlice from './slices/authSlice';
+
 import uiSlice from './slices/uiSlice';
 import jobsSlice from './slices/jobsSlice';
 import targetsSlice from './slices/targetsSlice';
 
-// Import API slice
+// Import API slices
 import { apiSlice } from './api/apiSlice';
+import { usersApi } from './api/usersApi';
 
 export const store = configureStore({
   reducer: {
-    // API slice
+    // API slices
     [apiSlice.reducerPath]: apiSlice.reducer,
+    [usersApi.reducerPath]: usersApi.reducer,
     
     // Feature slices
-    auth: authSlice,
     ui: uiSlice,
     jobs: jobsSlice,
     targets: targetsSlice,
@@ -29,7 +30,7 @@ export const store = configureStore({
       serializableCheck: {
         ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE'],
       },
-    }).concat(apiSlice.middleware),
+    }).concat(apiSlice.middleware, usersApi.middleware),
   devTools: process.env.NODE_ENV !== 'production',
 });
 

@@ -39,11 +39,8 @@ import { RefreshAction, EditAction, DeleteAction } from '../../../components/com
 import { getStatusRowStyling, getTableCellStyle } from '../../../utils/tableUtils';
 import { useTheme } from '@mui/material/styles';
 
-// Redux selectors and actions
-import {
-  selectCurrentUser,
-  selectIsAuthenticated,
-} from '../../../store/slices/authSlice';
+// Use SessionAuth instead of Redux for user data
+import { useSessionAuth } from '../../../contexts/SessionAuthContext';
 import {
   selectFilters,
   selectPagination,
@@ -60,7 +57,7 @@ import '../../../styles/dashboard.css';
 const UserList = () => {
   const theme = useTheme();
   const dispatch = useDispatch();
-  const currentUser = useSelector(selectCurrentUser);
+  const { user: currentUser } = useSessionAuth();
   const filters = useSelector(selectFilters);
   const pagination = useSelector(selectPagination);
   

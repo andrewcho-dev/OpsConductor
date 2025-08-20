@@ -57,7 +57,7 @@ const SimpleTargetResultsModal = ({ open, onClose, executionSerial }) => {
       }
       
       // Get execution results using the correct API endpoint
-      const response = await fetch(`/api/v3/jobs/${jobId}/executions/${executionNumber}/results`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/jobs/${jobId}/executions/${executionNumber}/results`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

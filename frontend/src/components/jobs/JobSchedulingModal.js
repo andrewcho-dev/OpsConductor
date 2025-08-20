@@ -88,7 +88,7 @@ const JobSchedulingModal = ({ open, onClose, job, onSchedule, token }) => {
 
   const fetchExistingSchedules = async () => {
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/jobs/${job.id}/schedules`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -107,7 +107,7 @@ const JobSchedulingModal = ({ open, onClose, job, onSchedule, token }) => {
 
   const fetchSystemTimezone = async () => {
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/system/info`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -195,7 +195,7 @@ const JobSchedulingModal = ({ open, onClose, job, onSchedule, token }) => {
         schedulePayload.end_date = scheduleData.endDate;
       }
 
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/jobs/schedules`, {
         method: 'POST',
         headers: {
@@ -219,7 +219,7 @@ const JobSchedulingModal = ({ open, onClose, job, onSchedule, token }) => {
 
   const deleteSchedule = async (scheduleId) => {
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/jobs/schedules/${scheduleId}`, {
         method: 'DELETE',
         headers: {

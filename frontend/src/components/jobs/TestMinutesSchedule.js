@@ -8,10 +8,11 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
+import { apiService } from '../../services/apiService';
 
 const TestMinutesSchedule = () => {
-  const { authService } = useAuth();
+  const { user } = useSessionAuth();
   const [jobId, setJobId] = useState('');
   const [interval, setInterval] = useState(2);
   const [loading, setLoading] = useState(false);
@@ -28,8 +29,8 @@ const TestMinutesSchedule = () => {
       console.log(`🧪 Testing minutes schedule for job ${jobId} with interval ${interval}`);
       
       // Call the test endpoint
-      const response = await authService.api.post(
-        `/api/schedules/test-minutes?job_id=${jobId}&interval=${interval}`
+      const response = await apiService.post(
+        `${process.env.REACT_APP_API_URL || ''}/schedules/test-minutes?job_id=${jobId}&interval=${interval}`
       );
       
       console.log('✅ Test response:', response.data);

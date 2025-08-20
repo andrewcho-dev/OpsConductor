@@ -37,7 +37,7 @@ import {
   KeyboardArrowUp as ArrowUpIcon
 } from '@mui/icons-material';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
-import { authService } from '../../services/authService';
+import { apiService } from '../../services/apiService';
 import { formatLocalDateTime } from '../../utils/timeUtils';
 import StandardDataTable from '../common/StandardDataTable';
 import '../../styles/dashboard.css';
@@ -66,7 +66,7 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
     try {
       console.log('Making API call to:', url);
       // Don't replace /api prefix as it might be needed
-      const response = await authService.api.get(url, options);
+      const response = await apiService.get(`/${url}`);
       console.log('API response:', response.data);
       return response.data;
     } catch (error) {
@@ -119,14 +119,14 @@ const ExecutionLogViewerModal = ({ open, onClose, executionSerial, jobName }) =>
       try {
         console.log(`Fetching execution logs for job ${jobId}, execution ${executionNumber}`);
         
-        // First try to get the execution details - use relative path since REACT_APP_API_URL already includes /api/v3
-        const executionResponse = await authService.api.get(`jobs/${jobId}/executions/${executionNumber}`);
+        // First try to get the execution details
+        const executionResponse = await apiService.get(`/jobs/${jobId}/executions/${executionNumber}`);
         console.log('Execution details response:', executionResponse.data);
         
         // The execution details endpoint now exists and returns ExecutionResponse
         // Try to fetch execution results to get detailed action information
         try {
-          const resultsResponse = await authService.api.get(`jobs/${jobId}/executions/${executionNumber}/results`);
+          const resultsResponse = await apiService.get(`/jobs/${jobId}/executions/${executionNumber}/results`);
           console.log('Execution results response:', resultsResponse.data);
           
           // Transform the results to match the expected action format

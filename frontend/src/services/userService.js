@@ -30,37 +30,13 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
+      console.log('🚪 Session expired in userService, redirecting to login...');
 
-      try {
-        const refresh_token = localStorage.getItem('refresh_token');
-        if (!refresh_token) {
-          throw new Error('No refresh token');
-        }
-
-        const response = await axios.post(
-          `/api/auth/refresh`,
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${refresh_token}`,
-            },
-          }
-        );
-
-        const { access_token, refresh_token: new_refresh_token } = response.data;
-        localStorage.setItem('access_token', access_token);
-        localStorage.setItem('refresh_token', new_refresh_token);
-
-        // Retry original request with new token
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
-        return api(originalRequest);
-      } catch (refreshError) {
-        // Refresh failed, redirect to login
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
-      }
+      // Clear tokens and redirect to login (no refresh tokens in session-based auth)
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token'); // Remove any old refresh tokens
+      window.location.href = '/login';
+      return Promise.reject(error);
     }
 
     return Promise.reject(error);

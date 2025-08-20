@@ -59,7 +59,7 @@ const TargetSelectionModal = ({ open, onClose, selectedTargetIds = [], onSelecti
   const fetchTargets = async () => {
     setLoading(true);
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/targets/`, {
         headers: {
           'Authorization': `Bearer ${token}`,

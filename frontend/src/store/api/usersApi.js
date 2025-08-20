@@ -1,9 +1,39 @@
 /**
  * Users API endpoints using RTK Query
+ * Uses auth service endpoints - NO HARDCODED URLS
  */
-import { apiSlice } from './apiSlice';
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
-export const usersApi = apiSlice.injectEndpoints({
+const authBaseQuery = fetchBaseQuery({
+  baseUrl: process.env.REACT_APP_AUTH_URL || '/api/auth',
+  prepareHeaders: (headers, { getState }) => {
+    const token = localStorage.getItem('access_token');
+    
+    if (token) {
+      headers.set('authorization', `Bearer ${token}`);
+    }
+    
+    headers.set('content-type', 'application/json');
+    return headers;
+  },
+});
+
+const authBaseQueryWithReauth = async (args, api, extraOptions) => {
+  let result = await authBaseQuery(args, api, extraOptions);
+  
+  if (result.error && result.error.status === 401) {
+    console.log('🚪 Auth service session expired, redirecting to login...');
+    localStorage.removeItem('access_token');
+    window.location.href = '/login';
+  }
+  
+  return result;
+};
+
+export const usersApi = createApi({
+  reducerPath: 'usersApi',
+  baseQuery: authBaseQueryWithReauth,
+  tagTypes: ['User'],
   endpoints: (builder) => ({
     // Get users with pagination and filtering
     getUsers: builder.query({
@@ -53,46 +83,7 @@ export const usersApi = apiSlice.injectEndpoints({
       transformResponse: (response) => response.data || response,
     }),
 
-    // Change password
-    changePassword: builder.mutation({
-      query: ({ id, currentPassword, newPassword }) => ({
-        url: `/users/${id}/change-password`,
-        method: 'POST',
-        body: {
-          current_password: currentPassword,
-          new_password: newPassword,
-        },
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'User', id }],
-    }),
-
-    // Deactivate user
-    deactivateUser: builder.mutation({
-      query: (id) => ({
-        url: `/users/${id}/deactivate`,
-        method: 'POST',
-      }),
-      invalidatesTags: (result, error, id) => [
-        { type: 'User', id },
-        'User',
-      ],
-      transformResponse: (response) => response.data || response,
-    }),
-
-    // Activate user
-    activateUser: builder.mutation({
-      query: (id) => ({
-        url: `/users/${id}/activate`,
-        method: 'POST',
-      }),
-      invalidatesTags: (result, error, id) => [
-        { type: 'User', id },
-        'User',
-      ],
-      transformResponse: (response) => response.data || response,
-    }),
-
-    // Delete user (if implemented)
+    // Delete user
     deleteUser: builder.mutation({
       query: (id) => ({
         url: `/users/${id}`,
@@ -100,16 +91,54 @@ export const usersApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['User'],
     }),
+
+    // Change own password
+    changePassword: builder.mutation({
+      query: ({ currentPassword, newPassword }) => ({
+        url: '/users/change-password',
+        method: 'POST',
+        body: {
+          current_password: currentPassword,
+          new_password: newPassword,
+        },
+      }),
+    }),
+
+    // Admin reset user password
+    resetUserPassword: builder.mutation({
+      query: ({ id, newPassword }) => ({
+        url: `/users/${id}/reset-password`,
+        method: 'POST',
+        body: {
+          new_password: newPassword,
+        },
+      }),
+      invalidatesTags: (result, error, { id }) => [{ type: 'User', id }],
+    }),
+
+    // Toggle user status (activate/deactivate)
+    toggleUserStatus: builder.mutation({
+      query: (id) => ({
+        url: `/users/${id}/toggle-status`,
+        method: 'POST',
+      }),
+      invalidatesTags: (result, error, id) => [
+        { type: 'User', id },
+        'User',
+      ],
+      transformResponse: (response) => response.data || response,
+    }),
   }),
 });
 
+// Export hooks for usage in functional components
 export const {
   useGetUsersQuery,
   useGetUserByIdQuery,
   useCreateUserMutation,
   useUpdateUserMutation,
-  useChangePasswordMutation,
-  useDeactivateUserMutation,
-  useActivateUserMutation,
   useDeleteUserMutation,
+  useChangePasswordMutation,
+  useResetUserPasswordMutation,
+  useToggleUserStatusMutation,
 } = usersApi;

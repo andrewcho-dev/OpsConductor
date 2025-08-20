@@ -393,7 +393,7 @@ const JobList = ({
 
         for (const job of jobsToTerminate) {
             try {
-                const response = await fetch(`/api/v3/jobs/${job.id}/terminate`, {
+                const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/jobs/${job.id}/terminate`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

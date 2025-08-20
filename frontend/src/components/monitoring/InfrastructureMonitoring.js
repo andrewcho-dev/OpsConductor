@@ -43,7 +43,7 @@ const InfrastructureMonitoring = () => {
 
   const fetchSystemMetrics = async () => {
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/monitoring/system-metrics`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -66,7 +66,7 @@ const InfrastructureMonitoring = () => {
 
   const fetchNetdataInfo = async () => {
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/monitoring/netdata-info`, {
         headers: {
           'Authorization': `Bearer ${token}`,

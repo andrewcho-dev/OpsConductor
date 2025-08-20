@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../styles/dashboard.css';
-import authService from '../../services/authService';
+import { apiService } from '../../services/apiService';
 import {
   Typography,
   Button,
@@ -158,11 +158,12 @@ const UserManagement = () => {
     setLoading(true);
     try {
       console.log('🔍 Loading users from API...');
-      const response = await authService.api.get('/users');
-      console.log('👥 Users response:', response.data);
+      const response = await apiService.get('/users');
+      console.log('👥 Users response:', response);
       
       // Handle both array response and paginated response
-      const usersData = Array.isArray(response.data) ? response.data : response.data.users || [];
+      const responseData = await response.json();
+      const usersData = Array.isArray(responseData) ? responseData : responseData.users || [];
       setUsers(usersData);
       console.log(`👥 Loaded ${usersData.length} users`);
     } catch (error) {

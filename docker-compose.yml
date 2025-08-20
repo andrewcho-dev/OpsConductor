@@ -46,6 +46,63 @@ services:
       retries: 5
 
   # =============================================================================
+  # AUTH DATABASE - PostgreSQL
+  # =============================================================================
+  auth-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-auth-postgres
+    environment:
+      POSTGRES_DB: ${AUTH_POSTGRES_DB:-auth_db}
+      POSTGRES_USER: ${AUTH_POSTGRES_USER:-auth_user}
+      POSTGRES_PASSWORD: ${AUTH_POSTGRES_PASSWORD:-auth_password}
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+      - ./auth-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_POSTGRES_USER:-auth_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # AUTH SERVICE - FastAPI
+  # =============================================================================
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-auth-service
+    environment:
+      - DATABASE_URL=postgresql://${AUTH_POSTGRES_USER:-auth_user}:${AUTH_POSTGRES_PASSWORD:-auth_password}@auth-postgres:5432/${AUTH_POSTGRES_DB:-auth_db}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
+      - SESSION_TIMEOUT_MINUTES=${SESSION_TIMEOUT_MINUTES:-480}
+      - SESSION_WARNING_MINUTES=${SESSION_WARNING_MINUTES:-2}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG:-false}
+    networks:
+      - opsconductor-network
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
   # BACKEND - FastAPI
   # =============================================================================
   backend:
@@ -61,6 +118,7 @@ services:
       - JWT_ALGORITHM=${JWT_ALGORITHM}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
       - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
+      - AUTH_SERVICE_URL=http://opsconductor-auth-service:8000
       - ENVIRONMENT=${ENVIRONMENT}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - MAX_CONCURRENT_TARGETS=${MAX_CONCURRENT_TARGETS}
@@ -75,10 +133,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - opsconductor-network
+    ports:
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      auth-service:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -104,12 +166,15 @@ services:
       - WDS_SOCKET_PORT=${FRONTEND_PORT}
       - HTTPS=false
       - REACT_APP_API_URL=${REACT_APP_API_URL}
+      - REACT_APP_AUTH_URL=${REACT_APP_AUTH_URL}
       - REACT_APP_WS_URL=${REACT_APP_WS_URL}
     volumes:
       - ./frontend:/app
       - /app/node_modules
     networks:
       - opsconductor-network
+    ports:
+      - "3000:3000"
     depends_on:
       - backend
     restart: unless-stopped
@@ -280,6 +345,8 @@ networks:
 
 volumes:
   postgres_data:
+    driver: local
+  auth_postgres_data:
     driver: local
   prometheus_data:
     driver: local

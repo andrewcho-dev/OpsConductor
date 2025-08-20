@@ -21,14 +21,16 @@ export const SessionAuthProvider = ({ children }) => {
     timeRemaining: 0
   });
 
+  // Auth service URL - declared once and reused
+  const authUrl = process.env.REACT_APP_AUTH_URL || '/api/auth';
+
   useEffect(() => {
     // Initialize session service
     const initializeAuth = async () => {
       const token = localStorage.getItem('access_token');
       if (token) {
         try {
-          const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
-          const response = await fetch(`${apiUrl}/auth/me`, {
+          const response = await fetch(`${authUrl}/me`, {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -91,8 +93,12 @@ export const SessionAuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
-      const response = await fetch(`${apiUrl}/auth/login`, {
+      // Clear any existing tokens before login
+      localStorage.removeItem('access_token');
+      console.log('🧹 Cleared existing tokens');
+      
+      // Login goes to AUTH SERVICE, not main backend
+      const response = await fetch(`${authUrl}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,8 +124,10 @@ export const SessionAuthProvider = ({ children }) => {
       console.log('🔑 Session ID from response:', data.session_id);
       sessionService.setSessionId(data.session_id);
       
-      // Get user data
-      const userResponse = await fetch(`${apiUrl}/auth/me`, {
+      // Get user data from auth service
+      console.log('🔍 FULL TOKEN being sent to /me endpoint:', data.access_token);
+      console.log('🔍 Token length:', data.access_token.length);
+      const userResponse = await fetch(`${authUrl}/me`, {
         headers: {
           'Authorization': `Bearer ${data.access_token}`,
           'Content-Type': 'application/json'
@@ -132,7 +140,10 @@ export const SessionAuthProvider = ({ children }) => {
         setIsAuthenticated(true);
         return { success: true };
       } else {
-        throw new Error('Failed to get user data');
+        console.error('❌ /me endpoint failed:', userResponse.status, await userResponse.text());
+        // If /me fails, clear the token and try again
+        localStorage.removeItem('access_token');
+        throw new Error(`Failed to get user data: ${userResponse.status}`);
       }
 
     } catch (error) {
@@ -148,8 +159,7 @@ export const SessionAuthProvider = ({ children }) => {
     try {
       const token = localStorage.getItem('access_token');
       if (token) {
-        const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
-        await fetch(`${apiUrl}/auth/logout`, {
+        await fetch(`${authUrl}/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

@@ -5,15 +5,16 @@
 
 class SessionService {
   constructor() {
-    // Use system settings values (will be updated from server)
-    this.activityTimeout = 5 * 60 * 1000; // 5 minutes in milliseconds (minimum)
-    this.warningThreshold = 2 * 60 * 1000; // 2 minutes warning before timeout (default)
+    // Default values (will be updated from system settings)
+    this.activityTimeout = 60 * 60 * 1000; // 60 minutes default (inactivity_timeout_minutes)
+    this.warningThreshold = 2 * 60 * 1000; // 2 minutes warning before timeout (warning_time_minutes)
     this.checkInterval = 5 * 1000; // Check every 5 seconds
     
     this.lastActivity = Date.now();
     this.sessionCheckTimer = null;
     this.warningShown = false;
     this.sessionId = null;
+    this.settingsLoaded = false;
     
     this.listeners = {
       warning: [],
@@ -21,10 +22,7 @@ class SessionService {
       extend: []
     };
     
-    console.log('🔧 SessionService initialized with:');
-    console.log(`⏱️ Activity timeout: ${this.activityTimeout / 60000} minutes`);
-    console.log(`⚠️ Warning threshold: ${this.warningThreshold / 60000} minutes before timeout`);
-    console.log(`🔄 Check interval: ${this.checkInterval / 1000} seconds`);
+    console.log('🔧 SessionService initialized with defaults');
     
     this.init();
   }
@@ -74,9 +72,9 @@ class SessionService {
         return;
       }
       
-      // Make API call to get session status
-      const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
-      fetch(`${apiUrl}/auth/session/status`, {
+      // Fetch system settings to get configurable timeout values
+      const apiUrl = process.env.REACT_APP_API_URL || '';
+      fetch(`${apiUrl}/system/settings`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -87,30 +85,32 @@ class SessionService {
         if (response.ok) {
           return response.json();
         } else {
-          console.warn('⚠️ Failed to fetch session settings:', response.status);
-          throw new Error('Failed to fetch session settings');
+          console.warn('⚠️ Failed to fetch system settings:', response.status);
+          throw new Error('Failed to fetch system settings');
         }
       })
       .then(data => {
-        console.log('✅ Received session settings from server:', data);
+        console.log('✅ Received system settings from server:', data);
         
-        // Update warning threshold from server
-        if (data.warning_threshold) {
-          this.warningThreshold = data.warning_threshold * 1000; // Convert seconds to ms
-          console.log(`⚠️ Updated warning threshold to ${this.warningThreshold / 60000} minutes`);
+        const settings = data.settings || {};
+        
+        // Update activity timeout from inactivity_timeout_minutes
+        if (settings.inactivity_timeout_minutes) {
+          this.activityTimeout = settings.inactivity_timeout_minutes * 60 * 1000; // Convert minutes to ms
+          console.log(`⏱️ Updated activity timeout to ${settings.inactivity_timeout_minutes} minutes from system settings`);
         }
         
-        // Update total timeout based on time remaining
-        if (data.time_remaining) {
-          // Get the full timeout value, not just remaining time
-          // The server sends the full timeout value when session is fresh
-          this.activityTimeout = data.time_remaining * 1000; // Convert seconds to ms
-          console.log(`⏱️ Updated activity timeout to ${this.activityTimeout / 60000} minutes`);
-          
-          // Force update activity to reset the timer
-          this.lastActivity = Date.now();
-          console.log(`🔄 Reset activity timer at ${new Date(this.lastActivity).toLocaleTimeString()}`);
+        // Update warning threshold from warning_time_minutes
+        if (settings.warning_time_minutes) {
+          this.warningThreshold = settings.warning_time_minutes * 60 * 1000; // Convert minutes to ms
+          console.log(`⚠️ Updated warning threshold to ${settings.warning_time_minutes} minutes from system settings`);
         }
+        
+        this.settingsLoaded = true;
+        
+        // Force update activity to reset the timer
+        this.lastActivity = Date.now();
+        console.log(`🔄 Reset activity timer at ${new Date(this.lastActivity).toLocaleTimeString()}`);
         
         // Debug log current state
         console.log(`🔍 Current session state:
@@ -178,9 +178,9 @@ class SessionService {
         return;
       }
       
-      // Make API call to log activity
-      const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
-      fetch(`${apiUrl}/auth/session/activity`, {
+      // Make API call to extend session (auth service)
+      const authUrl = process.env.REACT_APP_AUTH_URL || '/api/auth';
+      fetch(`${authUrl}/session/extend`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -317,8 +317,8 @@ class SessionService {
       this.notifyListeners('extend');
       
       // Call server endpoint to extend session
-      const apiUrl = process.env.REACT_APP_API_URL || '/api/v3';
-      fetch(`${apiUrl}/auth/session/extend`, {
+      const authUrl = process.env.REACT_APP_AUTH_URL || '/api/auth';
+      fetch(`${authUrl}/session/extend`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -63,7 +63,7 @@ function AuditDashboard() {
       setError(null);
       
       // Fetch events with pagination
-      const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const baseUrl = process.env.REACT_APP_API_URL || '';
       const eventsResponse = await fetch(`${baseUrl}/audit/events?page=${currentPage}&limit=${pageSize}&sort=${sortField}&order=${sortDirection}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -143,7 +143,7 @@ function AuditDashboard() {
   // Handle export
   const handleExport = async (format) => {
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const baseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${baseUrl}/audit/export?format=${format}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

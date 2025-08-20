@@ -3,7 +3,7 @@
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { selectCurrentToken } from '../store/slices/authSlice';
+// Get token from localStorage instead of Redux since we removed authSlice
 import { 
   updateExecutionProgress, 
   addExecutionLog,
@@ -13,7 +13,7 @@ import { addAlert } from '../store/slices/uiSlice';
 
 const useWebSocket = (room = null) => {
   const dispatch = useDispatch();
-  const token = useSelector(selectCurrentToken);
+  const token = localStorage.getItem('access_token');
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
   const wsRef = useRef(null);
@@ -30,7 +30,7 @@ const useWebSocket = (room = null) => {
 
     try {
       const baseWsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
-      const apiPath = process.env.REACT_APP_API_URL ? `${process.env.REACT_APP_API_URL}/websocket/connect` : '/api/v3/websocket/connect';
+      const apiPath = `${process.env.REACT_APP_API_URL || ''}/websocket/connect`;
       const wsUrl = `${baseWsUrl}${apiPath}/${token}${room ? `?room=${room}` : ''}`;
       wsRef.current = new WebSocket(wsUrl);
 

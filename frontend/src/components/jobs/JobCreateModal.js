@@ -69,7 +69,7 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
 
   const fetchTargets = async () => {
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/targets/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -87,7 +87,7 @@ const JobCreateModal = ({ open, onClose, onCreateJob }) => {
 
   const fetchSystemTimezone = async () => {
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/system/info`, {
         headers: {
           'Authorization': `Bearer ${token}`,

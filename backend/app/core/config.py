@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours for a full work day
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
+    # Auth Service
+    AUTH_SERVICE_URL: str = "http://opsconductor-auth-service:8000"
+    
     # CORS
     CORS_ORIGINS: Optional[str] = None
     

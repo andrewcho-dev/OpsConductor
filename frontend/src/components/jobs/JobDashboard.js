@@ -25,7 +25,7 @@ import JobList from './JobList';
 import JobSafetyControls from './JobSafetyControls';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useAlert } from '../layout/BottomStatusBar';
-import { authService } from '../../services/authService';
+import { apiService } from '../../services/apiService';
 import '../../styles/dashboard.css';
 
 const JobDashboard = () => {
@@ -50,7 +50,7 @@ const JobDashboard = () => {
         try {
             setLoading(true);
             
-            const response = await authService.api.get('/jobs/');
+            const response = await apiService.get('/jobs/');
             setJobs(response.data || []);
             addAlert(`Loaded ${response.data?.length || 0} jobs successfully`, 'success', 3000);
         } catch (error) {
@@ -81,7 +81,7 @@ const JobDashboard = () => {
     // Gentle refresh - only updates changed data without showing loading state
     const gentleRefresh = async () => {
         try {
-            const response = await authService.api.get('/jobs/');
+            const response = await apiService.get('/jobs/');
             const newJobs = response.data || [];
             
             // Only update if data has actually changed
@@ -130,7 +130,7 @@ const JobDashboard = () => {
     const handleCreateJob = async (jobData, scheduleConfig) => {
         try {
             // First create the job
-            const response = await authService.api.post('/jobs/', jobData);
+            const response = await apiService.post('/jobs/', jobData);
             const newJob = response.data;
             setJobs(prevJobs => [newJob, ...prevJobs]);
             
@@ -205,7 +205,7 @@ const JobDashboard = () => {
                     console.log('📤 Creating new schedule');
                     try {
                         // The baseURL already includes /api, so we don't need to include it again
-                        const scheduleResponse = await authService.api.post('/schedules', scheduleData);
+                        const scheduleResponse = await apiService.post('/schedules', scheduleData);
                         console.log('✅ Schedule creation response:', scheduleResponse.status, scheduleResponse.data);
                     } catch (error) {
                         console.error('❌ Schedule creation error:', error);
@@ -232,7 +232,7 @@ const JobDashboard = () => {
 
     const handleExecuteJob = async (jobId, targetIds = null) => {
         try {
-            const response = await authService.api.post(`/jobs/${jobId}/execute`, { target_ids: targetIds });
+            const response = await apiService.post(`/jobs/${jobId}/execute`, { target_ids: targetIds });
             fetchJobs(); // Refresh job list
             addAlert(`Job execution started successfully`, 'success', 3000);
             return true;
@@ -245,7 +245,7 @@ const JobDashboard = () => {
     const handleScheduleJob = async (jobId, scheduledAt) => {
         try {
             // Note: Scheduling moved to separate schedule service in v3
-            const response = await authService.api.post(`/jobs/${jobId}/schedule`, { scheduled_at: scheduledAt });
+            const response = await apiService.post(`/jobs/${jobId}/schedule`, { scheduled_at: scheduledAt });
             fetchJobs(); // Refresh job list
             return true;
         } catch (error) {
@@ -270,7 +270,7 @@ const JobDashboard = () => {
             console.log('📤 JobDashboard: Sending job data:', jobData);
             
             // Update the basic job first
-            const response = await authService.api.put(`/jobs/${jobId}`, jobData);
+            const response = await apiService.put(`/jobs/${jobId}`, jobData);
             console.log('✅ JobDashboard: Job API response:', response.status, response.data);
             
             if (response.status === 200 && response.data) {
@@ -286,12 +286,12 @@ const JobDashboard = () => {
                         try {
                             console.log('🔍 Fetching schedules for job:', updatedJob.id);
                             // The baseURL already includes /api, so we don't need to include it again
-                            const existingSchedulesResponse = await authService.api.get(`/schedules?job_id=${updatedJob.id}`);
+                            const existingSchedulesResponse = await apiService.get(`/schedules?job_id=${updatedJob.id}`);
                             if (existingSchedulesResponse.data && existingSchedulesResponse.data.length > 0) {
                                 for (const existingSchedule of existingSchedulesResponse.data) {
                                     console.log('🗑️ Deleting schedule:', existingSchedule.id);
                                     // The baseURL already includes /api, so we don't need to include it again
-                                    await authService.api.delete(`/schedules/${existingSchedule.id}`);
+                                    await apiService.delete(`/schedules/${existingSchedule.id}`);
                                     console.log('🗑️ JobDashboard: Deleted existing schedule:', existingSchedule.id);
                                 }
                             }
@@ -461,7 +461,7 @@ const JobDashboard = () => {
                             // Final check of the data being sent
                             console.log('📤 Final schedule data being sent:', JSON.stringify(scheduleData, null, 2));
                             
-                            const scheduleResponse = await authService.api.post('/schedules', scheduleData);
+                            const scheduleResponse = await apiService.post('/schedules', scheduleData);
                             console.log('✅ Schedule creation response status:', scheduleResponse.status);
                             console.log('✅ Schedule creation response data:', JSON.stringify(scheduleResponse.data, null, 2));
                         } catch (error) {
@@ -523,7 +523,7 @@ const JobDashboard = () => {
 
     const handleDeleteJob = async (jobId) => {
         try {
-            await authService.api.delete(`/jobs/${jobId}`);
+            await apiService.delete(`/jobs/${jobId}`);
             // Remove the job from the local state
             setJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
             addAlert(`Job deleted successfully`, 'success', 3000);

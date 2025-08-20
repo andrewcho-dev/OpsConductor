@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { authService } from '../../services/authService';
+import { apiService } from '../../services/apiService';
 import { 
   Typography, 
   Button, 
@@ -32,7 +32,7 @@ import { useAlert } from '../layout/BottomStatusBar';
 import StandardPageLayout, { StandardContentCard } from '../common/StandardPageLayout';
 
 // Use centralized auth service with automatic token refresh and logout
-const api = authService.api;
+// Use apiService directly instead of authService.api
 
 const SystemSettings = () => {
   // Core state from original

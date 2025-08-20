@@ -55,7 +55,7 @@ const SystemHealthDashboard = () => {
     if (!refreshing) setRefreshing(true);
     
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const baseUrl = process.env.REACT_APP_API_URL || '';
       const token = localStorage.getItem('access_token');
       const headers = { 
         'Content-Type': 'application/json',
@@ -139,7 +139,7 @@ const SystemHealthDashboard = () => {
         return;
       }
       
-      const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const baseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${baseUrl}/system/health/volumes/prune`, {
         method: 'POST',
         headers: {
@@ -182,7 +182,7 @@ const SystemHealthDashboard = () => {
         return;
       }
 
-      const baseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const baseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${baseUrl}/system/health/services/${serviceName}/${action}`, {
         method: 'POST',
         headers: {

@@ -37,7 +37,7 @@ const JobSafetyControls = ({ onRefresh, token }) => {
   const handleCleanupStaleJobs = async () => {
     try {
       setLoading(true);
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/jobs/safety/cleanup-stale`, {
         method: 'POST',
         headers: {
@@ -69,7 +69,7 @@ const JobSafetyControls = ({ onRefresh, token }) => {
 
     try {
       setLoading(true);
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/jobs/safety/terminate/${terminateDialog.jobId}`, {
         method: 'POST',
         headers: {
@@ -99,7 +99,7 @@ const JobSafetyControls = ({ onRefresh, token }) => {
   const handleGetHealthStatus = async () => {
     try {
       setLoading(true);
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/jobs/safety/health`, {
         headers: {
           'Authorization': `Bearer ${token}`,

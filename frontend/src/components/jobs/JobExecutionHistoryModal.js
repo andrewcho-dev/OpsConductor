@@ -85,7 +85,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/v3/jobs/${job.id}/executions`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/jobs/${job.id}/executions`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -476,7 +476,7 @@ const JobExecutionHistoryModal = ({ open, onClose, job }) => {
         
         try {
           setLoading(true);
-          const url = `/api/v3/jobs/${job.id}/executions/${executionId}/results`;
+          const url = `${process.env.REACT_APP_API_URL || ''}/jobs/${job.id}/executions/${executionId}/results`;
           console.log('📡 Making request to:', url);
           
           const response = await fetch(url, {

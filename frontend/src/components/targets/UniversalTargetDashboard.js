@@ -109,7 +109,7 @@ const UniversalTargetDashboard = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const apiBaseUrl = process.env.REACT_APP_API_URL || '/api/v3';
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${apiBaseUrl}/targets/health-check-batch`, {
         method: 'POST',
         headers: {

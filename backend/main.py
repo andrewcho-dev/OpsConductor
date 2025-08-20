@@ -191,9 +191,9 @@ app.add_middleware(
 from app.api.v3 import (
     jobs_simple as jobs_v3,
     schedules as schedules_v3,
-    users as users_v3,
+
     targets as targets_v3,
-    auth as auth_v3,
+
     system as system_v3,
     celery as celery_v3,
     audit as audit_v3,
@@ -212,9 +212,9 @@ from app.api.v3 import (
 # Include V3 consolidated APIs
 app.include_router(jobs_v3.router, tags=["Jobs v3 - Simplified"])
 app.include_router(schedules_v3.router, tags=["Schedules v3"])
-app.include_router(users_v3.router, tags=["Users v3"])
+# Users management moved to auth service - NO LONGER IN MAIN BACKEND
 app.include_router(targets_v3.router, tags=["Targets v3"])
-app.include_router(auth_v3.router, tags=["Auth v3"])
+
 app.include_router(system_v3.router, tags=["System v3"])
 app.include_router(celery_v3.router, tags=["Celery v3"])
 app.include_router(audit_v3.router, tags=["Audit v3"])
