@@ -68,7 +68,29 @@ services:
       retries: 5
 
   # =============================================================================
-  # AUTH SERVICE - FastAPI
+  # USER DATABASE - PostgreSQL
+  # =============================================================================
+  user-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-user-postgres
+    environment:
+      POSTGRES_DB: ${USER_POSTGRES_DB:-user_db}
+      POSTGRES_USER: ${USER_POSTGRES_USER:-user_user}
+      POSTGRES_PASSWORD: ${USER_POSTGRES_PASSWORD:-user_password}
+    volumes:
+      - user_postgres_data:/var/lib/postgresql/data
+      - ./user-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_POSTGRES_USER:-user_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # AUTH SERVICE - FastAPI (Authentication Only)
   # =============================================================================
   auth-service:
     build:
@@ -84,6 +106,7 @@ services:
       - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
       - SESSION_TIMEOUT_MINUTES=${SESSION_TIMEOUT_MINUTES:-480}
       - SESSION_WARNING_MINUTES=${SESSION_WARNING_MINUTES:-2}
+      - USER_SERVICE_URL=http://user-service:8000
       - ENVIRONMENT=${ENVIRONMENT}
       - DEBUG=${DEBUG:-false}
     networks:
@@ -96,6 +119,38 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # USER SERVICE - FastAPI (User Management Only)
+  # =============================================================================
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-user-service
+    environment:
+      - DATABASE_URL=postgresql://${USER_POSTGRES_USER:-user_user}:${USER_POSTGRES_PASSWORD:-user_password}@user-postgres:5432/${USER_POSTGRES_DB:-user_db}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG:-false}
+    networks:
+      - opsconductor-network
+    depends_on:
+      user-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
       interval: 30s
@@ -118,7 +173,8 @@ services:
       - JWT_ALGORITHM=${JWT_ALGORITHM}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
       - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
-      - AUTH_SERVICE_URL=http://opsconductor-auth-service:8000
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - USER_SERVICE_URL=http://user-service:8000
       - ENVIRONMENT=${ENVIRONMENT}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - MAX_CONCURRENT_TARGETS=${MAX_CONCURRENT_TARGETS}
@@ -141,6 +197,8 @@ services:
       redis:
         condition: service_healthy
       auth-service:
+        condition: service_healthy
+      user-service:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -347,6 +405,8 @@ volumes:
   postgres_data:
     driver: local
   auth_postgres_data:
+    driver: local
+  user_postgres_data:
     driver: local
   prometheus_data:
     driver: local

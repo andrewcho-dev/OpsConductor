@@ -1,0 +1,155 @@
+# ELK STACK FOR OPSCONDUCTOR MICROSERVICES
+# Production-ready centralized logging solution
+
+services:
+  # =============================================================================
+  # ELK STACK - CENTRALIZED LOGGING
+  # =============================================================================
+  
+  # Elasticsearch - Log Storage & Search Engine
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: opsconductor-elasticsearch
+    environment:
+      - node.name=elasticsearch
+      - cluster.name=opsconductor-logs
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"  # Adjust based on your RAM
+      - xpack.security.enabled=false  # Enable in production
+      - xpack.security.enrollment.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Logstash - Log Processing & Transformation
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: opsconductor-logstash
+    volumes:
+      - ./logging/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./logging/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    ports:
+      - "5044:5044"  # Beats input
+      - "5000:5000/tcp"  # TCP input
+      - "5000:5000/udp"  # UDP input
+      - "9600:9600"  # API
+    environment:
+      LS_JAVA_OPTS: "-Xmx1g -Xms1g"
+    networks:
+      - opsconductor-network
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Kibana - Log Visualization & Analytics
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: opsconductor-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_NAME=opsconductor-kibana
+      - SERVER_HOST=0.0.0.0
+    volumes:
+      - ./logging/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+    networks:
+      - opsconductor-network
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Filebeat - Log Shipper (collects logs from all services)
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.11.0
+    container_name: opsconductor-filebeat
+    user: root
+    volumes:
+      - ./logging/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./logs:/app/logs:ro
+      - ./auth-service/logs:/auth-logs:ro
+      - filebeat_data:/usr/share/filebeat/data
+    environment:
+      - ELASTICSEARCH_HOST=elasticsearch:9200
+      - KIBANA_HOST=kibana:5601
+    networks:
+      - opsconductor-network
+    depends_on:
+      - elasticsearch
+      - logstash
+    restart: unless-stopped
+
+  # =============================================================================
+  # YOUR EXISTING SERVICES (Enhanced with ELK logging)
+  # =============================================================================
+  
+  auth-service:
+    # ... your existing config ...
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+        labels: "service=auth-service,environment=production,type=microservice"
+    labels:
+      - "logging=enabled"
+      - "service=auth-service"
+
+  backend:
+    # ... your existing config ...
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+        labels: "service=backend,environment=production,type=microservice"
+    labels:
+      - "logging=enabled"
+      - "service=backend"
+
+  frontend:
+    # ... your existing config ...
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+        labels: "service=frontend,environment=production,type=microservice"
+    labels:
+      - "logging=enabled"
+      - "service=frontend"
+
+volumes:
+  elasticsearch_data:
+  filebeat_data:
+  # ... your existing volumes ...
+
+networks:
+  opsconductor-network:
+    driver: bridge

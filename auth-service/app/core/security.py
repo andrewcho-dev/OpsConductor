@@ -18,9 +18,9 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_session_token(user_id: int, session_id: str) -> str:
+def create_session_token(user_id: int, session_id: str, user_data: Dict[str, Any] = None) -> str:
     """
-    Create a JWT token that contains session ID instead of expiration.
+    Create a JWT token that contains session ID and user info.
     This token doesn't expire - the session in Redis controls validity.
     """
     to_encode = {
@@ -29,6 +29,16 @@ def create_session_token(user_id: int, session_id: str) -> str:
         "token_type": "session",
         "issued_at": datetime.utcnow().isoformat()
     }
+    
+    # Add user information for microservices compatibility
+    if user_data:
+        to_encode.update({
+            "sub": str(user_id),  # Standard JWT subject field
+            "username": user_data.get("username"),
+            "role": user_data.get("role", "user"),
+            "permissions": user_data.get("permissions", []),
+            "email": user_data.get("email")
+        })
     
     # Create token without expiration
     encoded_jwt = jwt.encode(

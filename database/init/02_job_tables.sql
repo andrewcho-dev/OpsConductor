@@ -19,7 +19,7 @@ CREATE TABLE jobs (
     description TEXT,
     job_type job_type NOT NULL DEFAULT 'command',
     status job_status NOT NULL DEFAULT 'draft',
-    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_by INTEGER NOT NULL, -- References user from user-service
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE,
     scheduled_at TIMESTAMP WITH TIME ZONE,

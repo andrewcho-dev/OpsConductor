@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS discovery_jobs (
     target_range VARCHAR(255) NOT NULL,
     discovery_config JSONB,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_by INTEGER NOT NULL, -- References user from user-service
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE,
     started_at TIMESTAMP WITH TIME ZONE,
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS discovery_templates (
     discovery_type VARCHAR(50) NOT NULL,
     template_config JSONB NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
-    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_by INTEGER NOT NULL, -- References user from user-service
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE
 );
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS discovery_schedules (
     is_active BOOLEAN DEFAULT TRUE,
     last_run TIMESTAMP WITH TIME ZONE,
     next_run TIMESTAMP WITH TIME ZONE,
-    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_by INTEGER NOT NULL, -- References user from user-service
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE
 );

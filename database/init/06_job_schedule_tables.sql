@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS job_schedules (
     current_runs INTEGER DEFAULT 0,
     last_run_at TIMESTAMP WITH TIME ZONE,
     next_run_at TIMESTAMP WITH TIME ZONE,
-    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_by INTEGER NOT NULL, -- References user from user-service
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE,
     schedule_config JSONB

@@ -36,13 +36,7 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Check if user is active
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Account is inactive",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+
     
     # Create session
     session_data = await AuthService.create_user_session(
@@ -53,11 +47,7 @@ async def login(
     user_info = UserInfo(
         id=user.id,
         username=user.username,
-        email=user.email,
-        role=user.role,
-        is_active=user.is_active,
-        last_login=user.last_login,
-        created_at=user.created_at
+        last_login=user.last_login
     )
     
     return TokenResponse(
@@ -137,17 +127,3 @@ async def extend_session(
     return {"message": "Session extended successfully"}
 
 
-@router.get("/me", response_model=UserInfo)
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    """Get current user information."""
-    validation_result = await AuthService.validate_token(credentials.credentials)
-    
-    if not validation_result.valid or not validation_result.user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-    
-    return validation_result.user

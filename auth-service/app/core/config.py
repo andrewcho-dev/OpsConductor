@@ -29,6 +29,9 @@ class Settings(BaseSettings):
         "https://localhost:443"
     ]
     
+    # Service Integration
+    USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", "http://user-service:8000")
+    
     # Environment
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"

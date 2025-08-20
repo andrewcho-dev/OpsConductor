@@ -35,10 +35,7 @@ class AuthService:
             logger.debug(f"User '{username}' not found")
             return None
         
-        # Authentication failure - user not active
-        if not user.is_active:
-            logger.debug(f"User '{username}' is not active")
-            return None
+
         
         logger.debug(f"User found, verifying password")
         
@@ -71,9 +68,6 @@ class AuthService:
         # Create session data
         user_data = {
             "username": user.username,
-            "email": user.email,
-            "role": user.role,
-            "is_active": user.is_active,
             "client_ip": client_ip,
             "user_agent": user_agent
         }
@@ -81,8 +75,8 @@ class AuthService:
         # Create session in Redis
         session_id = await session_manager.create_session(user.id, user_data)
         
-        # Create JWT token with session ID
-        access_token = create_session_token(user.id, session_id)
+        # Create JWT token with session ID and user data
+        access_token = create_session_token(user.id, session_id, user_data)
         
         return {
             "access_token": access_token,
@@ -142,11 +136,7 @@ class AuthService:
             user_info = UserInfo(
                 id=user_id,
                 username=user_data.get("username", ""),
-                email=user_data.get("email", ""),
-                role=user_data.get("role", "user"),
-                is_active=user_data.get("is_active", True),
-                last_login=None,  # We could store this in session if needed
-                created_at=datetime.utcnow()  # Placeholder
+                last_login=None
             )
             
             return TokenValidationResponse(

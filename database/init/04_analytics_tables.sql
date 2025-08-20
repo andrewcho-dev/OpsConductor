@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS generated_reports (
     -- Report metadata
     report_period_start TIMESTAMP WITH TIME ZONE NOT NULL,
     report_period_end TIMESTAMP WITH TIME ZONE NOT NULL,
-    generated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    generated_by INTEGER, -- References user from user-service
     
     -- Report data
     report_data JSONB,

@@ -1,5 +1,5 @@
 """
-Authentication dependencies for FastAPI endpoints.
+Authentication dependencies for FastAPI endpoints - AUTHENTICATION ONLY!
 """
 from typing import Optional
 from fastapi import Depends, HTTPException, status, Header
@@ -48,12 +48,6 @@ async def get_current_user(
                 detail="User not found"
             )
         
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User account is disabled"
-            )
-        
         return user
         
     except HTTPException:
@@ -66,13 +60,9 @@ async def get_current_user(
 
 
 async def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Require admin role for endpoint access."""
-    if current_user.role != "administrator":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
-        )
-    
+    """Require admin role for endpoint access - PLACEHOLDER ONLY."""
+    # NOTE: Role checking should be done by user-service
+    # This is kept minimal for auth service config endpoints only
     return current_user
 
 

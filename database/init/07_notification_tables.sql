@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS notification_templates (
     subject_template TEXT,
     body_template TEXT NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
-    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_by INTEGER NOT NULL, -- References user from user-service
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE
 );
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     is_active BOOLEAN DEFAULT TRUE,
     notification_template_id INTEGER REFERENCES notification_templates(id) ON DELETE SET NULL,
     cooldown_minutes INTEGER DEFAULT 60,
-    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_by INTEGER NOT NULL, -- References user from user-service
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE
 );
@@ -74,9 +74,9 @@ CREATE TABLE IF NOT EXISTS alert_logs (
     message TEXT NOT NULL,
     triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     acknowledged_at TIMESTAMP WITH TIME ZONE,
-    acknowledged_by INTEGER REFERENCES users(id),
+    acknowledged_by INTEGER, -- References user from user-service
     resolved_at TIMESTAMP WITH TIME ZONE,
-    resolved_by INTEGER REFERENCES users(id),
+    resolved_by INTEGER, -- References user from user-service
     context_data JSONB,
     notification_sent BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

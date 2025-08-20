@@ -1,5 +1,5 @@
 """
-Pydantic schemas for configuration management.
+Pydantic schemas for configuration management - AUTHENTICATION ONLY!
 """
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -51,17 +51,6 @@ class ConfigurationCategoryResponse(BaseModel):
     configurations: Dict[str, ConfigurationValueResponse]
 
 
-class ConfigurationBatchUpdate(BaseModel):
-    """Schema for batch configuration updates."""
-    updates: Dict[str, Any]
-
-
-class ConfigurationBatchResponse(BaseModel):
-    """Schema for batch update results."""
-    successful: List[str]
-    failed: Dict[str, str]  # key -> error message
-
-
 class SessionConfigResponse(BaseModel):
     """Schema for session configuration."""
     timeout_minutes: int
@@ -93,43 +82,3 @@ class SecurityConfigResponse(BaseModel):
     require_email_verification: bool
     force_password_change_first_login: bool
     enable_two_factor: bool
-
-
-class AuditConfigResponse(BaseModel):
-    """Schema for audit configuration."""
-    log_all_events: bool
-    retention_days: int
-    log_failed_attempts: bool
-
-
-class UserManagementConfigResponse(BaseModel):
-    """Schema for user management configuration."""
-    default_role: str
-    allow_self_registration: bool
-    require_admin_approval: bool
-
-
-class CompleteConfigResponse(BaseModel):
-    """Schema for complete configuration."""
-    session: SessionConfigResponse
-    password: PasswordPolicyResponse
-    security: SecurityConfigResponse
-    audit: AuditConfigResponse
-    users: UserManagementConfigResponse
-
-
-class ConfigurationPreset(BaseModel):
-    """Schema for configuration presets."""
-    name: str
-    description: str
-    configurations: Dict[str, Any]
-
-
-class ConfigurationPresetResponse(ConfigurationPreset):
-    """Schema for configuration preset response."""
-    id: int
-    created_at: datetime
-    created_by: Optional[int]
-
-    class Config:
-        from_attributes = True

@@ -1,5 +1,9 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, Dict, Any
+"""
+Authentication schemas - AUTHENTICATION ONLY!
+NO user management schemas here!
+"""
+from pydantic import BaseModel, Field
+from typing import Optional
 from datetime import datetime
 
 
@@ -16,14 +20,10 @@ class TokenRequest(BaseModel):
 
 
 class UserInfo(BaseModel):
-    """User information schema."""
+    """Basic user information for authentication."""
     id: int
     username: str
-    email: str
-    role: str
-    is_active: bool
     last_login: Optional[datetime] = None
-    created_at: datetime
 
     class Config:
         orm_mode = True
@@ -53,46 +53,5 @@ class SessionStatus(BaseModel):
     time_remaining: int
     warning: bool
     warning_threshold: int
-
-
-class UserCreate(BaseModel):
-    """User creation schema."""
-    username: str = Field(..., min_length=3, max_length=50)
-    email: EmailStr
-    password: str = Field(..., min_length=8)
-    role: str = Field(default="user")
-
-
-class UserUpdate(BaseModel):
-    """User update schema."""
-    username: Optional[str] = Field(None, min_length=3, max_length=50)
-    email: Optional[EmailStr] = None
-    role: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-class PasswordChange(BaseModel):
-    """Password change schema."""
-    current_password: str = Field(..., min_length=8)
-    new_password: str = Field(..., min_length=8)
-
-
-class AdminPasswordReset(BaseModel):
-    """Admin password reset schema."""
-    new_password: str = Field(..., min_length=8)
-
-
-class UserResponse(BaseModel):
-    """User response schema."""
-    id: int
-    username: str
-    email: str
-    role: str
-    is_active: bool
-    last_login: Optional[datetime] = None
-    created_at: datetime
-
-    class Config:
-        orm_mode = True
 
 
