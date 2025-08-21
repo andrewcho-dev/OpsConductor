@@ -32,7 +32,7 @@ class Target(Base):
     status = Column(String(20), nullable=False, default="active")  # active, inactive, maintenance
     health_status = Column(String(20), nullable=False, default="unknown")  # healthy, warning, critical, unknown
     tags = Column(JSONB, nullable=True, default=list)  # Flexible tagging system
-    metadata = Column(JSONB, nullable=True, default=dict)  # Additional metadata
+    target_metadata = Column(JSONB, nullable=True, default=dict)  # Additional metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     created_by = Column(Integer, nullable=True)  # User ID who created the target

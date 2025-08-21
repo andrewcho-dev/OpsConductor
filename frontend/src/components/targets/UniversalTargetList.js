@@ -33,7 +33,7 @@ import {
 import { deleteTarget } from '../../services/targetService';
 import { useAlert } from '../layout/BottomStatusBar';
 import { ViewDetailsAction, EditAction, DeleteAction } from '../common/StandardActions';
-import { getStatusRowStyling, getHealthRowStyling, getTableCellStyle } from '../../utils/tableUtils';
+import { getStatusRowStyling, getTableCellStyle } from '../../utils/tableUtils';
 import { useTheme } from '@mui/material/styles';
 import '../../styles/dashboard.css';
 
@@ -422,7 +422,7 @@ const UniversalTargetList = ({
                 <TableRow 
                   key={target.id} 
                   hover
-                  sx={getHealthRowStyling(target.health_status, theme)}
+                  sx={getStatusRowStyling(target.health_status, theme)}
                 >
                   <TableCell className="standard-table-cell">
                     {target.ip_address || 'N/A'}

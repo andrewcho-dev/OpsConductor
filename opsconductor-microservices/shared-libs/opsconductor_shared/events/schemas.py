@@ -405,3 +405,20 @@ def create_execution_started_event(
         correlation_id=correlation_id,
         user_id=started_by
     )
+
+
+def create_service_started_event(
+    service_name: str,
+    version: Optional[str] = None,
+    correlation_id: Optional[UUID] = None
+) -> ServiceHealthCheckEvent:
+    """Create a service started event"""
+    return ServiceHealthCheckEvent(
+        data=ServiceHealthCheckEvent.EventData(
+            service_name=service_name,
+            health_status="healthy",
+            checks={"startup": True},
+            uptime=0
+        ),
+        correlation_id=correlation_id
+    )

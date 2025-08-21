@@ -72,57 +72,25 @@ class SessionService {
         return;
       }
       
-      // Fetch system settings to get configurable timeout values
-      const apiUrl = process.env.REACT_APP_API_URL || '';
-      fetch(`${apiUrl}/system/settings`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      .then(response => {
-        if (response.ok) {
-          return response.json();
-        } else {
-          console.warn('⚠️ Failed to fetch system settings:', response.status);
-          throw new Error('Failed to fetch system settings');
-        }
-      })
-      .then(data => {
-        console.log('✅ Received system settings from server:', data);
+      // Use default timeout values since system settings endpoint doesn't exist in microservices
+      console.log('⚙️ Using default session timeout values (system settings endpoint not available)');
+      
+      // Set default values
+      this.activityTimeout = 60 * 60 * 1000; // 60 minutes default
+      this.warningThreshold = 2 * 60 * 1000; // 2 minutes warning default
+      this.settingsLoaded = true;
         
-        const settings = data.settings || {};
-        
-        // Update activity timeout from inactivity_timeout_minutes
-        if (settings.inactivity_timeout_minutes) {
-          this.activityTimeout = settings.inactivity_timeout_minutes * 60 * 1000; // Convert minutes to ms
-          console.log(`⏱️ Updated activity timeout to ${settings.inactivity_timeout_minutes} minutes from system settings`);
-        }
-        
-        // Update warning threshold from warning_time_minutes
-        if (settings.warning_time_minutes) {
-          this.warningThreshold = settings.warning_time_minutes * 60 * 1000; // Convert minutes to ms
-          console.log(`⚠️ Updated warning threshold to ${settings.warning_time_minutes} minutes from system settings`);
-        }
-        
-        this.settingsLoaded = true;
-        
-        // Force update activity to reset the timer
-        this.lastActivity = Date.now();
-        console.log(`🔄 Reset activity timer at ${new Date(this.lastActivity).toLocaleTimeString()}`);
-        
-        // Debug log current state
-        console.log(`🔍 Current session state:
-          - Activity timeout: ${this.activityTimeout / 60000} minutes
-          - Warning threshold: ${this.warningThreshold / 60000} minutes
-          - Time until warning: ${(this.activityTimeout - this.warningThreshold) / 60000} minutes
-          - Check interval: ${this.checkInterval / 1000} seconds
-        `);
-      })
-      .catch(error => {
-        console.error('❌ Error fetching session settings:', error);
-      });
+      // Force update activity to reset the timer
+      this.lastActivity = Date.now();
+      console.log(`🔄 Reset activity timer at ${new Date(this.lastActivity).toLocaleTimeString()}`);
+      
+      // Debug log current state
+      console.log(`🔍 Current session state:
+        - Activity timeout: ${this.activityTimeout / 60000} minutes
+        - Warning threshold: ${this.warningThreshold / 60000} minutes
+        - Time until warning: ${(this.activityTimeout - this.warningThreshold) / 60000} minutes
+        - Check interval: ${this.checkInterval / 1000} seconds
+      `);
     } catch (error) {
       console.error('❌ Error in fetchSessionSettings:', error);
     }
