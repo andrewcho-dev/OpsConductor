@@ -115,15 +115,37 @@ export const SessionAuthProvider = ({ children }) => {
         body: JSON.stringify({ username, password }),
       });
 
+      console.log('🔍 Login response status:', response.status);
+      console.log('🔍 Login response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
-        const errorData = await response.json();
-        return {
-          success: false,
-          error: errorData.detail || 'Login failed'
-        };
+        const errorText = await response.text();
+        console.log('❌ Error response text:', errorText);
+        try {
+          const errorData = JSON.parse(errorText);
+          return {
+            success: false,
+            error: errorData.detail || 'Login failed'
+          };
+        } catch (parseError) {
+          return {
+            success: false,
+            error: `Server error: ${errorText}`
+          };
+        }
       }
 
-      const data = await response.json();
+      const responseText = await response.text();
+      console.log('📥 Raw response text:', responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ JSON parse error:', parseError);
+        console.error('❌ Response text that failed to parse:', responseText);
+        throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
+      }
       console.log('🔐 Login response data:', data);
       
       // Store token
