@@ -2,10 +2,72 @@ version: '3.8'
 
 services:
   # =============================================================================
-  # INFRASTRUCTURE SERVICES
+  # INFRASTRUCTURE SERVICES - DATABASES
   # =============================================================================
   
-  # PostgreSQL Databases
+  # Auth Service Database
+  auth-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-auth-postgres
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+      - ../auth-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # User Service Database
+  user-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-user-postgres
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: user_user
+      POSTGRES_PASSWORD: user_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - user_postgres_data:/var/lib/postgresql/data
+      - ../user-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_user -d user_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Universal Targets Database
+  targets-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-targets-postgres
+    environment:
+      POSTGRES_DB: targets_db
+      POSTGRES_USER: targets_user
+      POSTGRES_PASSWORD: targets_password
+    ports:
+      - "5435:5432"
+    volumes:
+      - targets_postgres_data:/var/lib/postgresql/data
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U targets_user -d targets_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Job Management Database
   job-management-db:
     image: postgres:15-alpine
     container_name: opsconductor-job-management-db
@@ -33,7 +95,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5433:5432"
+      - "5436:5432"
     volumes:
       - job_execution_data:/var/lib/postgresql/data
     networks:
@@ -52,7 +114,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5434:5432"
+      - "5437:5432"
     volumes:
       - job_scheduling_data:/var/lib/postgresql/data
     networks:
@@ -71,7 +133,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5435:5432"
+      - "5438:5432"
     volumes:
       - audit_events_data:/var/lib/postgresql/data
     networks:
@@ -119,7 +181,108 @@ services:
       retries: 5
 
   # =============================================================================
-  # MICROSERVICES
+  # EXISTING SERVICES (Already Built & Working)
+  # =============================================================================
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ../auth-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-auth-service
+    environment:
+      - DATABASE_URL=postgresql://auth_user:auth_password@auth-postgres:5432/auth_db
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-here}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      - SESSION_TIMEOUT_MINUTES=${SESSION_TIMEOUT_MINUTES:-480}
+      - SESSION_WARNING_MINUTES=${SESSION_WARNING_MINUTES:-2}
+      - USER_SERVICE_URL=http://user-service:8000
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DEBUG=${DEBUG:-false}
+    ports:
+      - "3000:8000"
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # User Service
+  user-service:
+    build:
+      context: ../user-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-user-service
+    environment:
+      - DATABASE_URL=postgresql://user_user:user_password@user-postgres:5432/user_db
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-here}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DEBUG=${DEBUG:-false}
+    ports:
+      - "3002:8000"
+    depends_on:
+      user-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.dev
+    container_name: opsconductor-frontend
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - FAST_REFRESH=false
+      - WDS_SOCKET_HOST=0.0.0.0
+      - WDS_SOCKET_PORT=3000
+      - HTTPS=false
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8080/api}
+      - REACT_APP_AUTH_URL=${REACT_APP_AUTH_URL:-http://localhost:3000}
+      - REACT_APP_WS_URL=${REACT_APP_WS_URL:-ws://localhost:8080/ws}
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    ports:
+      - "3001:3000"
+    depends_on:
+      - auth-service
+      - user-service
+    networks:
+      - opsconductor-network
+    stdin_open: true
+    tty: true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # NEW MICROSERVICES (To Be Created)
   # =============================================================================
 
   # Job Management Service
@@ -131,15 +294,31 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@job-management-db:5432/job_management
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - REDIS_URL=redis://redis:6379/2
+      # Integration with existing services
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - USER_SERVICE_URL=http://user-service:8000
+      - TARGETS_SERVICE_URL=http://universal-targets-service:3001
+      # Integration with new services
       - JOB_EXECUTION_SERVICE_URL=http://job-execution-service:8002
       - JOB_SCHEDULING_SERVICE_URL=http://job-scheduling-service:8003
       - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8004
+      # Security
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-here}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
     ports:
       - "8001:8001"
     depends_on:
       job-management-db:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      user-service:
         condition: service_healthy
     networks:
       - opsconductor-network
@@ -157,9 +336,19 @@ services:
     container_name: opsconductor-job-execution
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@job-execution-db:5432/job_execution
-      - REDIS_URL=redis://redis:6379/1
+      - REDIS_URL=redis://redis:6379/3
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      # Integration with existing services
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - USER_SERVICE_URL=http://user-service:8000
+      - TARGETS_SERVICE_URL=http://universal-targets-service:3001
+      # Integration with new services
       - JOB_MANAGEMENT_SERVICE_URL=http://job-management-service:8001
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8004
+      # Security
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-here}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
     ports:
       - "8002:8002"
     depends_on:
@@ -168,6 +357,10 @@ services:
       redis:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      user-service:
         condition: service_healthy
     networks:
       - opsconductor-network
@@ -282,6 +475,14 @@ networks:
     name: opsconductor-microservices
 
 volumes:
+  # Existing Services Databases
+  auth_postgres_data:
+    name: opsconductor-auth-postgres-data
+  user_postgres_data:
+    name: opsconductor-user-postgres-data
+  targets_postgres_data:
+    name: opsconductor-targets-postgres-data
+  # New Microservices Databases
   job_management_data:
     name: opsconductor-job-management-data
   job_execution_data:
@@ -290,6 +491,7 @@ volumes:
     name: opsconductor-job-scheduling-data
   audit_events_data:
     name: opsconductor-audit-events-data
+  # Infrastructure
   redis_data:
     name: opsconductor-redis-data
   rabbitmq_data:

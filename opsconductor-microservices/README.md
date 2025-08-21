@@ -1,416 +1,214 @@
 # OpsConductor Microservices Architecture
 
-A complete microservice-based job orchestration and execution platform built with FastAPI, PostgreSQL, Redis, and RabbitMQ.
-
 ## 🏗️ Architecture Overview
+
+This directory contains the complete microservices architecture for OpsConductor, transforming the platform from a monolithic structure to independent, scalable services.
 
 ```
 ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│ Job Management  │  │ Job Execution   │  │ Job Scheduling  │  │ Audit & Events  │
-│    Service      │  │    Service      │  │    Service      │  │    Service      │
-│   Port: 8001    │  │   Port: 8002    │  │   Port: 8003    │  │   Port: 8004    │
-│                 │  │                 │  │                 │  │                 │
-│ ┌─────────────┐ │  │ ┌─────────────┐ │  │ ┌─────────────┐ │  │ ┌─────────────┐ │
-│ │   Jobs DB   │ │  │ │Executions DB│ │  │ │Schedules DB │ │  │ │  Events DB  │ │
-│ │ Port: 5432  │ │  │ │ Port: 5433  │ │  │ │ Port: 5434  │ │  │ │ Port: 5435  │ │
-│ └─────────────┘ │  │ └─────────────┘ │  │ └─────────────┘ │  │ └─────────────┘ │
+│   Auth Service  │  │  User Service   │  │ Universal Targets│  │ Job Management  │
+│   ✅ EXISTING   │  │   ✅ EXISTING   │  │  🔄 EXTRACT     │  │  🔄 CREATE     │
+│   Port: 3000    │  │   Port: 3002    │  │   Port: 3001    │  │   Port: 8001    │
 └─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘
-         │                     │                     │                     │
-         └─────────────────────┼─────────────────────┼─────────────────────┘
-                               │                     │
-                    ┌─────────────────┐    ┌─────────────────┐
-                    │  API Gateway    │    │ Message Broker  │
-                    │   Port: 8080    │    │   RabbitMQ      │
-                    │   Port: 8443    │    │   Port: 5672    │
-                    └─────────────────┘    └─────────────────┘
-                               │
-                    ┌─────────────────┐
-                    │     Redis       │
-                    │   Port: 6379    │
-                    └─────────────────┘
+
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│ Job Execution   │  │ Job Scheduling  │  │ Audit & Events  │  │   Frontend      │
+│  🔄 CREATE     │  │  🔄 CREATE     │  │  🔄 CREATE     │  │   ✅ EXISTING   │
+│   Port: 8002    │  │   Port: 8003    │  │   Port: 8004    │  │   Port: 3001    │
+└─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘
 ```
 
-## 🎯 Microservices
+## 📋 Service Status
 
-### 1. Job Management Service (Port 8001)
-**Responsibility**: Job definition, lifecycle management, and validation
+### ✅ **Existing Services (Working)**
+- **Auth Service** (Port 3000) - JWT authentication, token management
+- **User Service** (Port 3002) - User management, profiles, permissions  
+- **Frontend** (Port 3001) - React application with Material-UI
 
-**Features**:
-- ✅ Job CRUD operations
-- ✅ Job validation and target verification
-- ✅ Job metadata and configuration management
-- ✅ Integration with external target service
-- ✅ Event publishing for job lifecycle changes
+### 🔄 **Services in Development**
+- **Universal Targets Service** (Port 3001) - Target management, connection methods
+- **Job Management Service** (Port 8001) - Job definitions, lifecycle, validation
+- **Job Execution Service** (Port 8002) - Job execution engine, SSH/WinRM connections
+- **Job Scheduling Service** (Port 8003) - Cron scheduling, recurring jobs
+- **Audit & Events Service** (Port 8004) - Event logging, audit trails, monitoring
 
-**Database**: `job_management` (PostgreSQL)
-- `jobs` - Job definitions
-- `job_actions` - Action sequences
-- `job_targets` - Target associations
+## 🗄️ Database Architecture
 
-**APIs**:
-- `POST /api/v1/jobs` - Create job
-- `GET /api/v1/jobs` - List jobs (with filtering/pagination)
-- `GET /api/v1/jobs/{id}` - Get job details
-- `PUT /api/v1/jobs/{id}` - Update job
-- `DELETE /api/v1/jobs/{id}` - Delete job
-- `POST /api/v1/jobs/{id}/execute` - Initiate execution
-- `GET /api/v1/jobs/{id}/validate` - Validate job configuration
+| Service | Database | Port | Status |
+|---------|----------|------|--------|
+| Auth Service | `auth_db` | 5433 | ✅ Working |
+| User Service | `user_db` | 5434 | ✅ Working |
+| Universal Targets | `targets_db` | 5435 | 🔄 To Create |
+| Job Management | `job_management` | 5432 | 🔄 To Create |
+| Job Execution | `job_execution` | 5436 | 🔄 To Create |
+| Job Scheduling | `job_scheduling` | 5437 | 🔄 To Create |
+| Audit & Events | `audit_events` | 5438 | 🔄 To Create |
 
-### 2. Job Execution Service (Port 8002)
-**Responsibility**: Job execution engine and target communication
-
-**Features**:
-- ✅ Concurrent job execution on multiple targets
-- ✅ SSH/WinRM connection management
-- ✅ Retry logic with exponential backoff
-- ✅ Safety checks for dangerous commands
-- ✅ Real-time execution tracking
-- ✅ Celery-based task processing
-
-**Database**: `job_execution` (PostgreSQL)
-- `job_executions` - Execution instances
-- `job_execution_results` - Per-target results
-
-**APIs**:
-- `POST /api/v1/executions` - Create execution
-- `GET /api/v1/executions/{id}` - Get execution details
-- `GET /api/v1/executions/{id}/results` - Get execution results
-- `POST /api/v1/executions/{id}/cancel` - Cancel execution
-- `POST /api/v1/executions/{id}/retry` - Retry failed execution
-
-**Workers**:
-- Celery workers for async job execution
-- Connection pooling and management
-- Result aggregation and reporting
-
-### 3. Job Scheduling Service (Port 8003)
-**Responsibility**: Time-based job scheduling and triggering
-
-**Features**:
-- ✅ Multiple schedule types (once, recurring, cron)
-- ✅ Cron expression parsing and validation
-- ✅ Timezone support
-- ✅ Schedule lifecycle management
-- ✅ Automatic job triggering
-
-**Database**: `job_scheduling` (PostgreSQL)
-- `job_schedules` - Schedule definitions
-- `schedule_executions` - Schedule execution history
-
-**APIs**:
-- `POST /api/v1/schedules` - Create schedule
-- `GET /api/v1/schedules/job/{id}` - Get job schedules
-- `GET /api/v1/schedules/{id}` - Get schedule details
-- `PUT /api/v1/schedules/{id}` - Update schedule
-- `DELETE /api/v1/schedules/{id}` - Delete schedule
-
-### 4. Audit & Events Service (Port 8004)
-**Responsibility**: Event logging, audit trails, and system monitoring
-
-**Features**:
-- ✅ Centralized event collection
-- ✅ Audit trail management
-- ✅ System metrics and monitoring
-- ✅ Event-driven notifications
-- ✅ Compliance reporting
-
-**Database**: `audit_events` (PostgreSQL)
-- `events` - System events
-- `audit_logs` - Audit trails
-- `metrics` - System metrics
-
-**APIs**:
-- `POST /api/v1/events` - Log event
-- `GET /api/v1/events` - Query events
-- `GET /api/v1/audit` - Get audit logs
-- `GET /api/v1/metrics` - Get system metrics
-
-## 🔧 Infrastructure Components
-
-### Message Broker (RabbitMQ)
-- **Purpose**: Inter-service event communication
-- **Port**: 5672 (AMQP), 15672 (Management UI)
-- **Features**:
-  - Event publishing/subscribing
-  - Reliable message delivery
-  - Topic-based routing
-  - Dead letter queues
-
-### Cache & Task Queue (Redis)
-- **Purpose**: Caching and Celery task queue
-- **Port**: 6379
-- **Features**:
-  - Session caching
-  - Task queue for Celery
-  - Result backend
-  - Pub/sub messaging
-
-### API Gateway (Nginx)
-- **Purpose**: Single entry point and load balancing
-- **Ports**: 8080 (HTTP), 8443 (HTTPS)
-- **Features**:
-  - Request routing
-  - Load balancing
-  - SSL termination
-  - Rate limiting
-  - CORS handling
-
-### Databases (PostgreSQL)
-- **Job Management DB** (Port 5432): Job definitions and metadata
-- **Job Execution DB** (Port 5433): Execution instances and results
-- **Job Scheduling DB** (Port 5434): Schedule definitions and history
-- **Audit Events DB** (Port 5435): Events and audit logs
-
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
-- Docker and Docker Compose
-- Python 3.11+
-- Git
+- Docker & Docker Compose
+- Node.js 18+ (for frontend development)
+- Python 3.11+ (for backend services)
 
-### Quick Start
+### 1. Environment Setup
+```bash
+# Copy environment template
+cp .env.example .env
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd opsconductor-microservices
-   ```
+# Edit environment variables
+nano .env
+```
 
-2. **Start infrastructure services**:
-   ```bash
-   docker-compose up -d rabbitmq redis job-management-db job-execution-db job-scheduling-db audit-events-db
-   ```
+### 2. Start Infrastructure Services
+```bash
+# Start databases, Redis, and RabbitMQ
+docker-compose up -d auth-postgres user-postgres targets-postgres redis rabbitmq
 
-3. **Wait for services to be healthy**:
-   ```bash
-   docker-compose ps
-   ```
+# Wait for services to be healthy
+docker-compose ps
+```
 
-4. **Start microservices**:
-   ```bash
-   docker-compose up -d job-management-service job-execution-service job-scheduling-service audit-events-service
-   ```
+### 3. Start Existing Services
+```bash
+# Start auth, user, and frontend services
+docker-compose up -d auth-service user-service frontend
+```
 
-5. **Start API Gateway**:
-   ```bash
-   docker-compose up -d api-gateway
-   ```
+### 4. Start New Microservices (When Ready)
+```bash
+# Start job-related services
+docker-compose up -d job-management-service job-execution-service job-scheduling-service audit-events-service
 
-6. **Verify deployment**:
-   ```bash
-   curl http://localhost:8080/health
-   ```
+# Start API Gateway
+docker-compose up -d api-gateway
+```
 
-### Development Setup
+### 5. Access Services
+- **Frontend**: http://localhost:3001
+- **Auth Service**: http://localhost:3000
+- **User Service**: http://localhost:3002
+- **API Gateway**: http://localhost:8080
+- **RabbitMQ Management**: http://localhost:15672 (guest/guest)
 
-1. **Install shared libraries**:
-   ```bash
-   cd shared-libs
-   pip install -e .
-   ```
+## 🔧 Development Workflow
 
-2. **Start each service individually**:
-   ```bash
-   # Job Management Service
-   cd job-management-service
-   pip install -r requirements.txt
-   uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+### Current Phase: Infrastructure & Shared Libraries ✅
+- [x] Shared libraries with auth/user integration
+- [x] Updated docker-compose with all services
+- [x] Database infrastructure for all services
+- [x] RabbitMQ setup with event routing
 
-   # Job Execution Service
-   cd job-execution-service
-   pip install -r requirements.txt
-   uvicorn main:app --host 0.0.0.0 --port 8002 --reload
+### Next Phase: Extract Universal Targets Service
+```bash
+# Extract targets functionality from legacy backend
+cd /home/enabledrm/opsconductor-microservices
+# TODO: Create universal-targets-service directory
+# TODO: Extract from /home/enabledrm/backend/app/api/v3/targets.py
+```
 
-   # Start Celery workers
-   celery -A app.core.celery_app worker --loglevel=info
-   ```
+## 🔍 Service Integration
 
-## 📊 Service Communication
+### Authentication Flow
+1. Frontend → Auth Service (JWT tokens)
+2. All services validate tokens via Auth Service
+3. User context passed between services
+
+### Service Communication
+- **Synchronous**: HTTP REST APIs between services
+- **Asynchronous**: RabbitMQ events for decoupled operations
+- **Caching**: Redis for session management and performance
 
 ### Event-Driven Architecture
-Services communicate through RabbitMQ events:
-
-```python
-# Job Management → Job Execution
-EventType.JOB_EXECUTED → Triggers execution
-
-# Job Execution → Job Management  
-EventType.EXECUTION_COMPLETED → Updates job status
-
-# Job Scheduling → Job Management
-EventType.SCHEDULE_TRIGGERED → Initiates job execution
-
-# All Services → Audit Events
-EventType.* → Centralized logging
+```
+┌─────────────┐    Events    ┌─────────────┐    Events    ┌─────────────┐
+│   Service   │ ──────────→  │  RabbitMQ   │ ──────────→  │   Service   │
+│      A      │              │   Broker    │              │      B      │
+└─────────────┘              └─────────────┘              └─────────────┘
 ```
 
-### HTTP API Communication
-Services also communicate via HTTP APIs:
+## 📊 Monitoring & Health Checks
 
-```python
-# Job Management calls Job Execution
-POST /api/v1/executions
-{
-  "job_id": 123,
-  "target_ids": [1, 2, 3]
-}
+### Health Check Endpoints
+- All services expose `/health` endpoint
+- Docker health checks configured
+- Service dependency management
 
-# Job Execution calls Job Management
-GET /api/v1/jobs/123
-```
+### Logging Strategy
+- Structured logging with correlation IDs
+- Centralized log aggregation (future: ELK stack)
+- Event tracking across service boundaries
 
 ## 🔒 Security
 
-### Authentication
-- JWT-based authentication across all services
+### Authentication & Authorization
+- JWT tokens for all API calls
 - Service-to-service authentication
-- Role-based access control
+- Role-based access control (RBAC)
+- Permission validation at service level
 
-### Safety Features
-- Command safety validation
-- Dangerous operation detection
-- Execution sandboxing
-- Audit logging
+### Network Security
+- Internal Docker network isolation
+- API Gateway as single entry point
+- SSL/TLS termination at gateway
 
-## 📈 Monitoring & Observability
+## 🎯 Development Roadmap
 
-### Health Checks
-Each service exposes health endpoints:
-- `/health` - Service health status
-- `/metrics` - Service metrics
-- `/version` - Service version info
+### Week 1: Infrastructure ✅
+- [x] Shared libraries
+- [x] Docker compose updates
+- [x] Database setup
+- [x] RabbitMQ configuration
 
-### Logging
-- Structured JSON logging
-- Centralized log aggregation
-- Request tracing with correlation IDs
-- Performance metrics
+### Week 2: Universal Targets Service
+- [ ] Extract from legacy backend
+- [ ] Independent database
+- [ ] API migration
+- [ ] Frontend integration
 
-### Metrics
-- Service-level metrics
-- Business metrics (job success rates, execution times)
-- Infrastructure metrics (database, message queue)
+### Week 3: Job Management Service
+- [ ] Job CRUD operations
+- [ ] Service integrations
+- [ ] Frontend updates
 
-## 🔧 Configuration
+### Week 4-8: Remaining Services
+- [ ] Job Execution Service
+- [ ] Job Scheduling Service
+- [ ] Audit & Events Service
+- [ ] API Gateway
+- [ ] Final migration
 
-### Environment Variables
-Each service uses environment-specific configuration:
+## 🛠️ Troubleshooting
 
+### Common Issues
+1. **Service Dependencies**: Check health status with `docker-compose ps`
+2. **Database Connections**: Verify database URLs and credentials
+3. **Network Issues**: Ensure all services are on `opsconductor-network`
+4. **Authentication**: Verify JWT_SECRET_KEY is consistent across services
+
+### Useful Commands
 ```bash
-# Database
-DATABASE_URL=postgresql://user:pass@host:port/db
+# View service logs
+docker-compose logs -f [service-name]
 
-# Message Broker
-RABBITMQ_URL=amqp://user:pass@host:port/
+# Check service health
+docker-compose ps
 
-# External Services
-JOB_EXECUTION_SERVICE_URL=http://job-execution-service:8002
-TARGET_SERVICE_URL=http://target-service:3001
+# Restart specific service
+docker-compose restart [service-name]
 
-# Security
-JWT_SECRET_KEY=your-secret-key
+# View network configuration
+docker network inspect opsconductor-microservices
 ```
 
-### Service Discovery
-Services discover each other through:
-- Environment variables for service URLs
-- Docker Compose service names
-- Health check endpoints
+## 📚 Documentation
 
-## 🧪 Testing
-
-### Unit Tests
-```bash
-cd job-management-service
-pytest tests/unit/
-
-cd job-execution-service  
-pytest tests/unit/
-```
-
-### Integration Tests
-```bash
-# Start test environment
-docker-compose -f docker-compose.test.yml up -d
-
-# Run integration tests
-pytest tests/integration/
-```
-
-### End-to-End Tests
-```bash
-# Full system tests
-pytest tests/e2e/
-```
-
-## 📦 Deployment
-
-### Production Deployment
-```bash
-# Build all services
-docker-compose build
-
-# Deploy to production
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-### Kubernetes Deployment
-Kubernetes manifests available in `/k8s` directory:
-```bash
-kubectl apply -f k8s/
-```
-
-## 🔄 Migration from Monolith
-
-If migrating from the original monolithic service:
-
-1. **Data Migration**: Scripts to migrate data between databases
-2. **API Compatibility**: Maintain backward compatibility during transition
-3. **Gradual Rollout**: Deploy services incrementally
-4. **Monitoring**: Enhanced monitoring during migration
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch
-3. Make changes with tests
-4. Submit pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details.
+- [Complete Workplan](./COMPLETE_WORKPLAN.md)
+- [Architecture Details](./UPDATED_MICROSERVICES_ARCHITECTURE.md)
+- [Shared Libraries](./shared-libs/README.md)
+- [API Documentation](../docs/API_REFERENCE.md)
 
 ---
 
-## 🎯 Key Benefits of This Architecture
-
-### ✅ **True Microservices**
-- **Single Responsibility**: Each service has one clear purpose
-- **Independent Databases**: No shared data stores
-- **Independent Deployment**: Services can be deployed separately
-- **Technology Independence**: Each service can use different tech stacks
-
-### ✅ **Scalability**
-- **Horizontal Scaling**: Scale services independently based on load
-- **Resource Optimization**: Allocate resources where needed most
-- **Performance Isolation**: Issues in one service don't affect others
-
-### ✅ **Reliability**
-- **Fault Isolation**: Service failures are contained
-- **Circuit Breakers**: Prevent cascade failures
-- **Retry Logic**: Automatic recovery from transient failures
-- **Health Monitoring**: Proactive issue detection
-
-### ✅ **Development Velocity**
-- **Team Autonomy**: Different teams can own different services
-- **Independent Development**: Parallel development without conflicts
-- **Technology Choice**: Use best tool for each job
-- **Faster Deployments**: Deploy only what changed
-
-### ✅ **Operational Excellence**
-- **Observability**: Comprehensive monitoring and logging
-- **Event-Driven**: Loose coupling through events
-- **API-First**: Well-defined service contracts
-- **Infrastructure as Code**: Reproducible deployments
-
-This is a **production-ready microservice architecture** that provides all the benefits of distributed systems while maintaining the functionality of the original job execution service!
+**Status**: Phase 1.2 Complete ✅ - Infrastructure & Docker Compose Updated
+**Next**: Phase 2.1 - Extract Universal Targets Service

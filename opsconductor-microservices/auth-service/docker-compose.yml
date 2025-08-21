@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # Auth Service
+  auth-service:
+    build: .
+    container_name: auth-service
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://auth_user:auth_password@auth-postgres:5432/auth_db
+      - REDIS_URL=redis://redis:6379/1
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+      - PASSWORD_MIN_LENGTH=8
+      - MAX_LOGIN_ATTEMPTS=5
+      - LOCKOUT_DURATION_MINUTES=15
+      - USER_SERVICE_URL=http://user-service:8001
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8004
+    depends_on:
+      - auth-postgres
+      - redis
+      - rabbitmq
+    networks:
+      - opsconductor-network
+    volumes:
+      - ./app:/app/app
+    restart: unless-stopped
+
+  # PostgreSQL Database for Auth
+  auth-postgres:
+    image: postgres:15-alpine
+    container_name: auth-postgres
+    environment:
+      - POSTGRES_DB=auth_db
+      - POSTGRES_USER=auth_user
+      - POSTGRES_PASSWORD=auth_password
+    ports:
+      - "5434:5432"  # Different port to avoid conflicts
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+
+  # Redis (shared with other services)
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+
+  # RabbitMQ (shared with other services)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+
+volumes:
+  auth_postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  opsconductor-network:
+    driver: bridge
