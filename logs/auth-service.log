@@ -1,0 +1,7 @@
+{"timestamp": "2024-01-15T10:30:00Z", "level": "INFO", "service": "auth-service", "message": "Auth service started", "module": "main"}
+{"timestamp": "2024-01-15T10:30:30Z", "level": "INFO", "service": "auth-service", "message": "User login successful", "module": "auth", "user_id": "user-001", "username": "admin"}
+{"timestamp": "2024-01-15T10:31:15Z", "level": "WARNING", "service": "auth-service", "message": "Failed login attempt", "module": "auth", "username": "hacker", "ip": "192.168.1.100"}
+{"timestamp": "2024-01-15T10:32:30Z", "level": "INFO", "service": "auth-service", "message": "JWT token refreshed", "module": "auth", "user_id": "user-001"}
+{"timestamp": "2024-01-15T10:33:45Z", "level": "ERROR", "service": "auth-service", "message": "Database connection lost", "module": "database", "error": "Connection refused"}{"timestamp": "2025-08-21T05:25:00Z", "level": "INFO", "service": "auth-service", "message": "ELK test - microservice logs working!", "module": "elk-test"}
+
+{"timestamp": "2025-08-21T05:30:00Z", "level": "INFO", "service": "auth-service", "message": "Fixed newline - auth service working!", "module": "elk-test"}

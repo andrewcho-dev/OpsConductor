@@ -1,0 +1,8 @@
+{"timestamp": "2024-01-15T10:30:00Z", "level": "INFO", "service": "backend", "message": "Application started successfully", "module": "main"}
+{"timestamp": "2024-01-15T10:30:15Z", "level": "INFO", "service": "backend", "message": "Database connection established", "module": "database"}
+{"timestamp": "2024-01-15T10:31:00Z", "level": "WARNING", "service": "backend", "message": "High memory usage detected", "module": "health", "memory_percent": 85.2}
+{"timestamp": "2024-01-15T10:32:00Z", "level": "ERROR", "service": "backend", "message": "Failed to connect to target server", "module": "targets", "error": "Connection timeout", "target_id": "srv-001"}
+{"timestamp": "2024-01-15T10:33:00Z", "level": "INFO", "service": "backend", "message": "Job execution completed", "module": "jobs", "job_id": "job-123", "duration": 45.2, "status": "success"}
+{"timestamp": "2024-01-15T10:35:00Z", "level": "INFO", "service": "backend", "message": "ELK Stack test log entry", "module": "elk-test"}
+{"timestamp": "2025-08-21T05:10:00Z", "level": "INFO", "service": "backend", "message": "File input test - ELK is working!", "module": "file-test"}{"timestamp": "2025-08-21T05:25:30Z", "level": "INFO", "service": "backend", "message": "ELK test - backend microservice logs working!", "module": "elk-test"}
+{"timestamp": "2025-08-21T05:30:30Z", "level": "INFO", "service": "backend", "message": "Fixed newline - backend service working!", "module": "elk-test"}

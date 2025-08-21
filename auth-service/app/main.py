@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from app.core.config import settings
 from app.database.database import create_tables
@@ -31,9 +33,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# =============================================================================
+# PROMETHEUS METRICS INSTRUMENTATION
+# =============================================================================
+# Initialize Prometheus instrumentator with basic configuration
+instrumentator = Instrumentator()
+instrumentator.instrument(app)
+
 # Include routers
 app.include_router(auth.router)
 app.include_router(config.router)
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """Prometheus metrics endpoint."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.on_event("startup")

@@ -27,6 +27,7 @@ import {
   MonitorHeart as MonitorHeartIcon,
   Security as SecurityIcon,
   VpnKey as VpnKeyIcon,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
@@ -71,6 +72,7 @@ const Sidebar = () => {
       path: '/system-health',
       roles: ['administrator', 'user']
     },
+
     {
       text: 'Audit & Security',
       icon: <SecurityIcon />,

@@ -1,0 +1,6 @@
+{"timestamp": "2024-01-15T10:30:00Z", "level": "INFO", "service": "user-service", "message": "User service started", "module": "main"}
+{"timestamp": "2024-01-15T10:30:45Z", "level": "INFO", "service": "user-service", "message": "User created successfully", "module": "users", "user_id": "user-002", "username": "john_doe"}
+{"timestamp": "2024-01-15T10:31:30Z", "level": "WARNING", "service": "user-service", "message": "User profile update failed", "module": "users", "user_id": "user-003", "error": "Invalid email format"}
+{"timestamp": "2024-01-15T10:32:15Z", "level": "INFO", "service": "user-service", "message": "User role updated", "module": "roles", "user_id": "user-001", "old_role": "user", "new_role": "admin"}
+{"timestamp": "2024-01-15T10:33:00Z", "level": "ERROR", "service": "user-service", "message": "Database query timeout", "module": "database", "query": "SELECT * FROM users WHERE active = true", "timeout": "30s"}
+{"timestamp": "2025-08-21T05:31:00Z", "level": "INFO", "service": "user-service", "message": "ELK test - user service working!", "module": "elk-test"}

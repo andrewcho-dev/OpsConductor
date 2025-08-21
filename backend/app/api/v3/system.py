@@ -1422,3 +1422,33 @@ async def update_system_settings(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update system settings: {str(e)}"
         )
+
+
+
+
+
+# SYSTEM SETTINGS ENDPOINT
+
+@router.get("/settings")
+async def get_system_settings(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get system settings for session management"""
+    try:
+        # Return default system settings for session management
+        return {
+            "status": "success",
+            "settings": {
+                "inactivity_timeout_minutes": 60,  # 1 hour default
+                "warning_timeout_minutes": 55,     # 5 minutes before timeout
+                "session_refresh_interval_minutes": 5,  # Refresh every 5 minutes
+                "max_session_duration_hours": 8    # Maximum session duration
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get system settings: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get system settings: {str(e)}"
+        )
+

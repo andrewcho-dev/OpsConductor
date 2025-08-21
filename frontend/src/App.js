@@ -24,6 +24,8 @@ import DebugTools from './components/debug/DebugTools';
 import SystemSettings from './components/system/SystemSettings';
 import SystemHealthDashboard from './components/system/SystemHealthDashboard';
 import AuditDashboard from './components/audit/AuditDashboard';
+import ObservabilityDashboard from './components/monitoring/ObservabilityDashboard';
+
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import './styles/dashboard.css';
 
@@ -144,6 +146,15 @@ function AppContent() {
                   </ProtectedRoute>
                 } 
               />
+              <Route 
+                path="/observability" 
+                element={
+                  <ProtectedRoute>
+                    <ObservabilityDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+
               <Route 
                 path="/" 
                 element={<Navigate to="/dashboard" replace />} 
