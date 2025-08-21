@@ -22,9 +22,10 @@ import DirectScheduleTest from './components/jobs/DirectScheduleTest';
 import DebugTools from './components/debug/DebugTools';
 
 import SystemSettings from './components/system/SystemSettings';
-import SystemHealthDashboard from './components/system/SystemHealthDashboard';
+
 import AuditDashboard from './components/audit/AuditDashboard';
 import ObservabilityDashboard from './components/monitoring/ObservabilityDashboard';
+import DockerMonitoringDashboard from './components/docker/DockerMonitoringDashboard';
 
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import './styles/dashboard.css';
@@ -130,11 +131,12 @@ function AppContent() {
                   </ProtectedRoute>
                 } 
               />
+
               <Route 
-                path="/system-health" 
+                path="/docker-monitoring" 
                 element={
                   <ProtectedRoute>
-                    <SystemHealthDashboard />
+                    <DockerMonitoringDashboard />
                   </ProtectedRoute>
                 } 
               />

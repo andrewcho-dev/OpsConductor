@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from app.core.celery_app import celery_app
 from app.tasks.cleanup_tasks import CleanupTasks
-from app.services.health_monitoring_service import HealthMonitoringService
+
 from app.services.celery_monitoring_service import CeleryMonitoringService
 from app.services.job_scheduling_service import JobSchedulingService
 from app.services.job_service import JobService
@@ -50,36 +50,7 @@ def system_health_check_task(self):
         return {"status": "failed", "error": str(e)}
 
 
-@celery_app.task(bind=True, name="app.tasks.periodic_tasks.target_health_monitoring_task")
-def target_health_monitoring_task(self):
-    """Celery task to monitor target health status"""
-    logger.info("🎯 Running scheduled target health monitoring...")
-    
-    try:
-        # Get database session
-        db = SessionLocal()
-        
-        try:
-            # Create health monitoring service
-            health_service = HealthMonitoringService(db)
-            
-            # Run health check batch
-            results = health_service.run_health_check_batch()
-            
-            logger.info(f"🏥 Target health monitoring completed: {results}")
-            
-            # Log summary if there were status changes
-            if results.get('status_changes', 0) > 0:
-                logger.warning(f"⚠️ {results['status_changes']} targets changed health status")
-            
-            return {"status": "success", "results": results}
-            
-        finally:
-            db.close()
-            
-    except Exception as e:
-        logger.error(f"❌ Target health monitoring failed: {str(e)}")
-        return {"status": "failed", "error": str(e)}
+
 
 
 @celery_app.task(bind=True, name="app.tasks.periodic_tasks.collect_celery_metrics_task")

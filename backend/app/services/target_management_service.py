@@ -27,7 +27,7 @@ from app.core.cache import get_redis_client
 from app.core.logging import get_structured_logger
 from app.core.config import settings
 from app.services.universal_target_service import UniversalTargetService
-from app.services.health_monitoring_service import HealthMonitoringService
+
 # SerialService removed - using database defaults
 from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
 from app.schemas.target_schemas import (
@@ -164,7 +164,7 @@ class TargetManagementService:
         self.db = db
         self.audit_service = AuditService(db)
         self.target_service = UniversalTargetService(db)
-        self.health_service = HealthMonitoringService(db)
+
         logger.info("Target Management Service initialized with enhanced features")
     
     @with_performance_logging

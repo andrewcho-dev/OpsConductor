@@ -29,7 +29,6 @@ class DashboardMetrics(BaseModel):
     successful_jobs: int
     failed_jobs: int
     active_targets: int
-    system_health_score: float
     recent_activity: List[Dict[str, Any]]
 
 
@@ -43,15 +42,7 @@ class JobPerformanceMetrics(BaseModel):
     performance_trend: List[Dict[str, Any]]
 
 
-class SystemHealthMetrics(BaseModel):
-    """Model for system health analytics"""
-    overall_health: str
-    cpu_usage: float
-    memory_usage: float
-    disk_usage: float
-    network_status: str
-    service_status: Dict[str, str]
-    alerts: List[Dict[str, Any]]
+
 
 
 class ExecutionTrends(BaseModel):
@@ -161,53 +152,7 @@ async def get_job_performance_metrics(
         )
 
 
-@router.get("/system/health", response_model=SystemHealthMetrics)
-async def get_system_health_metrics(
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get system health analytics"""
-    try:
-        # Mock alerts
-        alerts = [
-            {
-                "type": "warning",
-                "message": "High CPU usage detected",
-                "timestamp": datetime.now(timezone.utc) - timedelta(minutes=10),
-                "component": "backend"
-            },
-            {
-                "type": "info",
-                "message": "Database backup completed",
-                "timestamp": datetime.now(timezone.utc) - timedelta(hours=1),
-                "component": "database"
-            }
-        ]
-        
-        metrics = SystemHealthMetrics(
-            overall_health="good",
-            cpu_usage=72.5,
-            memory_usage=68.3,
-            disk_usage=45.2,
-            network_status="healthy",
-            service_status={
-                "backend": "running",
-                "database": "running",
-                "cache": "running",
-                "celery": "running",
-                "nginx": "running"
-            },
-            alerts=alerts
-        )
-        
-        return metrics
-        
-    except Exception as e:
-        logger.error(f"Failed to get system health metrics: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get system health metrics: {str(e)}"
-        )
+
 
 
 @router.get("/trends/executions", response_model=ExecutionTrends)
@@ -347,32 +292,7 @@ async def get_report_summary(
         )
 
 
-@router.get("/targets/health-distribution")
-async def get_target_health_distribution(
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get target health distribution analytics"""
-    try:
-        distribution = {
-            "healthy": 22,
-            "warning": 2,
-            "critical": 1,
-            "offline": 0,
-            "unknown": 0,
-            "total": 25,
-            "health_percentage": 88.0,
-            "last_updated": datetime.now(timezone.utc).isoformat()
-        }
-        
-        return distribution
-        
-    except Exception as e:
-        logger.error(f"Failed to get target health distribution: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get target health distribution: {str(e)}"
-        )
+
 
 
 @router.get("/jobs/category-breakdown")

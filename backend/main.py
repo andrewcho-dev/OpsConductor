@@ -203,6 +203,7 @@ from app.api.v3 import (
     metrics as metrics_v3,
     websocket as websocket_v3,
     device_types as device_types_v3,
+    docker as docker_v3,
 
     analytics as analytics_v3,
     data_export as data_export_v3
@@ -224,6 +225,7 @@ app.include_router(templates_v3.router, tags=["Templates v3"])
 app.include_router(metrics_v3.router, tags=["Metrics v3"])
 app.include_router(websocket_v3.router, tags=["WebSocket v3"])
 app.include_router(device_types_v3.router, tags=["Device Types v3"])
+app.include_router(docker_v3.router, tags=["Docker v3"])
 
 app.include_router(analytics_v3.router, tags=["Analytics v3"])
 app.include_router(data_export_v3.router, tags=["Data Export v3"])

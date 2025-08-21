@@ -319,6 +319,23 @@ services:
       start_period: 60s
 
   # =============================================================================
+  # PORTAINER - Docker Container Management
+  # =============================================================================
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: opsconductor-portainer
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    # Note: Portainer CE doesn't include wget/curl, so we disable health check
+    # The service is monitored through the OpsConductor Docker monitoring interface
+
+  # =============================================================================
   # NGINX REVERSE PROXY - HTTPS ONLY & SSL TERMINATION
   # =============================================================================
   nginx:
@@ -359,4 +376,6 @@ volumes:
   auth_postgres_data:
     driver: local
   user_postgres_data:
+    driver: local
+  portainer_data:
     driver: local

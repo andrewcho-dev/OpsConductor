@@ -86,9 +86,3 @@ export const getStatusRowStyling = (status, theme) => {
   return getRowStyling(status, theme);
 };
 
-/**
- * Get health-based row styling (for system health, etc.)
- */
-export const getHealthRowStyling = (health, theme) => {
-  return getRowStyling(health, theme);
-};

@@ -22,12 +22,7 @@ export const analyticsApi = apiSlice.injectEndpoints({
       transformResponse: (response) => response.data || response,
     }),
 
-    // Get system health report
-    getSystemHealthReport: builder.query({
-      query: () => '/analytics/system/health',
-      providesTags: ['SystemHealth'],
-      transformResponse: (response) => response.data || response,
-    }),
+
 
     // Get execution trends
     getExecutionTrends: builder.query({
@@ -51,7 +46,6 @@ export const analyticsApi = apiSlice.injectEndpoints({
 export const {
   useGetDashboardMetricsQuery,
   useGetJobPerformanceAnalysisQuery,
-  useGetSystemHealthReportQuery,
   useGetExecutionTrendsQuery,
   useGetSummaryReportQuery,
 } = analyticsApi;

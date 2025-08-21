@@ -49,7 +49,6 @@ const SystemSettings = () => {
 
   // Enhanced state for system monitoring
   const [systemStatus, setSystemStatus] = useState(null);
-  const [systemHealth, setSystemHealth] = useState(null);
   
   // Notification configuration state
   const [emailTargets, setEmailTargets] = useState([]);
@@ -142,12 +141,7 @@ const SystemSettings = () => {
         // Don't show alert for this one as it's handled in the function
       }
       
-      try {
-        await loadSystemHealth();
-      } catch (error) {
-        console.error('Failed to load system health:', error);
-        // Don't show alert for this one as it's handled in the function
-      }
+
       
       try {
         await loadEmailTargets();
@@ -335,16 +329,7 @@ const SystemSettings = () => {
     }
   };
 
-  const loadSystemHealth = async () => {
-    try {
-      // Updated to use the correct API endpoint path
-      const response = await api.get('/system/health');
-      setSystemHealth(response.data);
-    } catch (err) {
-      console.error('Failed to load system health:', err);
-      // Do NOT use mock data - just show error state
-    }
-  };
+
 
   const loadEmailTargets = async () => {
     try {
@@ -554,7 +539,7 @@ const SystemSettings = () => {
   const stats = {
     version: '1.0.0',
     uptime: systemStatus?.uptime || 'N/A',
-    health: systemHealth?.overall_health || 'Healthy',
+    health: 'Healthy',
     cpu: systemStatus?.resource_usage?.cpu_percent?.toFixed(1) || 'N/A',
     memory: systemStatus?.resource_usage?.memory?.percent?.toFixed(1) || 'N/A',
     disk: systemStatus?.resource_usage?.disk?.percent?.toFixed(1) || 'N/A',

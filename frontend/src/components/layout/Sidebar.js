@@ -24,10 +24,11 @@ import {
   Dashboard as DashboardIcon,
   AutoAwesome as AutoAwesomeIcon,
   Speed as SpeedIcon,
-  MonitorHeart as MonitorHeartIcon,
+
   Security as SecurityIcon,
   VpnKey as VpnKeyIcon,
   Visibility as VisibilityIcon,
+  ViewInAr as DockerIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
@@ -66,10 +67,11 @@ const Sidebar = () => {
     },
 
 
+
     {
-      text: 'System Health',
-      icon: <MonitorHeartIcon />,
-      path: '/system-health',
+      text: 'Docker Environment',
+      icon: <DockerIcon />,
+      path: '/docker-monitoring',
       roles: ['administrator', 'user']
     },
 

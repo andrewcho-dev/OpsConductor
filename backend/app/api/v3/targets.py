@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.database.database import get_db
 from app.services.universal_target_service import UniversalTargetService
-from app.services.health_monitoring_service import HealthMonitoringService
+
 from app.services.target_management_service import TargetManagementService
 from app.utils.target_utils import getTargetIpAddress
 from app.domains.audit.services.audit_service import AuditService, AuditEventType, AuditSeverity
@@ -432,97 +432,7 @@ async def get_target_statistics(
         )
 
 
-# HEALTH MONITORING (from v1)
 
-@router.get("/health/check")
-async def get_targets_needing_health_check(
-    minutes_since_last_check: int = Query(30, ge=1),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get targets that need health checks."""
-    try:
-        health_service = HealthMonitoringService(db)
-        targets = health_service.get_targets_needing_health_check(minutes_since_last_check)
-        
-        return {
-            "targets": [
-                {
-                    "id": target.id,
-                    "name": target.name,
-                    "ip_address": target.ip_address,
-                    "last_health_check": target.last_health_check,
-                    "health_status": target.health_status
-                }
-                for target in targets
-            ],
-            "count": len(targets)
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get targets needing health check: {str(e)}"
-        )
-
-
-@router.post("/health/perform")
-async def perform_health_checks(
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Perform health checks on targets that need them."""
-    try:
-        health_service = HealthMonitoringService(db)
-        results = health_service.perform_health_checks()
-        
-        return {
-            "message": "Health checks initiated",
-            "targets_checked": len(results),
-            "results": results
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to perform health checks: {str(e)}"
-        )
-
-
-@router.post("/health-check-batch")
-async def health_check_batch(
-    target_ids: List[int],
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Perform health checks on specific targets."""
-    try:
-        health_service = HealthMonitoringService(db)
-        results = []
-        
-        for target_id in target_ids:
-            try:
-                result = health_service.check_target_health(target_id)
-                results.append({
-                    "target_id": target_id,
-                    "success": True,
-                    "health_status": result.get("status", "unknown"),
-                    "response_time": result.get("response_time"),
-                    "message": result.get("message", "Health check completed")
-                })
-            except Exception as e:
-                results.append({
-                    "target_id": target_id,
-                    "success": False,
-                    "health_status": "error",
-                    "response_time": None,
-                    "message": str(e)
-                })
-        
-        return {"results": results}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to perform batch health checks: {str(e)}"
-        )
 
 
 # TARGET TYPES (from v1)

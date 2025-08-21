@@ -67,8 +67,7 @@ const JobDashboard = () => {
 
     const fetchWorkerStats = async () => {
         try {
-            // TODO: Update to use v2 system health endpoint when available
-            // const response = await authService.api.get('/v2/system/health');
+
             // For now, set default worker stats
             setWorkerStats({ active: 1, total: 1 });
         } catch (error) {
