@@ -1,0 +1,556 @@
+version: '3.8'
+
+# =============================================================================
+# OPSCONDUCTOR COMPLETE MICROSERVICES ARCHITECTURE
+# =============================================================================
+# Integrates existing services (Auth, User, Frontend) with new microservices
+# All services run behind nginx with SSL termination
+# Access: https://localhost or https://your-server-ip
+
+name: opsconductor-microservices
+
+services:
+  # =============================================================================
+  # INFRASTRUCTURE SERVICES
+  # =============================================================================
+  
+  # Redis for Caching and Celery
+  redis:
+    image: redis:7-alpine
+    container_name: opsconductor-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ for Event Messaging
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: opsconductor-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # DATABASE SERVICES
+  # =============================================================================
+
+  # Auth Service Database
+  auth-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-auth-db
+    environment:
+      POSTGRES_DB: ${AUTH_POSTGRES_DB:-auth_db}
+      POSTGRES_USER: ${AUTH_POSTGRES_USER:-auth_user}
+      POSTGRES_PASSWORD: ${AUTH_POSTGRES_PASSWORD:-auth_password}
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+      - ../auth-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_POSTGRES_USER:-auth_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # User Service Database
+  user-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-user-db
+    environment:
+      POSTGRES_DB: ${USER_POSTGRES_DB:-user_db}
+      POSTGRES_USER: ${USER_POSTGRES_USER:-user_user}
+      POSTGRES_PASSWORD: ${USER_POSTGRES_PASSWORD:-user_password}
+    ports:
+      - "5434:5432"
+    volumes:
+      - user_postgres_data:/var/lib/postgresql/data
+      - ../user-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_POSTGRES_USER:-user_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Universal Targets Database
+  targets-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-targets-db
+    environment:
+      POSTGRES_DB: targets_db
+      POSTGRES_USER: targets_user
+      POSTGRES_PASSWORD: targets_password
+    ports:
+      - "5435:5432"
+    volumes:
+      - targets_postgres_data:/var/lib/postgresql/data
+      - ./universal-targets-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U targets_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Job Management Database
+  job-management-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-job-management-db
+    environment:
+      POSTGRES_DB: job_management
+      POSTGRES_USER: job_mgmt_user
+      POSTGRES_PASSWORD: job_mgmt_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - job_management_data:/var/lib/postgresql/data
+      - ./job-management-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U job_mgmt_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Job Execution Database
+  job-execution-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-job-execution-db
+    environment:
+      POSTGRES_DB: job_execution
+      POSTGRES_USER: job_exec_user
+      POSTGRES_PASSWORD: job_exec_password
+    ports:
+      - "5436:5432"
+    volumes:
+      - job_execution_data:/var/lib/postgresql/data
+      - ./job-execution-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U job_exec_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Job Scheduling Database
+  job-scheduling-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-job-scheduling-db
+    environment:
+      POSTGRES_DB: job_scheduling
+      POSTGRES_USER: job_sched_user
+      POSTGRES_PASSWORD: job_sched_password
+    ports:
+      - "5437:5432"
+    volumes:
+      - job_scheduling_data:/var/lib/postgresql/data
+      - ./job-scheduling-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U job_sched_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Audit & Events Database
+  audit-events-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-audit-events-db
+    environment:
+      POSTGRES_DB: audit_events
+      POSTGRES_USER: audit_user
+      POSTGRES_PASSWORD: audit_password
+    ports:
+      - "5438:5432"
+    volumes:
+      - audit_events_data:/var/lib/postgresql/data
+      - ./audit-events-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U audit_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # EXISTING MICROSERVICES (Already Built & Working)
+  # =============================================================================
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ../auth-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-auth-service
+    environment:
+      - DATABASE_URL=postgresql://auth_user:auth_password@auth-postgres:5432/auth_db
+      - CORS_ORIGINS=["http://localhost:3000", "http://localhost:8080", "https://localhost"]
+      - DEBUG=${DEBUG:-false}
+    ports:
+      - "3000:3000"
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # User Service
+  user-service:
+    build:
+      context: ../user-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-user-service
+    environment:
+      - DATABASE_URL=postgresql://user_user:user_password@user-postgres:5432/user_db
+      - AUTH_SERVICE_URL=http://auth-service:3000
+      - CORS_ORIGINS=["http://localhost:3000", "http://localhost:8080", "https://localhost"]
+      - DEBUG=${DEBUG:-false}
+    ports:
+      - "3002:3002"
+    depends_on:
+      user-postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: opsconductor-frontend
+    environment:
+      - REACT_APP_API_BASE_URL=http://localhost:8080
+      - REACT_APP_AUTH_SERVICE_URL=http://localhost:3000
+      - REACT_APP_USER_SERVICE_URL=http://localhost:3002
+    ports:
+      - "3000:80"
+    depends_on:
+      - auth-service
+      - user-service
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # NEW MICROSERVICES (To Be Built)
+  # =============================================================================
+
+  # Universal Targets Service
+  universal-targets-service:
+    build:
+      context: ./universal-targets-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-universal-targets
+    environment:
+      - DATABASE_URL=postgresql://targets_user:targets_password@targets-postgres:5432/targets_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - AUTH_SERVICE_URL=http://auth-service:3000
+      - USER_SERVICE_URL=http://user-service:3002
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8004
+    ports:
+      - "3001:3001"
+    depends_on:
+      targets-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Job Management Service
+  job-management-service:
+    build:
+      context: ./job-management-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-job-management
+    environment:
+      - DATABASE_URL=postgresql://job_mgmt_user:job_mgmt_password@job-management-postgres:5432/job_management
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - AUTH_SERVICE_URL=http://auth-service:3000
+      - USER_SERVICE_URL=http://user-service:3002
+      - UNIVERSAL_TARGETS_SERVICE_URL=http://universal-targets-service:3001
+      - JOB_EXECUTION_SERVICE_URL=http://job-execution-service:8002
+      - JOB_SCHEDULING_SERVICE_URL=http://job-scheduling-service:8003
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8004
+    ports:
+      - "8001:8001"
+    depends_on:
+      job-management-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      universal-targets-service:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Job Execution Service
+  job-execution-service:
+    build:
+      context: ./job-execution-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-job-execution
+    environment:
+      - DATABASE_URL=postgresql://job_exec_user:job_exec_password@job-execution-postgres:5432/job_execution
+      - REDIS_URL=redis://redis:6379/1
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - AUTH_SERVICE_URL=http://auth-service:3000
+      - USER_SERVICE_URL=http://user-service:3002
+      - UNIVERSAL_TARGETS_SERVICE_URL=http://universal-targets-service:3001
+      - JOB_MANAGEMENT_SERVICE_URL=http://job-management-service:8001
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8004
+    ports:
+      - "8002:8002"
+    depends_on:
+      job-execution-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      universal-targets-service:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Job Execution Workers (Celery)
+  job-execution-worker:
+    build:
+      context: ./job-execution-service
+      dockerfile: Dockerfile.worker
+    container_name: opsconductor-execution-worker
+    environment:
+      - DATABASE_URL=postgresql://job_exec_user:job_exec_password@job-execution-postgres:5432/job_execution
+      - REDIS_URL=redis://redis:6379/1
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - AUTH_SERVICE_URL=http://auth-service:3000
+      - USER_SERVICE_URL=http://user-service:3002
+      - UNIVERSAL_TARGETS_SERVICE_URL=http://universal-targets-service:3001
+      - JOB_MANAGEMENT_SERVICE_URL=http://job-management-service:8001
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8004
+    depends_on:
+      job-execution-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+  # Job Scheduling Service
+  job-scheduling-service:
+    build:
+      context: ./job-scheduling-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-job-scheduling
+    environment:
+      - DATABASE_URL=postgresql://job_sched_user:job_sched_password@job-scheduling-postgres:5432/job_scheduling
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - AUTH_SERVICE_URL=http://auth-service:3000
+      - USER_SERVICE_URL=http://user-service:3002
+      - JOB_MANAGEMENT_SERVICE_URL=http://job-management-service:8001
+      - JOB_EXECUTION_SERVICE_URL=http://job-execution-service:8002
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8004
+    ports:
+      - "8003:8003"
+    depends_on:
+      job-scheduling-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      job-management-service:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Audit & Events Service
+  audit-events-service:
+    build:
+      context: ./audit-events-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-audit-events
+    environment:
+      - DATABASE_URL=postgresql://audit_user:audit_password@audit-events-postgres:5432/audit_events
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - AUTH_SERVICE_URL=http://auth-service:3000
+      - USER_SERVICE_URL=http://user-service:3002
+    ports:
+      - "8004:8004"
+    depends_on:
+      audit-events-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # API GATEWAY & LOAD BALANCER
+  # =============================================================================
+
+  # API Gateway (Nginx)
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: opsconductor-api-gateway
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ../nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - auth-service
+      - user-service
+      - universal-targets-service
+      - job-management-service
+      - job-execution-service
+      - job-scheduling-service
+      - audit-events-service
+      - frontend
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# =============================================================================
+# NETWORKS AND VOLUMES
+# =============================================================================
+
+networks:
+  opsconductor-network:
+    driver: bridge
+    name: opsconductor-microservices
+
+volumes:
+  # Infrastructure
+  redis_data:
+    name: opsconductor-redis-data
+  rabbitmq_data:
+    name: opsconductor-rabbitmq-data
+  
+  # Existing Services
+  auth_postgres_data:
+    name: opsconductor-auth-postgres-data
+  user_postgres_data:
+    name: opsconductor-user-postgres-data
+  
+  # New Services
+  targets_postgres_data:
+    name: opsconductor-targets-postgres-data
+  job_management_data:
+    name: opsconductor-job-management-data
+  job_execution_data:
+    name: opsconductor-job-execution-data
+  job_scheduling_data:
+    name: opsconductor-job-scheduling-data
+  audit_events_data:
+    name: opsconductor-audit-events-data

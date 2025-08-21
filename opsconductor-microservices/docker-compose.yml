@@ -1,0 +1,296 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # INFRASTRUCTURE SERVICES
+  # =============================================================================
+  
+  # PostgreSQL Databases
+  job-management-db:
+    image: postgres:15-alpine
+    container_name: opsconductor-job-management-db
+    environment:
+      POSTGRES_DB: job_management
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - job_management_data:/var/lib/postgresql/data
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d job_management"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  job-execution-db:
+    image: postgres:15-alpine
+    container_name: opsconductor-job-execution-db
+    environment:
+      POSTGRES_DB: job_execution
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - job_execution_data:/var/lib/postgresql/data
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d job_execution"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  job-scheduling-db:
+    image: postgres:15-alpine
+    container_name: opsconductor-job-scheduling-db
+    environment:
+      POSTGRES_DB: job_scheduling
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - job_scheduling_data:/var/lib/postgresql/data
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d job_scheduling"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  audit-events-db:
+    image: postgres:15-alpine
+    container_name: opsconductor-audit-events-db
+    environment:
+      POSTGRES_DB: audit_events
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - audit_events_data:/var/lib/postgresql/data
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d audit_events"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Caching and Celery
+  redis:
+    image: redis:7-alpine
+    container_name: opsconductor-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ for Event Messaging
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: opsconductor-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # MICROSERVICES
+  # =============================================================================
+
+  # Job Management Service
+  job-management-service:
+    build:
+      context: ./job-management-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-job-management
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@job-management-db:5432/job_management
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - JOB_EXECUTION_SERVICE_URL=http://job-execution-service:8002
+      - JOB_SCHEDULING_SERVICE_URL=http://job-scheduling-service:8003
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8004
+    ports:
+      - "8001:8001"
+    depends_on:
+      job-management-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Job Execution Service
+  job-execution-service:
+    build:
+      context: ./job-execution-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-job-execution
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@job-execution-db:5432/job_execution
+      - REDIS_URL=redis://redis:6379/1
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - JOB_MANAGEMENT_SERVICE_URL=http://job-management-service:8001
+    ports:
+      - "8002:8002"
+    depends_on:
+      job-execution-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Job Execution Workers (Celery)
+  job-execution-worker:
+    build:
+      context: ./job-execution-service
+      dockerfile: Dockerfile.worker
+    container_name: opsconductor-execution-worker
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@job-execution-db:5432/job_execution
+      - REDIS_URL=redis://redis:6379/1
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - JOB_MANAGEMENT_SERVICE_URL=http://job-management-service:8001
+    depends_on:
+      job-execution-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    deploy:
+      replicas: 2
+
+  # Job Scheduling Service
+  job-scheduling-service:
+    build:
+      context: ./job-scheduling-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-job-scheduling
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@job-scheduling-db:5432/job_scheduling
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - JOB_MANAGEMENT_SERVICE_URL=http://job-management-service:8001
+      - JOB_EXECUTION_SERVICE_URL=http://job-execution-service:8002
+    ports:
+      - "8003:8003"
+    depends_on:
+      job-scheduling-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Audit & Events Service
+  audit-events-service:
+    build:
+      context: ./audit-events-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-audit-events
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@audit-events-db:5432/audit_events
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    ports:
+      - "8004:8004"
+    depends_on:
+      audit-events-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # API Gateway (Nginx)
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: opsconductor-api-gateway
+    ports:
+      - "8080:80"
+      - "8443:443"
+    depends_on:
+      - job-management-service
+      - job-execution-service
+      - job-scheduling-service
+      - audit-events-service
+    networks:
+      - opsconductor-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# =============================================================================
+# NETWORKS AND VOLUMES
+# =============================================================================
+
+networks:
+  opsconductor-network:
+    driver: bridge
+    name: opsconductor-microservices
+
+volumes:
+  job_management_data:
+    name: opsconductor-job-management-data
+  job_execution_data:
+    name: opsconductor-job-execution-data
+  job_scheduling_data:
+    name: opsconductor-job-scheduling-data
+  audit_events_data:
+    name: opsconductor-audit-events-data
+  redis_data:
+    name: opsconductor-redis-data
+  rabbitmq_data:
+    name: opsconductor-rabbitmq-data
