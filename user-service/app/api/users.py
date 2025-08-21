@@ -12,11 +12,30 @@ from app.services.user_service import UserService
 from app.schemas.user import (
     UserCreate, UserUpdate, UserResponse, UserListResponse,
     UserSettingsUpdate, UserSettingsResponse,
-    UserStatsResponse, BulkUserAction, BulkUserActionResponse
+    UserStatsResponse, BulkUserAction, BulkUserActionResponse,
+    UserActivityListResponse
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/users", tags=["Users"])
+
+
+@router.get("/exists/{username}")
+async def check_user_exists(
+    username: str,
+    db: Session = Depends(get_db)
+):
+    """Check if user exists by username (for auth service)."""
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_username(username)
+        return {"exists": user is not None}
+    except Exception as e:
+        logger.error(f"Error checking if user exists: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
 
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -269,6 +288,10 @@ async def bulk_user_action(
     current_user: CurrentUser = Depends(get_current_admin_user)
 ):
     """Perform bulk action on users (admin only)."""
+    logger.error(f"=== API BULK ACTION CALLED ===")
+    logger.error(f"Action: {action_data.action}")
+    logger.error(f"User IDs: {action_data.user_ids}")
+    logger.error(f"Current user: {current_user.user_id}")
     try:
         user_service = UserService(db)
         return user_service.bulk_user_action(
@@ -277,6 +300,40 @@ async def bulk_user_action(
         )
     except Exception as e:
         logger.error(f"Error performing bulk action: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@router.get("/{user_id}/activity", response_model=UserActivityListResponse)
+async def get_user_activity(
+    user_id: str,
+    limit: int = Query(100, ge=1, le=1000, description="Number of activities to return"),
+    skip: int = Query(0, ge=0, description="Number of activities to skip"),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_permission("read_users"))
+):
+    """Get user activity history."""
+    try:
+        user_service = UserService(db)
+        
+        # Verify user exists
+        user = user_service.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Get user activity
+        activity_data = user_service.get_user_activity(user_id, skip=skip, limit=limit)
+        return activity_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting user activity for {user_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"

@@ -196,7 +196,7 @@ const EnhancedUserManagement = () => {
       });
       
       showNotification(
-        `Bulk action completed: ${result.successful.length} successful, ${result.failed.length} failed`,
+        `Bulk action completed: ${result.success_count} successful, ${result.failed_count} failed`,
         'success'
       );
       setOpenBulkDialog(false);
@@ -413,7 +413,7 @@ const EnhancedUserManagement = () => {
                   onChange={(e) => setRoleFilter(e.target.value)}
                 >
                   <MenuItem value="">All Roles</MenuItem>
-                  <MenuItem value="administrator">Administrator</MenuItem>
+                  <MenuItem value="admin">Administrator</MenuItem>
                   <MenuItem value="manager">Manager</MenuItem>
                   <MenuItem value="user">User</MenuItem>
                 </Select>
@@ -469,7 +469,6 @@ const EnhancedUserManagement = () => {
               <TableCell>Name</TableCell>
               <TableCell>Role</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell>Last Login</TableCell>
               <TableCell>Created</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
@@ -477,7 +476,7 @@ const EnhancedUserManagement = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={10} sx={{ textAlign: 'center', py: 4 }}>
+                <TableCell colSpan={9} sx={{ textAlign: 'center', py: 4 }}>
                   <CircularProgress size={24} />
                   <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
                     Loading users...
@@ -486,7 +485,7 @@ const EnhancedUserManagement = () => {
               </TableRow>
             ) : users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} sx={{ textAlign: 'center', py: 4 }}>
+                <TableCell colSpan={9} sx={{ textAlign: 'center', py: 4 }}>
                   <Typography variant="body2" color="text.secondary">
                     No users found
                   </Typography>
@@ -523,12 +522,6 @@ const EnhancedUserManagement = () => {
                     />
                   </TableCell>
                   <TableCell>{getStatusChip(user)}</TableCell>
-                  <TableCell>
-                    {user.last_login 
-                      ? new Date(user.last_login).toLocaleDateString()
-                      : 'Never'
-                    }
-                  </TableCell>
                   <TableCell>
                     {new Date(user.created_at).toLocaleDateString()}
                   </TableCell>
@@ -683,7 +676,7 @@ const EnhancedUserManagement = () => {
                 >
                   <MenuItem value="user">User</MenuItem>
                   <MenuItem value="manager">Manager</MenuItem>
-                  <MenuItem value="administrator">Administrator</MenuItem>
+                  <MenuItem value="admin">Administrator</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

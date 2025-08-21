@@ -137,6 +137,7 @@ class AuthService:
             user_info = UserInfo(
                 id=user_id,
                 username=user_data.get("username", ""),
+                role=user_data.get("role", "user"),
                 last_login=None
             )
             

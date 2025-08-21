@@ -12,14 +12,20 @@ class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=255)
     email: EmailStr
     full_name: Optional[str] = Field(None, max_length=255)
-    role: str = Field("user", regex="^(admin|user|viewer)$")
+    first_name: Optional[str] = Field(None, max_length=255)
+    last_name: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    department: Optional[str] = Field(None, max_length=255)
+    role: str = Field("user", regex="^(admin|user|viewer|manager)$")
     permissions: List[str] = Field(default_factory=list)
     is_active: bool = True
+    is_verified: bool = False
+    must_change_password: bool = False
 
 
 class UserCreate(UserBase):
     """Schema for creating a user."""
-    pass
+    password: str = Field(..., min_length=8, max_length=255)
 
 
 class UserUpdate(BaseModel):
@@ -27,9 +33,15 @@ class UserUpdate(BaseModel):
     username: Optional[str] = Field(None, min_length=3, max_length=255)
     email: Optional[EmailStr] = None
     full_name: Optional[str] = Field(None, max_length=255)
-    role: Optional[str] = Field(None, regex="^(admin|user|viewer)$")
+    first_name: Optional[str] = Field(None, max_length=255)
+    last_name: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    department: Optional[str] = Field(None, max_length=255)
+    role: Optional[str] = Field(None, regex="^(admin|user|viewer|manager)$")
     permissions: Optional[List[str]] = None
     is_active: Optional[bool] = None
+    is_verified: Optional[bool] = None
+    must_change_password: Optional[bool] = None
 
 
 class UserResponse(BaseModel):
@@ -39,11 +51,19 @@ class UserResponse(BaseModel):
     username: str
     email: str
     full_name: Optional[str]
+    first_name: Optional[str]
+    last_name: Optional[str]
+    phone: Optional[str]
+    department: Optional[str]
     role: str
     permissions: List[str]
     is_active: bool
+    is_verified: bool
+    must_change_password: bool
+    last_login: Optional[datetime]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
+    deleted_at: Optional[datetime]
     created_by: Optional[str]
     updated_by: Optional[str]
     

@@ -19,12 +19,21 @@ class UserProfile(Base):
     user_id = Column(String(255), unique=True, nullable=False, index=True)
     username = Column(String(255), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255))  # Store hashed password
     full_name = Column(String(255))
+    first_name = Column(String(255))
+    last_name = Column(String(255))
+    phone = Column(String(50))
+    department = Column(String(255))
     role = Column(String(50), nullable=False, default="user", index=True)
     permissions = Column(ARRAY(Text), default=[])
     is_active = Column(Boolean, default=True, index=True)
+    is_verified = Column(Boolean, default=False, index=True)
+    must_change_password = Column(Boolean, default=False)
+    last_login = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)  # Soft delete timestamp
     created_by = Column(UUID(as_uuid=True))
     updated_by = Column(UUID(as_uuid=True))
     
@@ -36,11 +45,19 @@ class UserProfile(Base):
             "username": self.username,
             "email": self.email,
             "full_name": self.full_name,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "phone": self.phone,
+            "department": self.department,
             "role": self.role,
             "permissions": self.permissions or [],
             "is_active": self.is_active,
+            "is_verified": self.is_verified,
+            "must_change_password": self.must_change_password,
+            "last_login": self.last_login.isoformat() if self.last_login else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "created_by": str(self.created_by) if self.created_by else None,
             "updated_by": str(self.updated_by) if self.updated_by else None
         }
