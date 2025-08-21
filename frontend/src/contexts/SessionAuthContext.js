@@ -22,7 +22,8 @@ export const SessionAuthProvider = ({ children }) => {
   });
 
   // Auth service URL - declared once and reused
-  const authUrl = process.env.REACT_APP_AUTH_URL || '/api/auth';
+  // ✅ PORT PLAN COMPLIANCE: Use API Gateway external port 8080 directly
+  const authUrl = process.env.REACT_APP_AUTH_URL || 'http://localhost:8080/api/auth';
 
   useEffect(() => {
     // Initialize session service
