@@ -59,7 +59,7 @@ services:
       POSTGRES_PASSWORD: ${AUTH_POSTGRES_PASSWORD:-auth_password}
     volumes:
       - auth_postgres_data:/var/lib/postgresql/data
-      - ./auth-service/database:/docker-entrypoint-initdb.d
+      - ./services/auth-service/database:/docker-entrypoint-initdb.d
     networks:
       - opsconductor-network
     restart: unless-stopped
@@ -81,7 +81,7 @@ services:
       POSTGRES_PASSWORD: ${USER_POSTGRES_PASSWORD:-user_password}
     volumes:
       - user_postgres_data:/var/lib/postgresql/data
-      - ./user-service/database:/docker-entrypoint-initdb.d
+      - ./services/user-service/database:/docker-entrypoint-initdb.d
     networks:
       - opsconductor-network
     restart: unless-stopped
@@ -92,11 +92,121 @@ services:
       retries: 5
 
   # =============================================================================
+  # TARGETS DATABASE - PostgreSQL
+  # =============================================================================
+  targets-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-targets-postgres
+    environment:
+      POSTGRES_DB: ${TARGETS_POSTGRES_DB:-targets_db}
+      POSTGRES_USER: ${TARGETS_POSTGRES_USER:-targets_user}
+      POSTGRES_PASSWORD: ${TARGETS_POSTGRES_PASSWORD:-targets_password}
+    volumes:
+      - targets_postgres_data:/var/lib/postgresql/data
+      - ./services/targets-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TARGETS_POSTGRES_USER:-targets_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # JOBS DATABASE - PostgreSQL
+  # =============================================================================
+  jobs-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-jobs-postgres
+    environment:
+      POSTGRES_DB: ${JOBS_POSTGRES_DB:-jobs_db}
+      POSTGRES_USER: ${JOBS_POSTGRES_USER:-jobs_user}
+      POSTGRES_PASSWORD: ${JOBS_POSTGRES_PASSWORD:-jobs_password}
+    volumes:
+      - jobs_postgres_data:/var/lib/postgresql/data
+      - ./services/jobs-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${JOBS_POSTGRES_USER:-jobs_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # EXECUTION DATABASE - PostgreSQL
+  # =============================================================================
+  execution-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-execution-postgres
+    environment:
+      POSTGRES_DB: ${EXECUTION_POSTGRES_DB:-execution_db}
+      POSTGRES_USER: ${EXECUTION_POSTGRES_USER:-execution_user}
+      POSTGRES_PASSWORD: ${EXECUTION_POSTGRES_PASSWORD:-execution_password}
+    volumes:
+      - execution_postgres_data:/var/lib/postgresql/data
+      - ./services/execution-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EXECUTION_POSTGRES_USER:-execution_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # AUDIT EVENTS DATABASE - PostgreSQL
+  # =============================================================================
+  audit-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-audit-postgres
+    environment:
+      POSTGRES_DB: ${AUDIT_POSTGRES_DB:-audit_db}
+      POSTGRES_USER: ${AUDIT_POSTGRES_USER:-audit_user}
+      POSTGRES_PASSWORD: ${AUDIT_POSTGRES_PASSWORD:-audit_password}
+    volumes:
+      - audit_postgres_data:/var/lib/postgresql/data
+      - ./services/audit-events-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUDIT_POSTGRES_USER:-audit_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # NOTIFICATION DATABASE - PostgreSQL
+  # =============================================================================
+  notification-postgres:
+    image: postgres:15-alpine
+    container_name: opsconductor-notification-postgres
+    environment:
+      POSTGRES_DB: ${NOTIFICATION_POSTGRES_DB:-notification_db}
+      POSTGRES_USER: ${NOTIFICATION_POSTGRES_USER:-notification_user}
+      POSTGRES_PASSWORD: ${NOTIFICATION_POSTGRES_PASSWORD:-notification_password}
+    volumes:
+      - notification_postgres_data:/var/lib/postgresql/data
+      - ./services/notification-service/database:/docker-entrypoint-initdb.d
+    networks:
+      - opsconductor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_POSTGRES_USER:-notification_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
   # AUTH SERVICE - FastAPI (Authentication Only)
   # =============================================================================
   auth-service:
     build:
-      context: ./auth-service
+      context: ./services/auth-service
       dockerfile: Dockerfile
     container_name: opsconductor-auth-service
     environment:
@@ -109,6 +219,7 @@ services:
       - SESSION_TIMEOUT_MINUTES=${SESSION_TIMEOUT_MINUTES:-480}
       - SESSION_WARNING_MINUTES=${SESSION_WARNING_MINUTES:-2}
       - USER_SERVICE_URL=http://user-service:8000
+      - API_BASE_PATH=/api/v1
       - ENVIRONMENT=${ENVIRONMENT}
       - DEBUG=${DEBUG:-false}
     networks:
@@ -132,7 +243,7 @@ services:
   # =============================================================================
   user-service:
     build:
-      context: ./user-service
+      context: ./services/user-service
       dockerfile: Dockerfile
     container_name: opsconductor-user-service
     environment:
@@ -141,6 +252,7 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - JWT_ALGORITHM=${JWT_ALGORITHM}
       - AUTH_SERVICE_URL=http://auth-service:8000
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8000
       - ENVIRONMENT=${ENVIRONMENT}
       - DEBUG=${DEBUG:-false}
     networks:
@@ -155,6 +267,333 @@ services:
       - "8002:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # TARGETS SERVICE - FastAPI (Target Management)
+  # =============================================================================
+  targets-service:
+    build:
+      context: ./services/targets-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-targets-service
+    environment:
+      - DATABASE_URL=postgresql://${TARGETS_POSTGRES_USER:-targets_user}:${TARGETS_POSTGRES_PASSWORD:-targets_password}@targets-postgres:5432/${TARGETS_POSTGRES_DB:-targets_db}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - USER_SERVICE_URL=http://user-service:8000
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8000
+      - TARGET_DISCOVERY_SERVICE_URL=http://target-discovery-service:8000
+      - API_BASE_PATH=/api/v1
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG:-false}
+    networks:
+      - opsconductor-network
+    depends_on:
+      targets-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8003:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # JOBS SERVICE - FastAPI (Job Management)
+  # =============================================================================
+  jobs-service:
+    build:
+      context: ./services/jobs-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-jobs-service
+    environment:
+      - DATABASE_URL=postgresql://${JOBS_POSTGRES_USER:-jobs_user}:${JOBS_POSTGRES_PASSWORD:-jobs_password}@jobs-postgres:5432/${JOBS_POSTGRES_DB:-jobs_db}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - USER_SERVICE_URL=http://user-service:8000
+      - TARGETS_SERVICE_URL=http://targets-service:8000
+      - EXECUTION_SERVICE_URL=http://execution-service:8000
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8000
+      - JOB_SCHEDULING_SERVICE_URL=http://job-scheduling-service:8000
+      - API_BASE_PATH=/api/v1
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG:-false}
+    networks:
+      - opsconductor-network
+    depends_on:
+      jobs-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8004:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # EXECUTION SERVICE - FastAPI (Job Execution)
+  # =============================================================================
+  execution-service:
+    build:
+      context: ./services/execution-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-execution-service
+    environment:
+      - DATABASE_URL=postgresql://${EXECUTION_POSTGRES_USER:-execution_user}:${EXECUTION_POSTGRES_PASSWORD:-execution_password}@execution-postgres:5432/${EXECUTION_POSTGRES_DB:-execution_db}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - USER_SERVICE_URL=http://user-service:8000
+      - TARGETS_SERVICE_URL=http://targets-service:8000
+      - JOBS_SERVICE_URL=http://jobs-service:8000
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8000
+      - API_BASE_PATH=/api/v1
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG:-false}
+      - MAX_CONCURRENT_EXECUTIONS=${MAX_CONCURRENT_EXECUTIONS:-10}
+      - CONNECTION_TIMEOUT=${CONNECTION_TIMEOUT:-30}
+      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT:-300}
+    networks:
+      - opsconductor-network
+    depends_on:
+      execution-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8005:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # AUDIT EVENTS SERVICE - FastAPI (Audit Logging)
+  # =============================================================================
+  audit-events-service:
+    build:
+      context: ./services/audit-events-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-audit-events-service
+    environment:
+      - DATABASE_URL=postgresql://${AUDIT_POSTGRES_USER:-audit_user}:${AUDIT_POSTGRES_PASSWORD:-audit_password}@audit-postgres:5432/${AUDIT_POSTGRES_DB:-audit_db}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - API_BASE_PATH=/api/v1
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG:-false}
+    networks:
+      - opsconductor-network
+    depends_on:
+      audit-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8006:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # NOTIFICATION SERVICE - FastAPI (Notifications)
+  # =============================================================================
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-notification-service
+    environment:
+      - DATABASE_URL=postgresql://${NOTIFICATION_POSTGRES_USER:-notification_user}:${NOTIFICATION_POSTGRES_PASSWORD:-notification_password}@notification-postgres:5432/${NOTIFICATION_POSTGRES_DB:-notification_db}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - USER_SERVICE_URL=http://user-service:8000
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8000
+      - API_BASE_PATH=/api/v1
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG:-false}
+    networks:
+      - opsconductor-network
+    depends_on:
+      notification-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8007:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # TARGET DISCOVERY SERVICE - FastAPI (Auto Discovery)
+  # =============================================================================
+  target-discovery-service:
+    build:
+      context: ./services/target-discovery-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-target-discovery-service
+    environment:
+      - DATABASE_URL=postgresql://${TARGETS_POSTGRES_USER:-targets_user}:${TARGETS_POSTGRES_PASSWORD:-targets_password}@targets-postgres:5432/${TARGETS_POSTGRES_DB:-targets_db}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - TARGETS_SERVICE_URL=http://targets-service:8000
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8000
+      - API_BASE_PATH=/api/v1
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG:-false}
+    networks:
+      - opsconductor-network
+    depends_on:
+      targets-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8008:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # JOB SCHEDULING SERVICE - FastAPI (Scheduling)
+  # =============================================================================
+  job-scheduling-service:
+    build:
+      context: ./services/job-scheduling-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-job-scheduling-service
+    environment:
+      - DATABASE_URL=postgresql://${JOBS_POSTGRES_USER:-jobs_user}:${JOBS_POSTGRES_PASSWORD:-jobs_password}@jobs-postgres:5432/${JOBS_POSTGRES_DB:-jobs_db}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - JOBS_SERVICE_URL=http://jobs-service:8000
+      - EXECUTION_SERVICE_URL=http://execution-service:8000
+      - API_BASE_PATH=/api/v1
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG:-false}
+    networks:
+      - opsconductor-network
+    depends_on:
+      jobs-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8009:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # JOB MANAGEMENT SERVICE - FastAPI (Job Lifecycle)
+  # =============================================================================
+  job-management-service:
+    build:
+      context: ./services/job-management-service
+      dockerfile: Dockerfile
+    container_name: opsconductor-job-management-service
+    environment:
+      - DATABASE_URL=postgresql://${JOBS_POSTGRES_USER:-jobs_user}:${JOBS_POSTGRES_PASSWORD:-jobs_password}@jobs-postgres:5432/${JOBS_POSTGRES_DB:-jobs_db}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - JOBS_SERVICE_URL=http://jobs-service:8000
+      - EXECUTION_SERVICE_URL=http://execution-service:8000
+      - JOB_SCHEDULING_SERVICE_URL=http://job-scheduling-service:8000
+      - TARGETS_SERVICE_URL=http://targets-service:8000
+      - USER_SERVICE_URL=http://user-service:8000
+      - AUDIT_EVENTS_SERVICE_URL=http://audit-events-service:8000
+      - API_BASE_PATH=/api/v1
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG:-false}
+    networks:
+      - opsconductor-network
+    depends_on:
+      jobs-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8010:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "5", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # API GATEWAY - Nginx (Microservices Routing)
+  # =============================================================================
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: opsconductor-api-gateway
+    ports:
+      - "8080:80"
+    networks:
+      - opsconductor-network
+    depends_on:
+      - auth-service
+      - user-service
+      - targets-service
+      - jobs-service
+      - execution-service
+      - audit-events-service
+      - notification-service
+      - target-discovery-service
+      - job-scheduling-service
+      - job-management-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -185,6 +624,7 @@ services:
       - ENABLE_RETRY=${ENABLE_RETRY}
       - MAX_RETRIES=${MAX_RETRIES}
       - RETRY_BACKOFF_BASE=${RETRY_BACKOFF_BASE}
+      - API_BASE_URL=/api/v1
     volumes:
       - ./backend:/app
       - ./backend/uploads:/app/uploads
@@ -376,6 +816,16 @@ volumes:
   auth_postgres_data:
     driver: local
   user_postgres_data:
+    driver: local
+  targets_postgres_data:
+    driver: local
+  jobs_postgres_data:
+    driver: local
+  execution_postgres_data:
+    driver: local
+  audit_postgres_data:
+    driver: local
+  notification_postgres_data:
     driver: local
   portainer_data:
     driver: local

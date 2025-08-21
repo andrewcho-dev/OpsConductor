@@ -70,7 +70,7 @@ async def get_current_user(
 
 def require_admin_role(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Require administrator role for access."""
-    if current_user.get("role") != "administrator":
+    if current_user.get("role") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Administrator access required"

@@ -210,31 +210,33 @@ from app.api.v3 import (
 )
 # V2 ROUTERS REMOVED - Using v3 only
 
-# Include V3 consolidated APIs
-app.include_router(jobs_v3.router, tags=["Jobs v3 - Simplified"])
-app.include_router(schedules_v3.router, tags=["Schedules v3"])
+# Include V1 consolidated APIs (renamed from v3)
+app.include_router(jobs_v3.router, tags=["Jobs v1 - Simplified"])
+app.include_router(schedules_v3.router, tags=["Schedules v1"])
 # Users management moved to auth service - NO LONGER IN MAIN BACKEND
-app.include_router(targets_v3.router, tags=["Targets v3"])
+app.include_router(targets_v3.router, tags=["Targets v1"])
 
-app.include_router(system_v3.router, tags=["System v3"])
-app.include_router(celery_v3.router, tags=["Celery v3"])
-app.include_router(audit_v3.router, tags=["Audit v3"])
-app.include_router(discovery_v3.router, tags=["Discovery v3"])
-app.include_router(notifications_v3.router, tags=["Notifications v3"])
-app.include_router(templates_v3.router, tags=["Templates v3"])
-app.include_router(metrics_v3.router, tags=["Metrics v3"])
-app.include_router(websocket_v3.router, tags=["WebSocket v3"])
-app.include_router(device_types_v3.router, tags=["Device Types v3"])
-app.include_router(docker_v3.router, tags=["Docker v3"])
+app.include_router(system_v3.router, tags=["System v1"])
+app.include_router(celery_v3.router, tags=["Celery v1"])
+app.include_router(audit_v3.router, tags=["Audit v1"])
+app.include_router(discovery_v3.router, tags=["Discovery v1"])
+app.include_router(notifications_v3.router, tags=["Notifications v1"])
+app.include_router(templates_v3.router, tags=["Templates v1"])
+app.include_router(metrics_v3.router, tags=["Metrics v1"])
+app.include_router(websocket_v3.router, tags=["WebSocket v1"])
+app.include_router(device_types_v3.router, tags=["Device Types v1"])
+app.include_router(docker_v3.router, tags=["Docker v1"])
 
-app.include_router(analytics_v3.router, tags=["Analytics v3"])
-app.include_router(data_export_v3.router, tags=["Data Export v3"])
+app.include_router(analytics_v3.router, tags=["Analytics v1"])
+app.include_router(data_export_v3.router, tags=["Data Export v1"])
 
 # V1 ROUTERS REMOVED - Using v3 only
 
-@app.get("/")
-async def root():
+@app.get("/api/v1/info")
+async def service_info():
+    """Service information endpoint"""
     return {
+        "service": "opsconductor-backend",
         "message": "OpsConductor Universal Automation Orchestration Platform",
         "version": "1.0.0",
         "status": "running"

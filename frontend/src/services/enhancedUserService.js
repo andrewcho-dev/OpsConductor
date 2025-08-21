@@ -6,7 +6,7 @@ import { apiService } from './apiService';
  */
 class EnhancedUserService {
   constructor() {
-    this.baseUrl = '/api/users';
+    this.baseUrl = '/users';
   }
 
   /**

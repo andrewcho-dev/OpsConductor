@@ -244,7 +244,7 @@ class DiscoveryManagementService:
                 "started_at": datetime.utcnow().isoformat(),
                 "initiated_by": current_username,
                 "discovery_options": discovery_options,
-                "progress_url": f"{os.getenv('API_BASE_URL', '/api/v3')}/discovery/jobs/{discovery_job['id']}/progress"
+                "progress_url": f"{os.getenv('API_BASE_URL', '/api/v1')}/discovery/jobs/{discovery_job['id']}/progress"
             }
             
             logger.info(

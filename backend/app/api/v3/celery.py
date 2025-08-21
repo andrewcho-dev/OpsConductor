@@ -21,8 +21,8 @@ from app.core.logging import get_structured_logger
 
 # Initialize
 logger = get_structured_logger(__name__)
-api_base_url = os.getenv("API_BASE_URL", "/api/v3")
-router = APIRouter(prefix=f"{api_base_url}/celery", tags=["Celery v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v1")
+router = APIRouter(prefix=f"{api_base_url}/celery", tags=["Celery v1"])
 
 # Celery app instance - use the properly configured app
 from app.core.celery_app import celery_app

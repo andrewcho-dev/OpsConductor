@@ -17,8 +17,8 @@ from app.database.database import get_db
 from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger
 
-api_base_url = os.getenv("API_BASE_URL", "/api/v3")
-router = APIRouter(prefix=f"{api_base_url}/data-export", tags=["Data Export v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v1")
+router = APIRouter(prefix=f"{api_base_url}/data-export", tags=["Data Export v1"])
 
 # Configure structured logger
 logger = get_structured_logger(__name__)
@@ -191,7 +191,7 @@ async def create_export(
             "format": export_request.format,
             "status": "processing",
             "file_path": None,
-            "download_url": f"{os.getenv('API_BASE_URL', '/api/v3')}/data-export/download/{export_id}",
+            "download_url": f"{os.getenv('API_BASE_URL', '/api/v1')}/data-export/download/{export_id}",
             "created_at": datetime.now(timezone.utc),
             "expires_at": datetime.now(timezone.utc).replace(hour=23, minute=59, second=59),
             "record_count": 0,
@@ -223,7 +223,7 @@ async def get_export_status(
             "format": "json",
             "status": "completed",
             "file_path": f"/tmp/exports/{export_id}.json",
-            "download_url": f"{os.getenv('API_BASE_URL', '/api/v3')}/data-export/download/{export_id}",
+            "download_url": f"{os.getenv('API_BASE_URL', '/api/v1')}/data-export/download/{export_id}",
             "created_at": datetime.now(timezone.utc) - timedelta(minutes=5),
             "expires_at": datetime.now(timezone.utc).replace(hour=23, minute=59, second=59),
             "record_count": 25,
@@ -357,7 +357,7 @@ async def list_exports(
                 "format": ["json", "csv", "xlsx"][i % 3],
                 "status": ["completed", "processing", "failed"][i % 3],
                 "file_path": f"/tmp/exports/export_{i+1}.json" if i % 3 == 0 else None,
-                "download_url": f"{os.getenv('API_BASE_URL', '/api/v3')}/data-export/download/export_{i+1}" if i % 3 == 0 else None,
+                "download_url": f"{os.getenv('API_BASE_URL', '/api/v1')}/data-export/download/export_{i+1}" if i % 3 == 0 else None,
                 "created_at": datetime.now(timezone.utc) - timedelta(hours=i),
                 "expires_at": datetime.now(timezone.utc).replace(hour=23, minute=59, second=59),
                 "record_count": (i+1) * 10,

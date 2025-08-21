@@ -14,8 +14,8 @@ from app.database.database import get_db
 from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_structured_logger
 
-api_base_url = os.getenv("API_BASE_URL", "/api/v3")
-router = APIRouter(prefix=f"{api_base_url}/notifications", tags=["Notifications v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v1")
+router = APIRouter(prefix=f"{api_base_url}/notifications", tags=["Notifications v1"])
 
 # Configure structured logger
 logger = get_structured_logger(__name__)

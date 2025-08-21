@@ -16,7 +16,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/schedules", tags=["Job Schedules"])
+import os
+
+api_base_url = os.getenv("API_BASE_URL", "/api/v1")
+router = APIRouter(prefix=f"{api_base_url}/schedules", tags=["Job Schedules v1"])
 
 
 # MODELS

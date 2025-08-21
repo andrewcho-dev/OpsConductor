@@ -16,8 +16,8 @@ from app.domains.audit.services.audit_service import AuditService
 from app.clients.auth_service_client import auth_client
 from app.services.universal_target_service import UniversalTargetService
 
-api_base_url = os.getenv("API_BASE_URL", "/api/v3")
-router = APIRouter(prefix=f"{api_base_url}/audit", tags=["Audit v3"])
+api_base_url = os.getenv("API_BASE_URL", "/api/v1")
+router = APIRouter(prefix=f"{api_base_url}/audit", tags=["Audit v1"])
 
 logger = logging.getLogger(__name__)
 

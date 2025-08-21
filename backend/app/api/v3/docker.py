@@ -3,6 +3,7 @@ Docker Management API v3 - Proxy to Portainer API
 Provides Docker container, volume, and network management through Portainer
 """
 
+import os
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
 import httpx
@@ -11,7 +12,8 @@ from typing import Dict, Any, Optional
 import logging
 from app.core.auth_dependencies import get_current_user
 
-router = APIRouter(prefix="/api/v3/docker")
+api_base_url = os.getenv("API_BASE_URL", "/api/v1")
+router = APIRouter(prefix=f"{api_base_url}/docker", tags=["Docker v1"])
 logger = logging.getLogger(__name__)
 
 PORTAINER_BASE_URL = "http://portainer:9000/api"

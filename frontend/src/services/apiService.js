@@ -21,8 +21,8 @@ class ApiService {
     };
 
     try {
-      // If URL already starts with /api/, use it directly without baseURL
-      const fullUrl = url.startsWith('/api/') ? url : `${this.baseURL}${url}`;
+      // Always use the baseURL for API calls  
+      const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
       const response = await fetch(fullUrl, config);
       
       // If we get a 401, session has expired - force logout immediately

@@ -6,7 +6,7 @@ import { apiService } from './apiService';
  */
 class ConfigService {
   constructor() {
-    this.baseUrl = '/api/v3/system';
+    this.baseUrl = '/api/v1/system';
   }
 
   /**

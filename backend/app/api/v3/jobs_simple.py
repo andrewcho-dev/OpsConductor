@@ -20,8 +20,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-api_base_url = os.getenv('API_BASE_URL', '/api/v3')
-router = APIRouter(prefix=f"{api_base_url}/jobs", tags=["Jobs v3 - Simplified"])
+api_base_url = os.getenv('API_BASE_URL', '/api/v1')
+router = APIRouter(prefix=f"{api_base_url}/jobs", tags=["Jobs v1"])
 
 
 # SIMPLIFIED MODELS

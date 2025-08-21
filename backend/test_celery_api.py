@@ -25,7 +25,7 @@ def test_celery_api():
     for cred in credentials:
         print(f"🔑 Trying {cred['username']}:{cred['password']}")
         try:
-            response = requests.post(f"{base_url}/api/v3/auth/login", json=cred, timeout=10)
+            response = requests.post(f"{base_url}/api/v1/auth/login", json=cred, timeout=10)
             if response.status_code == 200:
                 data = response.json()
                 token = data.get('access_token')
@@ -44,9 +44,9 @@ def test_celery_api():
     headers = {'Authorization': f'Bearer {token}'}
     
     endpoints = [
-        "/api/v3/celery/stats",
-        "/api/v3/celery/workers", 
-        "/api/v3/celery/queues"
+        "/api/v1/celery/stats",
+        "/api/v1/celery/workers", 
+        "/api/v1/celery/queues"
     ]
     
     for endpoint in endpoints:
@@ -62,13 +62,13 @@ def test_celery_api():
             if response.status_code == 200:
                 data = response.json()
                 print(f"✅ Success! Data keys: {list(data.keys())}")
-                if endpoint == "/api/v3/celery/stats":
+                if endpoint == "/api/v1/celery/stats":
                     print(f"   📈 Completed tasks: {data.get('completed_tasks', 'N/A')}")
                     print(f"   📈 Active tasks: {data.get('active_tasks', 'N/A')}")
-                elif endpoint == "/api/v3/celery/workers":
+                elif endpoint == "/api/v1/celery/workers":
                     print(f"   👷 Total workers: {data.get('total_workers', 'N/A')}")
                     print(f"   👷 Active workers: {data.get('active_workers', 'N/A')}")
-                elif endpoint == "/api/v3/celery/queues":
+                elif endpoint == "/api/v1/celery/queues":
                     print(f"   📋 Queues: {list(data.keys())}")
             else:
                 print(f"❌ Failed: {response.text}")
