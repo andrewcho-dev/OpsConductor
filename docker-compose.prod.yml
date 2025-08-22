@@ -1,296 +1,171 @@
 # =============================================================================
-# OPSCONDUCTOR - PRODUCTION DOCKER COMPOSE
+# OPSCONDUCTOR - PRODUCTION OVERRIDE
 # =============================================================================
-# Production setup with optimized containers and security
+# Production-optimized configuration with proper nginx gateway and static frontend
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
 
-name: opsconductor-prod
+version: '3.8'
 
 services:
   # =============================================================================
-  # DATABASE - PostgreSQL
-  # =============================================================================
-  postgres:
-    image: postgres:15-alpine
-    container_name: opsconductor-postgres-prod
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data_prod:/var/lib/postgresql/data
-      - ./database/init:/docker-entrypoint-initdb.d
-    networks:
-      - opsconductor-network-prod
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # =============================================================================
-  # CACHE - Redis
-  # =============================================================================
-  redis:
-    image: redis:7-alpine
-    container_name: opsconductor-redis-prod
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis_data_prod:/data
-    networks:
-      - opsconductor-network-prod
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # =============================================================================
-  # BACKEND - FastAPI
-  # =============================================================================
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: opsconductor-backend-prod
-    container_name: opsconductor-backend-prod
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - SECRET_KEY=${SECRET_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
-      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
-      - ENVIRONMENT=production
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - MAX_CONCURRENT_TARGETS=${MAX_CONCURRENT_TARGETS}
-      - CONNECTION_TIMEOUT=${CONNECTION_TIMEOUT}
-      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT}
-      - ENABLE_RETRY=${ENABLE_RETRY}
-      - MAX_RETRIES=${MAX_RETRIES}
-      - RETRY_BACKOFF_BASE=${RETRY_BACKOFF_BASE}
-    volumes:
-      - ./logs:/app/logs
-      - ./backend/uploads:/app/uploads
-    networks:
-      - opsconductor-network-prod
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # =============================================================================
-  # CELERY WORKER - Background Tasks
-  # =============================================================================
-  celery-worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: opsconductor-celery-worker-prod
-    container_name: opsconductor-celery-worker-prod
-    command: celery -A app.celery worker --loglevel=info --concurrency=4
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - SECRET_KEY=${SECRET_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
-      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
-      - ENVIRONMENT=production
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - MAX_CONCURRENT_TARGETS=${MAX_CONCURRENT_TARGETS}
-      - CONNECTION_TIMEOUT=${CONNECTION_TIMEOUT}
-      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT}
-      - ENABLE_RETRY=${ENABLE_RETRY}
-      - MAX_RETRIES=${MAX_RETRIES}
-      - RETRY_BACKOFF_BASE=${RETRY_BACKOFF_BASE}
-    volumes:
-      - ./logs:/app/logs
-      - ./backend/uploads:/app/uploads
-    networks:
-      - opsconductor-network-prod
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A app.celery inspect ping -d celery@$$HOSTNAME"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # =============================================================================
-  # CELERY SCHEDULER - Scheduled Tasks
-  # =============================================================================
-  scheduler:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: opsconductor-scheduler-prod
-    container_name: opsconductor-scheduler-prod
-    command: celery -A app.celery beat --loglevel=info
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - SECRET_KEY=${SECRET_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
-      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
-      - ENVIRONMENT=production
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - MAX_CONCURRENT_TARGETS=${MAX_CONCURRENT_TARGETS}
-      - CONNECTION_TIMEOUT=${CONNECTION_TIMEOUT}
-      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT}
-      - ENABLE_RETRY=${ENABLE_RETRY}
-      - MAX_RETRIES=${MAX_RETRIES}
-      - RETRY_BACKOFF_BASE=${RETRY_BACKOFF_BASE}
-    volumes:
-      - ./logs:/app/logs
-    networks:
-      - opsconductor-network-prod
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "test -f /proc/1/cmdline && grep -q celery /proc/1/cmdline"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # =============================================================================
-  # FRONTEND - React Production Build
-  # =============================================================================
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - REACT_APP_API_URL=/api
-        - REACT_APP_WS_URL=/ws
-    image: opsconductor-frontend-prod
-    container_name: opsconductor-frontend-prod
-    networks:
-      - opsconductor-network-prod
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # =============================================================================
-  # NGINX REVERSE PROXY - HTTPS ONLY
+  # NGINX - PRODUCTION GATEWAY (replaces development nginx)
   # =============================================================================
   nginx:
     image: nginx:alpine
-    container_name: opsconductor-nginx-prod
+    container_name: opsconductor-nginx-production
     command: sh -c "apk add --no-cache curl && nginx -g 'daemon off;'"
     ports:
-      - "80:80"
-      - "443:443"
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
     volumes:
-      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf
-      - ./nginx/ssl:/etc/nginx/ssl
-      - ./logs/nginx:/var/log/nginx
+      - ./nginx/nginx-production.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      # Mount built frontend files
+      - frontend-build:/usr/share/nginx/html:ro
     networks:
-      - opsconductor-network-prod
+      - opsconductor-network
     depends_on:
-      - backend
-      - frontend
+      frontend-builder:
+        condition: service_completed_successfully
+      auth-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      targets-service:
+        condition: service_healthy
+      jobs-service:
+        condition: service_healthy
+      execution-service:
+        condition: service_healthy
+      audit-events-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      target-discovery-service:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.opsconductor.rule=Host(`localhost`)"
+      - "traefik.http.routers.opsconductor.tls=true"
 
   # =============================================================================
-  # MONITORING - Prometheus
+  # FRONTEND BUILDER - Build React app to static files
   # =============================================================================
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: opsconductor-prometheus-prod
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
+  frontend-builder:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      target: build
+    container_name: opsconductor-frontend-builder
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data_prod:/prometheus
-    networks:
-      - opsconductor-network-prod
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # =============================================================================
-  # MONITORING - Grafana
-  # =============================================================================
-  grafana:
-    image: grafana/grafana:latest
-    container_name: opsconductor-grafana-prod
+      - frontend-build:/app/build
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana_data_prod:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
-    networks:
-      - opsconductor-network-prod
-    restart: unless-stopped
-    ports:
-      - "3001:3000"
-    depends_on:
-      - prometheus
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - NODE_ENV=production
+      - GENERATE_SOURCEMAP=false
+      - REACT_APP_API_URL=/api/v1
+      - REACT_APP_AUTH_URL=/api/v1/auth
+      - REACT_APP_USER_URL=/api/v1/users
+      - REACT_APP_WS_URL=/ws
+      - REACT_APP_STORAGE_URL=/storage
+    profiles:
+      - build
 
-# =============================================================================
-# NETWORKS & VOLUMES
-# =============================================================================
-networks:
-  opsconductor-network-prod:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+  # =============================================================================
+  # REMOVE DEVELOPMENT FRONTEND SERVICE
+  # =============================================================================
+  frontend:
+    profiles:
+      - disabled  # Disable the development frontend service
+
+  # =============================================================================
+  # API GATEWAY - REMOVE DIRECT EXPOSURE
+  # =============================================================================
+  api-gateway:
+    # Remove direct port exposure - access only through main nginx
+    ports: []
+    
+  # =============================================================================
+  # BACKEND - LEGACY SERVICE (DISABLED IN PRODUCTION)
+  # =============================================================================
+  backend:
+    profiles:
+      - disabled  # Disable legacy backend service
+
+  celery-worker:
+    profiles:
+      - disabled  # Disable legacy celery worker
+
+  scheduler:
+    profiles:
+      - disabled  # Disable legacy scheduler
+
+  # =============================================================================
+  # MINIO - PRODUCTION CONFIGURATION
+  # =============================================================================
+  minio:
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-opsconductor}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-opsconductor_minio_2024}
+      - MINIO_BROWSER_REDIRECT_URL=https://${EXTERNAL_DOMAIN:-localhost}/storage/console
+      - MINIO_SERVER_URL=https://${EXTERNAL_DOMAIN:-localhost}/storage
+    # Remove direct port exposure - access only through nginx
+    ports: []
+    labels:
+      - "opsconductor.service=storage"
+      - "opsconductor.type=backend"
+
+  # =============================================================================
+  # MICROSERVICES - REMOVE DIRECT PORT EXPOSURE
+  # =============================================================================
+  auth-service:
+    ports: []  # Access only through nginx gateway
+    
+  user-service:
+    ports: []  # Access only through nginx gateway
+    
+  targets-service:
+    ports: []  # Access only through nginx gateway
+    
+  jobs-service:
+    ports: []  # Access only through nginx gateway
+    
+  execution-service:
+    ports: []  # Access only through nginx gateway
+    environment:
+      # Override MinIO endpoint to use internal networking
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_BROWSER_REDIRECT=false
+    
+  audit-events-service:
+    ports: []  # Access only through nginx gateway
+    
+  notification-service:
+    ports: []  # Access only through nginx gateway
+    
+  target-discovery-service:
+    ports: []  # Access only through nginx gateway
+    
+  job-scheduling-service:
+    ports: []  # Access only through nginx gateway
+    
+  job-management-service:
+    ports: []  # Access only through nginx gateway
 
 volumes:
-  postgres_data_prod:
+  # Volume for built frontend static files
+  frontend-build:
     driver: local
-  redis_data_prod:
-    driver: local
-  prometheus_data_prod:
-    driver: local
-  grafana_data_prod:
-    driver: local
+
+networks:
+  opsconductor-network:
+    external: false
+    driver: bridge

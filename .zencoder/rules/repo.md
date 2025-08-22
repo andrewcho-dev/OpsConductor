@@ -6,11 +6,12 @@ alwaysApply: true
 # OpsConductor Universal Automation Orchestration Platform
 
 ## Repository Summary
-OpsConductor is a comprehensive job-centric automation platform for orchestrating tasks across various target systems. It features a modern architecture with a FastAPI backend, React frontend, and uses PostgreSQL for data storage and Redis for caching.
+OpsConductor is a comprehensive job-centric automation platform for orchestrating tasks across various target systems. It features a modern microservices architecture with individual FastAPI services, API gateway routing, React frontend, and uses PostgreSQL for data storage and Redis for caching. The legacy monolithic backend code is preserved for reference only.
 
 ## Repository Structure
-- **backend/**: FastAPI application with API endpoints, database models, and business logic
-- **frontend/**: React application with Material-UI components
+- **services/**: **[ACTIVE]** Microservices-based architecture with individual services
+- **frontend/**: **[ACTIVE]** React application with Material-UI components
+- **archive/legacy-backend-20250822/**: **[RETIRED]** Original monolithic FastAPI application (fully replaced by microservices)
 - **database/**: SQL initialization scripts for PostgreSQL
 - **nginx/**: Nginx configuration for reverse proxy and SSL termination
 - **docs/**: Documentation files including API references and deployment guides
@@ -18,17 +19,26 @@ OpsConductor is a comprehensive job-centric automation platform for orchestratin
 - **monitoring/**: Prometheus and Grafana configurations
 - **logs/**: Application logs directory
 
-### Main Repository Components
-- **Backend API**: FastAPI-based REST API with JWT authentication
+### Active Architecture (Microservices + Frontend)
 - **Frontend UI**: React application with Material-UI components
-- **Job System**: Celery-based task execution and scheduling
+- **API Gateway**: Nginx-based routing and load balancing
+- **Auth Service**: JWT authentication and authorization
+- **User Service**: User management and profiles
+- **Jobs Service**: Job definition and lifecycle management
+- **Targets Service**: Target system management and discovery
+- **Execution Service**: Job execution with Celery workers
+- **Notification Service**: Event notifications and alerts
+- **Audit Events Service**: System audit logging and compliance
 - **Database**: PostgreSQL for persistent storage
 - **Cache**: Redis for session management and task queuing
-- **Monitoring**: Prometheus and Grafana for metrics and visualization
 
 ## Projects
 
-### Backend (FastAPI)
+### **[ACTIVE]** Microservices Architecture
+**Location**: services/
+**Components**: Individual FastAPI services with dedicated databases and responsibilities
+
+### **[LEGACY - REFERENCE ONLY]** Backend (FastAPI)
 **Configuration File**: backend/requirements.txt
 
 #### Language & Runtime
@@ -73,7 +83,7 @@ cd backend
 python -m unittest discover
 ```
 
-### Frontend (React)
+### **[ACTIVE]** Frontend (React)
 **Configuration File**: frontend/package.json
 
 #### Language & Runtime

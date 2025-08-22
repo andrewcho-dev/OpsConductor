@@ -64,7 +64,7 @@ class User(Base):
     theme = Column(String(20), default='light')
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    user_metadata = Column(JSONB, nullable=True, default=dict)
     tags = Column(JSONB, nullable=True, default=list)
     
     # Timestamps
@@ -124,7 +124,7 @@ class Role(Base):
     level = Column(Integer, default=0)  # Role hierarchy level
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    role_metadata = Column(JSONB, nullable=True, default=dict)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -161,7 +161,7 @@ class Permission(Base):
     is_system = Column(Boolean, default=False, index=True)  # System permissions cannot be deleted
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    permission_metadata = Column(JSONB, nullable=True, default=dict)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -230,7 +230,7 @@ class UserActivityLog(Base):
     session_id = Column(String(255), nullable=True)
     
     # Additional Data
-    metadata = Column(JSONB, nullable=True, default=dict)
+    activity_metadata = Column(JSONB, nullable=True, default=dict)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

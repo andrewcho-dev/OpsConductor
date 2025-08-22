@@ -271,4 +271,10 @@ async def process_notification_event(event_data: Dict[str, Any]) -> bool:
 
 # Set up event consumer callback
 if event_consumer:
-    event_consumer.set_event_handler(process_notification_event)
+    # Register handlers for different event types
+    event_consumer.register_handler("user_login", process_notification_event)
+    event_consumer.register_handler("user_created", process_notification_event)
+    event_consumer.register_handler("job_created", process_notification_event)
+    event_consumer.register_handler("execution_completed", process_notification_event)
+    event_consumer.register_handler("execution_failed", process_notification_event)
+    event_consumer.register_handler("system_alert", process_notification_event)

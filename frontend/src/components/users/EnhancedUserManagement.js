@@ -298,7 +298,7 @@ const EnhancedUserManagement = () => {
 
   const getRoleColor = (role) => {
     switch (role) {
-      case 'administrator': return 'error';
+      case 'admin': return 'error';
       case 'manager': return 'warning';
       default: return 'default';
     }

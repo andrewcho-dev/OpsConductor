@@ -1,8 +1,7 @@
 -- Execution Service Database Initialization
 
--- Create database if not exists
-CREATE DATABASE IF NOT EXISTS execution_db;
-\c execution_db;
+-- Note: Database is already created by POSTGRES_DB environment variable
+-- So we just connect to it and set up the schema
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -60,7 +59,9 @@ CREATE TABLE IF NOT EXISTS action_executions (
     config JSONB, -- Action-specific configuration
     metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+    deleted_by INTEGER
 );
 
 -- Execution queue table
@@ -124,10 +125,21 @@ CREATE TABLE IF NOT EXISTS execution_artifacts (
     artifact_type VARCHAR(50) NOT NULL, -- log, file, screenshot, report, etc.
     name VARCHAR(200) NOT NULL,
     description TEXT,
-    file_path TEXT, -- Path to stored file
+    storage_type VARCHAR(20) DEFAULT 'filesystem', -- filesystem, object_storage, database
+    file_path TEXT, -- Path to stored file (filesystem)
+    object_key TEXT, -- Object storage key (S3/MinIO path)
+    bucket_name VARCHAR(100), -- Object storage bucket
+    storage_url TEXT, -- Full URL to object (for CDN/direct access)
     file_size BIGINT,
     mime_type VARCHAR(100),
-    content TEXT, -- For small text artifacts
+    content TEXT, -- For small text artifacts (< 64KB)
+    checksum VARCHAR(64), -- SHA256 checksum for integrity
+    compression VARCHAR(20), -- gzip, none
+    encryption_key VARCHAR(100), -- For client-side encryption
+    retention_policy VARCHAR(50), -- temporary, permanent, archived
+    expires_at TIMESTAMP WITH TIME ZONE, -- For automatic cleanup
+    access_count INTEGER DEFAULT 0, -- Track usage
+    last_accessed_at TIMESTAMP WITH TIME ZONE,
     metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -144,6 +156,41 @@ CREATE TABLE IF NOT EXISTS execution_resources (
     recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Object storage buckets configuration
+CREATE TABLE IF NOT EXISTS object_storage_buckets (
+    id SERIAL PRIMARY KEY,
+    bucket_name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    bucket_type VARCHAR(50) NOT NULL, -- executions, artifacts, logs, backups, temp
+    retention_days INTEGER, -- Auto-delete objects after N days
+    lifecycle_policy JSONB, -- Object lifecycle rules
+    encryption_enabled BOOLEAN DEFAULT TRUE,
+    versioning_enabled BOOLEAN DEFAULT FALSE,
+    public_access BOOLEAN DEFAULT FALSE,
+    max_object_size BIGINT, -- Max size per object in bytes
+    total_size_limit BIGINT, -- Total bucket size limit
+    current_size BIGINT DEFAULT 0, -- Current usage
+    object_count INTEGER DEFAULT 0, -- Number of objects
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Object storage access logs (for auditing)
+CREATE TABLE IF NOT EXISTS object_storage_access_logs (
+    id SERIAL PRIMARY KEY,
+    artifact_id INTEGER REFERENCES execution_artifacts(id),
+    bucket_name VARCHAR(100),
+    object_key TEXT,
+    operation VARCHAR(20), -- upload, download, delete, list
+    user_id INTEGER, -- Who accessed it
+    client_ip INET,
+    user_agent TEXT,
+    bytes_transferred BIGINT,
+    status_code INTEGER, -- HTTP status code
+    error_message TEXT,
+    access_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_job_executions_status ON job_executions(status);
 CREATE INDEX IF NOT EXISTS idx_job_executions_job_id ON job_executions(job_id);
@@ -151,8 +198,10 @@ CREATE INDEX IF NOT EXISTS idx_job_executions_target_id ON job_executions(target
 CREATE INDEX IF NOT EXISTS idx_job_executions_created_by ON job_executions(created_by);
 CREATE INDEX IF NOT EXISTS idx_job_executions_started_at ON job_executions(started_at);
 CREATE INDEX IF NOT EXISTS idx_job_executions_uuid ON job_executions(uuid);
+CREATE INDEX IF NOT EXISTS idx_job_executions_deleted_at ON job_executions(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_action_executions_job_execution_id ON action_executions(job_execution_id);
 CREATE INDEX IF NOT EXISTS idx_action_executions_status ON action_executions(status);
+CREATE INDEX IF NOT EXISTS idx_action_executions_deleted_at ON action_executions(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_execution_queue_priority ON execution_queue(priority);
 CREATE INDEX IF NOT EXISTS idx_execution_queue_scheduled_for ON execution_queue(scheduled_for);
 CREATE INDEX IF NOT EXISTS idx_execution_queue_worker_id ON execution_queue(worker_id);
@@ -162,8 +211,17 @@ CREATE INDEX IF NOT EXISTS idx_file_transfers_job_execution_id ON file_transfers
 CREATE INDEX IF NOT EXISTS idx_file_transfers_status ON file_transfers(status);
 CREATE INDEX IF NOT EXISTS idx_execution_artifacts_job_execution_id ON execution_artifacts(job_execution_id);
 CREATE INDEX IF NOT EXISTS idx_execution_artifacts_type ON execution_artifacts(artifact_type);
+CREATE INDEX IF NOT EXISTS idx_execution_artifacts_storage_type ON execution_artifacts(storage_type);
+CREATE INDEX IF NOT EXISTS idx_execution_artifacts_bucket_name ON execution_artifacts(bucket_name);
+CREATE INDEX IF NOT EXISTS idx_execution_artifacts_object_key ON execution_artifacts(object_key);
+CREATE INDEX IF NOT EXISTS idx_execution_artifacts_expires_at ON execution_artifacts(expires_at);
+CREATE INDEX IF NOT EXISTS idx_execution_artifacts_retention_policy ON execution_artifacts(retention_policy);
 CREATE INDEX IF NOT EXISTS idx_execution_resources_job_execution_id ON execution_resources(job_execution_id);
 CREATE INDEX IF NOT EXISTS idx_execution_resources_recorded_at ON execution_resources(recorded_at);
+CREATE INDEX IF NOT EXISTS idx_object_storage_buckets_type ON object_storage_buckets(bucket_type);
+CREATE INDEX IF NOT EXISTS idx_object_storage_access_logs_artifact_id ON object_storage_access_logs(artifact_id);
+CREATE INDEX IF NOT EXISTS idx_object_storage_access_logs_bucket_operation ON object_storage_access_logs(bucket_name, operation);
+CREATE INDEX IF NOT EXISTS idx_object_storage_access_logs_access_time ON object_storage_access_logs(access_time);
 
 -- Create trigger for updating updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -176,3 +234,13 @@ $$ language 'plpgsql';
 
 CREATE TRIGGER update_job_executions_updated_at BEFORE UPDATE ON job_executions FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 CREATE TRIGGER update_action_executions_updated_at BEFORE UPDATE ON action_executions FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+CREATE TRIGGER update_object_storage_buckets_updated_at BEFORE UPDATE ON object_storage_buckets FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+-- Insert default object storage buckets
+INSERT INTO object_storage_buckets (bucket_name, description, bucket_type, retention_days, encryption_enabled, versioning_enabled, max_object_size, total_size_limit) VALUES 
+('opsconductor-executions', 'Job execution logs and outputs', 'executions', 365, true, false, 1073741824, 107374182400), -- 1GB per object, 100GB total
+('opsconductor-artifacts', 'Job artifacts and generated files', 'artifacts', 730, true, true, 5368709120, 536870912000), -- 5GB per object, 500GB total  
+('opsconductor-logs', 'Detailed execution logs', 'logs', 90, true, false, 104857600, 10737418240), -- 100MB per object, 10GB total
+('opsconductor-temp', 'Temporary files and processing data', 'temp', 7, false, false, 1073741824, 53687091200), -- 1GB per object, 50GB total
+('opsconductor-backups', 'Database and configuration backups', 'backups', 2555, true, true, 10737418240, 1073741824000) -- 10GB per object, 1TB total
+ON CONFLICT (bucket_name) DO NOTHING;

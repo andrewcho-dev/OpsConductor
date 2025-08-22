@@ -272,4 +272,4 @@ async def process_audit_event(event_data: Dict[str, Any]) -> bool:
 
 # Set up event consumer callback
 if event_consumer:
-    event_consumer.set_event_handler(process_audit_event)
+    event_consumer.register_handler("audit_event", process_audit_event)

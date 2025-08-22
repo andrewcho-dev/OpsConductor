@@ -15,17 +15,17 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY target-discovery-service/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install shared libraries
-COPY ../shared-libs /tmp/shared-libs
+COPY shared-libs /tmp/shared-libs
 RUN pip install -e /tmp/shared-libs
 
 # Copy application code
-COPY app/ ./app/
+COPY target-discovery-service/app/ ./app/
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app && chown -R app:app /app

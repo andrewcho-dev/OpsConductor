@@ -35,13 +35,26 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
     
-    # Start event consumer for notification triggers
-    if event_consumer:
+    # Initialize event consumer (optional - service works without it)
+    event_consumer = None
+    if settings.RABBITMQ_URL:
         try:
+            from opsconductor_shared.events.consumer import EventConsumer
+            event_consumer = EventConsumer(
+                rabbitmq_url=settings.RABBITMQ_URL,
+                queue_name="notification_events",
+                exchange_name="opsconductor_events"
+            )
+            
+            # Register event handlers
+            # event_consumer.register_handler("job.completed", handle_job_completed)
+            # event_consumer.register_handler("job.failed", handle_job_failed)
+            
             await event_consumer.start_consuming()
             logger.info("Event consumer started")
         except Exception as e:
-            logger.warning(f"Failed to start event consumer: {e}")
+            logger.warning(f"Failed to start event consumer (service will continue without it): {e}")
+            event_consumer = None
     
     logger.info("Notification Service started successfully")
     
@@ -103,6 +116,12 @@ app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 app.include_router(templates.router, prefix="/api/v1/templates", tags=["Templates"])
 app.include_router(alerts.router, prefix="/api/v1/alerts", tags=["Alerts"])
+
+# Simple health endpoint for docker health checks
+@app.get("/health")
+async def simple_health():
+    """Simple health check endpoint"""
+    return {"status": "healthy", "service": "notification-service"}
 
 
 # Service info endpoint - standardized location

@@ -14,7 +14,9 @@ import uvicorn
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.events import event_consumer
-from app.api.v1 import events, audit, reports, health
+from app.api.v1 import health
+# TODO: Create missing API modules
+# from app.api.v1 import events, audit, reports
 from opsconductor_shared.models.base import ServiceType, EventType
 
 # Configure logging
@@ -100,9 +102,10 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(health.router, prefix="/health", tags=["Health"])
-app.include_router(events.router, prefix="/api/v1/events", tags=["Events"])
-app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
-app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
+# TODO: Add missing routers when API modules are created
+# app.include_router(events.router, prefix="/api/v1/events", tags=["Events"])
+# app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
+# app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 
 
 # Service info endpoint - standardized location

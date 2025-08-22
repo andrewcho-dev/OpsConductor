@@ -157,7 +157,7 @@ class AuditEvent(Base):
     data_classification = Column(String(50), nullable=True)
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    event_metadata = Column(JSONB, nullable=True, default=dict)
     tags = Column(JSONB, nullable=True, default=list)
     
     # Timestamps
@@ -221,7 +221,7 @@ class SecurityAlert(Base):
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    event_metadata = Column(JSONB, nullable=True, default=dict)
 
 
 class ComplianceReport(Base):
@@ -258,7 +258,7 @@ class ComplianceReport(Base):
     generated_at = Column(DateTime(timezone=True), nullable=True)
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    event_metadata = Column(JSONB, nullable=True, default=dict)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -298,7 +298,7 @@ class EventStream(Base):
     last_error_at = Column(DateTime(timezone=True), nullable=True)
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    event_metadata = Column(JSONB, nullable=True, default=dict)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -331,7 +331,7 @@ class AuditTrail(Base):
     user_agent = Column(Text, nullable=True)
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    event_metadata = Column(JSONB, nullable=True, default=dict)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

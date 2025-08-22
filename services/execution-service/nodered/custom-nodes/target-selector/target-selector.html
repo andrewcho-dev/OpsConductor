@@ -1,0 +1,103 @@
+<!-- OpsConductor Target Selector Node -->
+<script type="text/javascript">
+    RED.nodes.registerType('opsconductor-target-selector', {
+        category: 'OpsConductor',
+        color: '#3498db',
+        defaults: {
+            name: {value: ""},
+            targetFilter: {value: {}},
+            selectedTargets: {value: []},
+            outputFormat: {value: "array"}
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "target.svg",
+        label: function() {
+            return this.name || "Target Selector";
+        },
+        labelStyle: function() {
+            return this.name ? "node_label_italic" : "";
+        },
+        paletteLabel: "Target Selector"
+    });
+</script>
+
+<script type="text/html" data-template-name="opsconductor-target-selector">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Target Selector">
+    </div>
+    
+    <div class="form-row">
+        <label for="node-input-outputFormat"><i class="fa fa-list"></i> Output Format</label>
+        <select id="node-input-outputFormat" style="width: 70%;">
+            <option value="array">Full Target Objects</option>
+            <option value="ids">Target IDs Only</option>
+            <option value="names">Target Names Only</option>
+            <option value="grouped">Grouped by Environment</option>
+        </select>
+    </div>
+    
+    <div class="form-row">
+        <label><i class="fa fa-filter"></i> Target Filters</label>
+    </div>
+    
+    <div class="form-row" style="margin-left: 20px;">
+        <label for="node-input-osType" style="width: 100px;">OS Type:</label>
+        <select id="node-input-osType" style="width: 150px;">
+            <option value="">Any</option>
+            <option value="linux">Linux</option>
+            <option value="windows">Windows</option>
+            <option value="macos">macOS</option>
+        </select>
+    </div>
+    
+    <div class="form-row" style="margin-left: 20px;">
+        <label for="node-input-environment" style="width: 100px;">Environment:</label>
+        <select id="node-input-environment" style="width: 150px;">
+            <option value="">Any</option>
+            <option value="production">Production</option>
+            <option value="staging">Staging</option>
+            <option value="development">Development</option>
+            <option value="testing">Testing</option>
+        </select>
+    </div>
+    
+    <div class="form-row" style="margin-left: 20px;">
+        <label for="node-input-status" style="width: 100px;">Status:</label>
+        <select id="node-input-status" style="width: 150px;">
+            <option value="">Any</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="maintenance">Maintenance</option>
+        </select>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="opsconductor-target-selector">
+    <p>Selects OpsConductor targets based on filters and criteria.</p>
+    
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>targetFilter <span class="property-type">object</span></dt>
+        <dd>Dynamic filters to apply to target selection</dd>
+    </dl>
+    
+    <h3>Outputs</h3>
+    <dl class="message-properties">
+        <dt>targets <span class="property-type">array|object</span></dt>
+        <dd>Selected targets in the specified format</dd>
+        <dt>targetCount <span class="property-type">number</span></dt>
+        <dd>Number of targets selected</dd>
+        <dt>selectedAt <span class="property-type">string</span></dt>
+        <dd>ISO timestamp of when selection was made</dd>
+    </dl>
+    
+    <h3>Details</h3>
+    <p>This node connects to the OpsConductor targets service to retrieve and filter targets based on your criteria. You can filter by OS type, environment, status, and other target properties.</p>
+    
+    <p>The output format can be customized to return full target objects, just IDs, names only, or grouped by environment.</p>
+    
+    <h3>Configuration</h3>
+    <p>Set the <code>OPSCONDUCTOR_API_URL</code> and <code>OPSCONDUCTOR_TOKEN</code> environment variables to configure the connection to your OpsConductor instance.</p>
+</script>

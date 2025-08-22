@@ -33,6 +33,15 @@ class NotificationStatus(str, enum.Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     RETRY = "retry"
+    EXPIRED = "expired"
+
+
+class NotificationPriority(str, enum.Enum):
+    """Notification priority enumeration"""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    URGENT = "urgent"
 
 
 class AlertSeverity(str, enum.Enum):
@@ -88,7 +97,7 @@ class NotificationTemplate(Base):
     organization_id = Column(Integer, nullable=True, index=True)
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    template_metadata = Column(JSONB, nullable=True, default=dict)
     tags = Column(JSONB, nullable=True, default=list)
     
     # Timestamps
@@ -151,7 +160,7 @@ class NotificationLog(Base):
     external_status = Column(String(50), nullable=True)           # External service status
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    template_metadata = Column(JSONB, nullable=True, default=dict)
     tags = Column(JSONB, nullable=True, default=list)
     
     # Timestamps
@@ -201,7 +210,7 @@ class AlertRule(Base):
     organization_id = Column(Integer, nullable=True, index=True)
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    template_metadata = Column(JSONB, nullable=True, default=dict)
     tags = Column(JSONB, nullable=True, default=list)
     
     # Timestamps
@@ -244,7 +253,7 @@ class AlertLog(Base):
     notification_ids = Column(JSONB, nullable=True, default=list)  # Related notification log IDs
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    template_metadata = Column(JSONB, nullable=True, default=dict)
     tags = Column(JSONB, nullable=True, default=list)
     
     # Timestamps
@@ -297,7 +306,7 @@ class NotificationChannel(Base):
     organization_id = Column(Integer, nullable=True, index=True)
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    template_metadata = Column(JSONB, nullable=True, default=dict)
     tags = Column(JSONB, nullable=True, default=list)
     
     # Timestamps
@@ -344,7 +353,7 @@ class NotificationPreference(Base):
     quiet_hours_timezone = Column(String(50), default="UTC")
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    template_metadata = Column(JSONB, nullable=True, default=dict)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -380,7 +389,7 @@ class NotificationQueue(Base):
     average_processing_time = Column(Float, nullable=True)  # In seconds
     
     # Metadata
-    metadata = Column(JSONB, nullable=True, default=dict)
+    template_metadata = Column(JSONB, nullable=True, default=dict)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

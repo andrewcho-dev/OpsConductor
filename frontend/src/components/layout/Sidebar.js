@@ -51,19 +51,19 @@ const Sidebar = () => {
       text: 'Dashboard',
       icon: <DashboardIcon />,
       path: '/dashboard',
-      roles: ['administrator', 'user']
+      roles: ['admin', 'user']
     },
     {
       text: 'Universal Targets',
       icon: <ComputerIcon />,
       path: '/targets',
-      roles: ['administrator', 'user']
+      roles: ['admin', 'user']
     },
     {
       text: 'Job Management',
       icon: <WorkIcon />,
       path: '/jobs',
-      roles: ['administrator', 'user']
+      roles: ['admin', 'user']
     },
 
 
@@ -72,32 +72,32 @@ const Sidebar = () => {
       text: 'Docker Environment',
       icon: <DockerIcon />,
       path: '/docker-monitoring',
-      roles: ['administrator', 'user']
+      roles: ['admin', 'user']
     },
 
     {
       text: 'Audit & Security',
       icon: <SecurityIcon />,
       path: '/audit',
-      roles: ['administrator']
+      roles: ['admin']
     },
     {
       text: 'User Management',
       icon: <PeopleIcon />,
       path: '/users',
-      roles: ['administrator']
+      roles: ['admin']
     },
     {
       text: 'Auth Configuration',
       icon: <VpnKeyIcon />,
       path: '/auth-config',
-      roles: ['administrator']
+      roles: ['admin']
     },
     {
       text: 'System Settings',
       icon: <SettingsIcon />,
       path: '/system-settings',
-      roles: ['administrator']
+      roles: ['admin']
     }
   ];
 
