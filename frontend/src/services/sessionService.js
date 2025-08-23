@@ -147,7 +147,7 @@ class SessionService {
       }
       
       // Make API call to extend session (auth service)
-      const authUrl = process.env.REACT_APP_AUTH_URL || '/auth';
+      const authUrl = process.env.REACT_APP_AUTH_URL || '/api/v1/auth';
       fetch(`${authUrl}/session/extend`, {
         method: 'POST',
         headers: {
@@ -285,7 +285,7 @@ class SessionService {
       this.notifyListeners('extend');
       
       // Call server endpoint to extend session
-      const authUrl = process.env.REACT_APP_AUTH_URL || '/auth';
+      const authUrl = process.env.REACT_APP_AUTH_URL || '/api/v1/auth';
       fetch(`${authUrl}/session/extend`, {
         method: 'POST',
         headers: {
