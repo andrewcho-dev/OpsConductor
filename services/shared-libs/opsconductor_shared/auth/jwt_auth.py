@@ -25,7 +25,7 @@ class AuthServiceClient:
         """Validate JWT token with Auth Service"""
         try:
             response = await self.client.post(
-                f"{self.auth_service_url}/api/auth/validate",
+                f"{self.auth_service_url}/api/v1/auth/validate",
                 headers={"Authorization": f"Bearer {token}"},
                 json={"token": token}
             )
@@ -44,7 +44,7 @@ class AuthServiceClient:
         """Get user information from token"""
         try:
             response = await self.client.get(
-                f"{self.auth_service_url}/api/auth/me",
+                f"{self.auth_service_url}/api/v1/auth/me",
                 headers={"Authorization": f"Bearer {token}"}
             )
             

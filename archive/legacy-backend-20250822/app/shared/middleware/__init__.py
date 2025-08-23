@@ -1,3 +1,0 @@
-"""
-Shared middleware components
-"""

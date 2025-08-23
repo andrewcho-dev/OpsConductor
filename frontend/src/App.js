@@ -35,134 +35,105 @@ function AppContent() {
 
   return (
     <Routes>
+      {/* Public route - Login page */}
       <Route 
         path="/login" 
         element={
           isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginScreen />
         } 
       />
+      
+      {/* All other routes are protected and wrapped in AppLayout */}
       <Route 
         path="/*" 
         element={
-          <AppLayout>
-            <Routes>
-              <Route 
-                path="/dashboard" 
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/users" 
-                element={
-                  <ProtectedRoute requireAdmin>
-                    <EnhancedUserManagement />
-                  </ProtectedRoute>
-                } 
-              />
-
-              <Route 
-                path="/users/:userId/activity" 
-                element={
-                  <ProtectedRoute requireAdmin>
-                    <UserActivityDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/auth-config" 
-                element={
-                  <ProtectedRoute requireAdmin>
-                    <AuthConfigManagement />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/targets" 
-                element={
-                  <ProtectedRoute>
-                    <UniversalTargetDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/jobs" 
-                element={
-                  <ProtectedRoute>
-                    <JobDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-
-              <Route 
-                path="/test-minutes-schedule" 
-                element={
-                  <ProtectedRoute>
-                    <TestMinutesSchedule />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/direct-schedule" 
-                element={
-                  <ProtectedRoute>
-                    <DirectScheduleTest />
-                  </ProtectedRoute>
-                } 
-              />
-
-
-              <Route 
-                path="/debug-tools" 
-                element={
-                  <ProtectedRoute>
-                    <DebugTools />
-                  </ProtectedRoute>
-                } 
-              />
-
-              <Route 
-                path="/system-settings" 
-                element={
-                  <ProtectedRoute requireAdmin>
-                    <SystemSettings />
-                  </ProtectedRoute>
-                } 
-              />
-
-              <Route 
-                path="/docker-monitoring" 
-                element={
-                  <ProtectedRoute>
-                    <DockerMonitoringDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/audit" 
-                element={
-                  <ProtectedRoute requireAdmin>
-                    <AuditDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/observability" 
-                element={
-                  <ProtectedRoute>
-                    <ObservabilityDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-
-              <Route 
-                path="/" 
-                element={<Navigate to="/dashboard" replace />} 
-              />
-            </Routes>
-          </AppLayout>
+          <ProtectedRoute>
+            <AppLayout>
+              <Routes>
+                <Route 
+                  path="/dashboard" 
+                  element={<Dashboard />} 
+                />
+                <Route 
+                  path="/users" 
+                  element={
+                    <ProtectedRoute requireAdmin>
+                      <EnhancedUserManagement />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/users/:userId/activity" 
+                  element={
+                    <ProtectedRoute requireAdmin>
+                      <UserActivityDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/auth-config" 
+                  element={
+                    <ProtectedRoute requireAdmin>
+                      <AuthConfigManagement />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/targets" 
+                  element={<UniversalTargetDashboard />} 
+                />
+                <Route 
+                  path="/jobs" 
+                  element={<JobDashboard />} 
+                />
+                <Route 
+                  path="/test-minutes-schedule" 
+                  element={<TestMinutesSchedule />} 
+                />
+                <Route 
+                  path="/direct-schedule" 
+                  element={<DirectScheduleTest />} 
+                />
+                <Route 
+                  path="/debug-tools" 
+                  element={<DebugTools />} 
+                />
+                <Route 
+                  path="/system-settings" 
+                  element={
+                    <ProtectedRoute requireAdmin>
+                      <SystemSettings />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/docker-monitoring" 
+                  element={<DockerMonitoringDashboard />} 
+                />
+                <Route 
+                  path="/audit" 
+                  element={
+                    <ProtectedRoute requireAdmin>
+                      <AuditDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/observability" 
+                  element={<ObservabilityDashboard />} 
+                />
+                <Route 
+                  path="/" 
+                  element={<Navigate to="/dashboard" replace />} 
+                />
+                {/* Catch-all route for any unmatched paths */}
+                <Route 
+                  path="*" 
+                  element={<Navigate to="/dashboard" replace />} 
+                />
+              </Routes>
+            </AppLayout>
+          </ProtectedRoute>
         } 
       />
     </Routes>

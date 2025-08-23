@@ -20,9 +20,11 @@ COPY target-discovery-service/requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install shared libraries
+# Install shared libraries (use build arg to bust cache when shared libs change)
+ARG SHARED_LIBS_CACHE_BUST=1
+RUN echo "Cache bust: $SHARED_LIBS_CACHE_BUST"
 COPY shared-libs /tmp/shared-libs
-RUN pip install -e /tmp/shared-libs
+RUN pip install --no-cache-dir -e /tmp/shared-libs
 
 # Copy application code
 COPY target-discovery-service/app/ ./app/

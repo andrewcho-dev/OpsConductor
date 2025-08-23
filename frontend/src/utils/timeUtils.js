@@ -278,12 +278,13 @@ export const getSystemTimezone = async (token = null) => {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const apiBaseUrl = process.env.REACT_APP_API_URL || '';
-    const response = await fetch(`${apiBaseUrl}/api/system/info`, { headers });
-    if (response.ok) {
-      const data = await response.json();
-      return data.timezone?.display_name || 'Local Time';
-    }
+    // System info endpoint not available in microservices architecture
+    // const apiBaseUrl = process.env.REACT_APP_API_URL || '';
+    // const response = await fetch(`${apiBaseUrl}/api/system/info`, { headers });
+    // if (response.ok) {
+    //   const data = await response.json();
+    //   return data.timezone?.display_name || 'Local Time';
+    // }
   } catch (error) {
     console.error('Failed to fetch system timezone:', error);
   }

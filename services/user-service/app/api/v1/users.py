@@ -11,7 +11,8 @@ from app.core.database import get_db
 from app.core.events import publish_user_event
 from app.schemas.user import (
     UserCreateRequest, UserUpdateRequest, UserResponse, UserListResponse,
-    UserRoleAssignRequest, UserStatsResponse, UserActivityLogResponse
+    UserRoleAssignRequest, UserStatsResponse, UserActivityLogResponse,
+    UserAuthenticationRequest, UserAuthenticationResponse
 )
 from app.services.user_service import UserService
 from opsconductor_shared.models.base import EventType
@@ -39,7 +40,7 @@ async def create_user(
     """Create a new user"""
     try:
         # Check permissions
-        if not current_user.get("is_superuser") and "users:create" not in current_user.get("permissions", []):
+        if current_user.get("role") != "admin" and "users:create" not in current_user.get("permissions", []):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions to create users"
@@ -93,7 +94,7 @@ async def get_user(
     try:
         # Check permissions - users can view their own profile or need users:read permission
         if (user_id != current_user.get("id") and 
-            not current_user.get("is_superuser") and 
+            current_user.get("role") != "admin" and 
             "users:read" not in current_user.get("permissions", [])):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -130,17 +131,17 @@ async def update_user(
     try:
         # Check permissions - users can update their own profile or need users:update permission
         if (user_id != current_user.get("id") and 
-            not current_user.get("is_superuser") and 
+            current_user.get("role") != "admin" and 
             "users:update" not in current_user.get("permissions", [])):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions to update user"
             )
         
-        # Restrict certain fields for non-superusers
-        if not current_user.get("is_superuser") and user_id != current_user.get("id"):
-            # Non-superusers can't change critical fields of other users
-            restricted_fields = ["is_active", "is_verified", "is_superuser"]
+        # Restrict certain fields for non-admins
+        if current_user.get("role") != "admin" and user_id != current_user.get("id"):
+            # Non-admins can't change critical fields of other users
+            restricted_fields = ["is_active", "is_verified"]
             for field in restricted_fields:
                 if getattr(update_data, field, None) is not None:
                     raise HTTPException(
@@ -193,7 +194,7 @@ async def delete_user(
     """Delete (deactivate) a user"""
     try:
         # Check permissions
-        if (not current_user.get("is_superuser") and 
+        if (current_user.get("role") != "admin" and 
             "users:delete" not in current_user.get("permissions", [])):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -255,7 +256,7 @@ async def list_users(
     """List users with filtering and pagination"""
     try:
         # Check permissions
-        if (not current_user.get("is_superuser") and 
+        if (current_user.get("role") != "admin" and 
             "users:read" not in current_user.get("permissions", [])):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -289,78 +290,74 @@ async def list_users(
 # User Role Management
 # =============================================================================
 
-@router.post("/{user_id}/roles", status_code=status.HTTP_200_OK)
-async def assign_user_roles(
+@router.post("/{user_id}/role", status_code=status.HTTP_200_OK)
+async def assign_user_role(
     user_id: int,
     role_data: UserRoleAssignRequest,
     current_user: dict = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service)
 ):
-    """Assign roles to a user"""
+    """Assign a single role to a user"""
     try:
         # Check permissions
-        if (not current_user.get("is_superuser") and 
-            "users:manage_roles" not in current_user.get("permissions", [])):
+        if (current_user.get("role") != "admin" and 
+            "users:assign_roles" not in current_user.get("permissions", [])):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions to manage user roles"
+                detail="Insufficient permissions to assign user roles"
             )
         
-        success = await user_service.assign_roles(
+        success = await user_service.assign_role(
             user_id=user_id,
-            role_ids=role_data.role_ids,
-            assigned_by=current_user.get("id")
+            role_id=role_data.role_id
         )
         
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to assign roles (user not found or invalid roles)"
+                detail="Failed to assign role (user not found or invalid role)"
             )
         
         # Publish role assignment event
         await publish_user_event(
-            event_type=EventType.USER_ROLES_ASSIGNED,
+            event_type=EventType.USER_ROLE_ASSIGNED,
             data={
                 "user_id": user_id,
-                "role_ids": role_data.role_ids,
-                "assigned_by": current_user.get("id")
+                "role_id": role_data.role_id
             },
             user_id=current_user.get("id")
         )
         
-        return {"success": True, "message": "Roles assigned successfully"}
+        return {"success": True, "message": "Role assigned successfully"}
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to assign roles to user {user_id}: {e}")
+        logger.error(f"Failed to assign role to user {user_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to assign roles"
+            detail="Failed to assign role"
         )
 
 
-@router.delete("/{user_id}/roles", status_code=status.HTTP_200_OK)
-async def remove_user_roles(
+@router.delete("/{user_id}/role", status_code=status.HTTP_200_OK)
+async def remove_user_role(
     user_id: int,
-    role_data: UserRoleAssignRequest,
     current_user: dict = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service)
 ):
-    """Remove roles from a user"""
+    """Remove role from a user (set to None)"""
     try:
         # Check permissions
-        if (not current_user.get("is_superuser") and 
-            "users:manage_roles" not in current_user.get("permissions", [])):
+        if (current_user.get("role") != "admin" and 
+            "users:assign_roles" not in current_user.get("permissions", [])):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions to manage user roles"
+                detail="Insufficient permissions to remove user roles"
             )
         
-        success = await user_service.remove_roles(
+        success = await user_service.remove_role(
             user_id=user_id,
-            role_ids=role_data.role_ids,
             removed_by=current_user.get("id")
         )
         
@@ -372,24 +369,23 @@ async def remove_user_roles(
         
         # Publish role removal event
         await publish_user_event(
-            event_type=EventType.USER_ROLES_REMOVED,
+            event_type=EventType.USER_ROLE_REMOVED,
             data={
                 "user_id": user_id,
-                "role_ids": role_data.role_ids,
                 "removed_by": current_user.get("id")
             },
             user_id=current_user.get("id")
         )
         
-        return {"success": True, "message": "Roles removed successfully"}
+        return {"success": True, "message": "Role removed successfully"}
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to remove roles from user {user_id}: {e}")
+        logger.error(f"Failed to remove role from user {user_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to remove roles"
+            detail="Failed to remove role"
         )
 
 
@@ -410,7 +406,7 @@ async def get_user_activity(
     try:
         # Check permissions - users can view their own activity or need users:read permission
         if (user_id != current_user.get("id") and 
-            not current_user.get("is_superuser") and 
+            current_user.get("role") != "admin" and 
             "users:read" not in current_user.get("permissions", [])):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -444,7 +440,7 @@ async def get_user_stats(
     """Get user statistics overview"""
     try:
         # Check permissions
-        if (not current_user.get("is_superuser") and 
+        if (current_user.get("role") != "admin" and 
             "users:read" not in current_user.get("permissions", [])):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -477,7 +473,7 @@ async def get_user_by_email(
     """Get user by email address"""
     try:
         # Check permissions
-        if (not current_user.get("is_superuser") and 
+        if (current_user.get("role") != "admin" and 
             "users:read" not in current_user.get("permissions", [])):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -512,7 +508,7 @@ async def get_user_by_username(
     """Get user by username"""
     try:
         # Check permissions
-        if (not current_user.get("is_superuser") and 
+        if (current_user.get("role") != "admin" and 
             "users:read" not in current_user.get("permissions", [])):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -535,4 +531,102 @@ async def get_user_by_username(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve user"
+        )
+
+
+# =============================================================================
+# Authentication Endpoints (for Auth Service)
+# =============================================================================
+
+@router.post("/authenticate", response_model=UserAuthenticationResponse)
+async def authenticate_user(
+    auth_request: UserAuthenticationRequest,
+    user_service: UserService = Depends(get_user_service)
+):
+    """Authenticate user credentials (used by auth service)"""
+    try:
+        result = await user_service.authenticate_user(
+            username=auth_request.username,
+            password=auth_request.password
+        )
+        
+        return UserAuthenticationResponse(**result)
+        
+    except Exception as e:
+        logger.error(f"Authentication error: {e}")
+        return UserAuthenticationResponse(
+            success=False,
+            message="Authentication error"
+        )
+
+
+@router.get("/auth/{username}")
+async def get_user_for_auth(
+    username: str,
+    user_service: UserService = Depends(get_user_service)
+):
+    """Get user data for authentication (used by auth service)"""
+    try:
+        user_data = await user_service.get_user_for_auth(username)
+        
+        if not user_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        return user_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get user for auth {username}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve user"
+        )
+
+
+@router.post("/{user_id}/password")
+async def set_user_password(
+    user_id: int,
+    password_data: dict,
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Set user password"""
+    try:
+        # Check permissions - only admins or the user themselves
+        if (user_id != current_user.get("id") and 
+            current_user.get("role") != "admin" and 
+            "users:update" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to update password"
+            )
+        
+        password = password_data.get("password")
+        if not password or len(password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 6 characters"
+            )
+        
+        success = await user_service.set_user_password(user_id, password)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        return {"success": True, "message": "Password updated successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to set password for user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update password"
         )

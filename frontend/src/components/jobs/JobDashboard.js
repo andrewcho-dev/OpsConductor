@@ -50,7 +50,7 @@ const JobDashboard = () => {
         try {
             setLoading(true);
             
-            const response = await apiService.get('/jobs/');
+            const response = await apiService.get('/api/v1/jobs/');
             setJobs(response.data || []);
             addAlert(`Loaded ${response.data?.length || 0} jobs successfully`, 'success', 3000);
         } catch (error) {
@@ -80,7 +80,7 @@ const JobDashboard = () => {
     // Gentle refresh - only updates changed data without showing loading state
     const gentleRefresh = async () => {
         try {
-            const response = await apiService.get('/jobs/');
+            const response = await apiService.get('/api/v1/jobs/');
             const newJobs = response.data || [];
             
             // Only update if data has actually changed
@@ -129,7 +129,7 @@ const JobDashboard = () => {
     const handleCreateJob = async (jobData, scheduleConfig) => {
         try {
             // First create the job
-            const response = await apiService.post('/jobs/', jobData);
+            const response = await apiService.post('/api/v1/jobs/', jobData);
             const newJob = response.data;
             setJobs(prevJobs => [newJob, ...prevJobs]);
             
@@ -204,7 +204,7 @@ const JobDashboard = () => {
                     console.log('📤 Creating new schedule');
                     try {
                         // The baseURL already includes /api, so we don't need to include it again
-                        const scheduleResponse = await apiService.post('/schedules', scheduleData);
+                        const scheduleResponse = await apiService.post('/api/v1/schedules', scheduleData);
                         console.log('✅ Schedule creation response:', scheduleResponse.status, scheduleResponse.data);
                     } catch (error) {
                         console.error('❌ Schedule creation error:', error);
@@ -460,7 +460,7 @@ const JobDashboard = () => {
                             // Final check of the data being sent
                             console.log('📤 Final schedule data being sent:', JSON.stringify(scheduleData, null, 2));
                             
-                            const scheduleResponse = await apiService.post('/schedules', scheduleData);
+                            const scheduleResponse = await apiService.post('/api/v1/schedules', scheduleData);
                             console.log('✅ Schedule creation response status:', scheduleResponse.status);
                             console.log('✅ Schedule creation response data:', JSON.stringify(scheduleResponse.data, null, 2));
                         } catch (error) {

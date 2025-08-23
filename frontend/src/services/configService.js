@@ -256,7 +256,7 @@ class ConfigService {
    */
   async validatePassword(password) {
     try {
-      const response = await apiService.post('/api/users/validate-password', { password });
+      const response = await apiService.post('/api/v1/users/validate-password', { password });
       return await response.json();
     } catch (error) {
       console.error('Failed to validate password:', error);

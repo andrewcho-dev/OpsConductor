@@ -14,7 +14,7 @@ import uvicorn
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.events import event_publisher
-from app.api.v1 import users, roles, permissions, profiles, health
+from app.api.v1 import users, profiles, health
 from opsconductor_shared.models.base import ServiceType, EventType
 
 # Configure logging
@@ -133,8 +133,6 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Include routers
 app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
-app.include_router(roles.router, prefix="/api/v1/roles", tags=["Roles"])
-app.include_router(permissions.router, prefix="/api/v1/permissions", tags=["Permissions"])
 app.include_router(profiles.router, prefix="/api/v1/profiles", tags=["Profiles"])
 
 

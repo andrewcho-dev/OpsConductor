@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.core.auth import get_current_user
+from opsconductor_shared.auth.dependencies import get_current_user
 from app.schemas.user import UserResponse
 
 router = APIRouter()
@@ -17,7 +17,7 @@ router = APIRouter()
 async def get_user_profile(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Get user profile"""
     # Placeholder implementation
@@ -42,7 +42,7 @@ async def update_user_profile(
     user_id: int,
     profile_data: dict,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Update user profile"""
     # Placeholder implementation
@@ -61,7 +61,7 @@ async def update_user_profile(
 async def get_user_preferences(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Get user preferences"""
     # Placeholder implementation
@@ -78,7 +78,7 @@ async def update_user_preferences(
     user_id: int,
     preferences: dict,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Update user preferences"""
     # Placeholder implementation
@@ -89,7 +89,7 @@ async def update_user_preferences(
 async def upload_avatar(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Upload user avatar"""
     # Placeholder implementation

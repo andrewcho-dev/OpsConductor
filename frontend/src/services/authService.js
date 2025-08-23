@@ -1,9 +1,9 @@
 import axios from 'axios';
 
 // Create axios instance with base configuration
-// ✅ PORT PLAN COMPLIANCE: Use API Gateway external port 8080 directly
-const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8080';
-const authBaseUrl = process.env.REACT_APP_AUTH_URL || 'http://localhost:8080/api/auth';
+// ✅ Use relative URLs since frontend is served through the same nginx proxy
+const apiBaseUrl = process.env.REACT_APP_API_URL || '';
+const authBaseUrl = process.env.REACT_APP_AUTH_URL || '/api/v1/auth';
 
 // Log the API base URL for debugging
 console.log('🌐 Using API base URL:', apiBaseUrl);

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.core.auth import get_current_user
+from opsconductor_shared.auth.dependencies import get_current_user
 from app.schemas.user import UserResponse
 
 router = APIRouter()
@@ -18,7 +18,7 @@ async def get_permissions(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Get all permissions"""
     # Placeholder implementation
@@ -39,7 +39,7 @@ async def get_permissions(
 async def create_permission(
     permission_data: dict,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Create a new permission"""
     # Placeholder implementation
@@ -54,7 +54,7 @@ async def create_permission(
 async def get_permission(
     permission_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Get a specific permission"""
     # Placeholder implementation
@@ -69,7 +69,7 @@ async def update_permission(
     permission_id: int,
     permission_data: dict,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Update a permission"""
     # Placeholder implementation
@@ -84,7 +84,7 @@ async def update_permission(
 async def delete_permission(
     permission_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Delete a permission"""
     # Placeholder implementation

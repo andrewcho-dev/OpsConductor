@@ -59,7 +59,7 @@ const SimpleJobView = ({ jobs, onRefresh, stats }) => {
   // Job creation handler
   const handleCreateJob = async (jobData) => {
     try {
-      const response = await apiService.post(`/api/jobs/`, jobData);
+      const response = await apiService.post(`/jobs/`, jobData);
 
       if (response.ok) {
         const newJob = await response.json();
@@ -79,7 +79,7 @@ const SimpleJobView = ({ jobs, onRefresh, stats }) => {
   // Job execution handler
   const handleExecuteJob = async (jobId) => {
     try {
-      const response = await apiService.post(`/api/jobs/${jobId}/execute`, {});
+      const response = await apiService.post(`/jobs/${jobId}/execute`, {});
 
       if (response.ok) {
         addAlert('Job execution started successfully!', 'success', 3000);

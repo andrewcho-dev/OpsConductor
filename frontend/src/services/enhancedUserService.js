@@ -6,7 +6,20 @@ import { apiService } from './apiService';
  */
 class EnhancedUserService {
   constructor() {
-    this.baseUrl = '/users';
+    this.baseUrl = '/api/v1/users/';
+  }
+
+  /**
+   * Get all available roles
+   */
+  async getRoles() {
+    try {
+      const response = await apiService.get('/api/v1/roles/');
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to fetch roles:', error);
+      throw error;
+    }
   }
 
   /**
@@ -16,18 +29,27 @@ class EnhancedUserService {
     try {
       const queryParams = new URLSearchParams();
       
-      // Add pagination parameters
-      if (params.skip !== undefined) queryParams.append('skip', params.skip);
-      if (params.limit !== undefined) queryParams.append('limit', params.limit);
+      // Convert skip/limit to page/page_size for backend compatibility
+      if (params.skip !== undefined && params.limit !== undefined) {
+        const page = Math.floor(params.skip / params.limit) + 1;
+        queryParams.append('page', page);
+        queryParams.append('page_size', params.limit);
+      } else {
+        // Default pagination
+        queryParams.append('page', 1);
+        queryParams.append('page_size', params.limit || 20);
+      }
       
-      // Add filtering parameters
+      // Add filtering parameters (map frontend params to backend params)
       if (params.search) queryParams.append('search', params.search);
-      if (params.role) queryParams.append('role', params.role);
-      if (params.active_only !== undefined) queryParams.append('active_only', params.active_only);
+      if (params.role_id) queryParams.append('role_id', params.role_id);
+      if (params.is_active !== undefined) queryParams.append('is_active', params.is_active);
+      if (params.is_verified !== undefined) queryParams.append('is_verified', params.is_verified);
+      if (params.department) queryParams.append('department', params.department);
+      if (params.organization) queryParams.append('organization', params.organization);
       
-      // Add sorting parameters
-      if (params.sort_by) queryParams.append('sort_by', params.sort_by);
-      if (params.sort_desc !== undefined) queryParams.append('sort_desc', params.sort_desc);
+      // Note: Backend doesn't support sorting parameters yet
+      // TODO: Add sorting support to backend API
       
       const url = queryParams.toString() ? `${this.baseUrl}?${queryParams}` : this.baseUrl;
       const response = await apiService.get(url);
@@ -43,7 +65,7 @@ class EnhancedUserService {
    */
   async getUserStats() {
     try {
-      const response = await apiService.get(`${this.baseUrl}/stats`);
+      const response = await apiService.get(`${this.baseUrl}stats/overview`);
       return await response.json();
     } catch (error) {
       console.error('Failed to fetch user statistics:', error);
@@ -56,7 +78,7 @@ class EnhancedUserService {
    */
   async getUserById(userId) {
     try {
-      const response = await apiService.get(`${this.baseUrl}/${userId}`);
+      const response = await apiService.get(`${this.baseUrl}${userId}`);
       return await response.json();
     } catch (error) {
       console.error(`Failed to fetch user ${userId}:`, error);
@@ -69,7 +91,7 @@ class EnhancedUserService {
    */
   async getUserActivity(userId, limit = 50) {
     try {
-      const response = await apiService.get(`${this.baseUrl}/${userId}/activity?limit=${limit}`);
+      const response = await apiService.get(`${this.baseUrl}${userId}/activity?limit=${limit}`);
       return await response.json();
     } catch (error) {
       console.error(`Failed to fetch user activity for ${userId}:`, error);
@@ -99,7 +121,7 @@ class EnhancedUserService {
    */
   async updateUser(userId, userData) {
     try {
-      const response = await apiService.put(`${this.baseUrl}/${userId}`, userData);
+      const response = await apiService.put(`${this.baseUrl}${userId}`, userData);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.detail || 'Failed to update user');
@@ -116,7 +138,7 @@ class EnhancedUserService {
    */
   async deleteUser(userId) {
     try {
-      const response = await apiService.delete(`${this.baseUrl}/${userId}`);
+      const response = await apiService.delete(`${this.baseUrl}${userId}`);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.detail || 'Failed to delete user');
@@ -133,7 +155,7 @@ class EnhancedUserService {
    */
   async changeUserPassword(userId, passwordData) {
     try {
-      const response = await apiService.put(`${this.baseUrl}/${userId}/password`, passwordData);
+      const response = await apiService.put(`${this.baseUrl}${userId}/password`, passwordData);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.detail || 'Failed to change password');
@@ -150,7 +172,7 @@ class EnhancedUserService {
    */
   async bulkUserAction(actionData) {
     try {
-      const response = await apiService.post(`${this.baseUrl}/bulk-action`, actionData);
+      const response = await apiService.post(`${this.baseUrl}bulk-action`, actionData);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.detail || 'Failed to perform bulk action');
@@ -167,7 +189,7 @@ class EnhancedUserService {
    */
   async validatePassword(password) {
     try {
-      const response = await apiService.post(`${this.baseUrl}/validate-password`, { password });
+      const response = await apiService.post(`${this.baseUrl}validate-password`, { password });
       return await response.json();
     } catch (error) {
       console.error('Failed to validate password:', error);

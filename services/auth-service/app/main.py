@@ -7,12 +7,13 @@ from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import jwt
 import bcrypt
 from datetime import datetime, timedelta
 import os
 import logging
+import httpx
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,37 +41,24 @@ security = HTTPBearer()
 JWT_SECRET = os.getenv("JWT_SECRET", "opsconductor-super-secret-key-for-auth-2025")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user-service:8000")
 
-# In-memory user store for testing (replace with database later)
-USERS_DB = {
-    "admin": {
-        "id": 1,
-        "username": "admin",
-        "email": "admin@opsconductor.com",
-        "password_hash": bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode(),
-        "role": "admin",
-        "is_active": True,
-        "created_at": "2024-01-01T00:00:00Z"
-    },
-    "user": {
-        "id": 2,
-        "username": "user", 
-        "email": "user@opsconductor.com",
-        "password_hash": bcrypt.hashpw("user123".encode(), bcrypt.gensalt()).decode(),
-        "role": "user",
-        "is_active": True,
-        "created_at": "2024-01-01T00:00:00Z"
-    },
-    "testuser": {
-        "id": 3,
-        "username": "testuser",
-        "email": "testuser@opsconductor.com", 
-        "password_hash": bcrypt.hashpw("password123".encode(), bcrypt.gensalt()).decode(),
-        "role": "user",
-        "is_active": True,
-        "created_at": "2024-01-01T00:00:00Z"
-    }
+# Role-based permissions mapping
+ROLE_PERMISSIONS = {
+    "admin": [
+        "users:create", "users:read", "users:update", "users:delete", "users:manage_roles",
+        "targets:create", "targets:read", "targets:update", "targets:delete",
+        "jobs:create", "jobs:read", "jobs:update", "jobs:delete", "jobs:execute",
+        "system:admin", "audit:read"
+    ],
+    "user": [
+        "users:read",  # Can read user info (limited)
+        "targets:read", "jobs:read"  # Basic read permissions
+    ]
 }
+
+# Note: User data is now managed by the user-service
+# Authentication is handled via API calls to user-service
 
 # In-memory session store
 ACTIVE_SESSIONS = {}
@@ -96,10 +84,17 @@ class TokenValidationResponse(BaseModel):
     error: Optional[str] = None
 
 # Helper functions
+def get_user_permissions(role: str) -> List[str]:
+    """Get permissions for a given role"""
+    return ROLE_PERMISSIONS.get(role, [])
+
 def create_access_token(user_data: Dict[str, Any]) -> str:
     """Create JWT access token"""
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     session_id = f"session_{user_data['id']}_{int(datetime.utcnow().timestamp())}"
+    
+    # Use permissions from user service, fallback to role-based if not available
+    permissions = user_data.get("permissions", get_user_permissions(user_data["role"]))
     
     payload = {
         "user_id": user_data["id"],
@@ -107,6 +102,7 @@ def create_access_token(user_data: Dict[str, Any]) -> str:
         "email": user_data["email"],
         "role": user_data["role"],
         "is_active": user_data["is_active"],
+        "permissions": permissions,
         "session_id": session_id,
         "exp": expire,
         "iat": datetime.utcnow(),
@@ -174,29 +170,51 @@ async def login(login_request: LoginRequest):
     """User login endpoint"""
     logger.info(f"Login attempt for user: {login_request.username}")
     
-    # Find user
-    user = USERS_DB.get(login_request.username)
-    if not user:
-        logger.warning(f"User not found: {login_request.username}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password"
-        )
+    try:
+        # Authenticate via user service
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{USER_SERVICE_URL}/api/v1/users/authenticate",
+                json={"username": login_request.username, "password": login_request.password},
+                timeout=10.0
+            )
+            
+            if response.status_code != 200:
+                logger.warning(f"User service authentication failed for: {login_request.username}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid username or password"
+                )
+            
+            result = response.json()
+            if not result.get("success"):
+                logger.warning(f"Authentication failed for user: {login_request.username} - {result.get('message')}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=result.get("message", "Invalid username or password")
+                )
+            
+            user = result.get("user")
+            if not user:
+                logger.error(f"No user data returned from user service for: {login_request.username}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Authentication service error"
+                )
     
-    # Verify password
-    if not verify_password(login_request.password, user["password_hash"]):
-        logger.warning(f"Invalid password for user: {login_request.username}")
+    except httpx.RequestError as e:
+        logger.error(f"Failed to connect to user service: {e}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="User service unavailable"
         )
-    
-    # Check if user is active
-    if not user["is_active"]:
-        logger.warning(f"Inactive user login attempt: {login_request.username}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during authentication: {e}")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is disabled"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication service error"
         )
     
     # Create access token
@@ -233,7 +251,8 @@ async def validate_token(request: TokenValidationRequest):
                 "username": payload.get("username"),
                 "email": payload.get("email"),
                 "role": payload.get("role"),
-                "is_active": payload.get("is_active")
+                "is_active": payload.get("is_active"),
+                "permissions": payload.get("permissions", [])
             },
             session_id=payload.get("session_id")
         )
@@ -309,18 +328,28 @@ async def extend_session(credentials: HTTPAuthorizationCredentials = Depends(sec
 
 @app.get("/api/v1/auth/users")
 async def list_users():
-    """List all users (for testing)"""
-    users = []
-    for username, user_data in USERS_DB.items():
-        users.append({
-            "id": user_data["id"],
-            "username": user_data["username"],
-            "email": user_data["email"],
-            "role": user_data["role"],
-            "is_active": user_data["is_active"],
-            "created_at": user_data["created_at"]
-        })
-    return {"users": users}
+    """List all users (proxy to user service)"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{USER_SERVICE_URL}/api/v1/users/",
+                timeout=10.0
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail="Failed to fetch users from user service"
+                )
+                
+    except httpx.RequestError as e:
+        logger.error(f"Failed to connect to user service: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="User service unavailable"
+        )
 
 @app.get("/api/v1/auth/sessions")
 async def list_active_sessions():

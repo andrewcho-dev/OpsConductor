@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -25,6 +26,11 @@ const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { login } = useSessionAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get the redirect URL from the location state (set by ProtectedRoute)
+  const redirectTo = location.state?.from || '/dashboard';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,10 +39,14 @@ const LoginScreen = () => {
 
     try {
       const result = await login(username, password);
-      if (!result.success) {
+      if (result.success) {
+        console.log(`✅ Login successful, redirecting to: ${redirectTo}`);
+        navigate(redirectTo, { replace: true });
+      } else {
         setError(result.error);
       }
     } catch (err) {
+      console.error('Login error:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -96,6 +106,12 @@ const LoginScreen = () => {
           {error && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
               {error}
+            </Alert>
+          )}
+
+          {location.state?.from && location.state.from !== '/dashboard' && (
+            <Alert severity="info" sx={{ width: '100%', mb: 2 }}>
+              Please log in to access <strong>{location.state.from}</strong>
             </Alert>
           )}
 

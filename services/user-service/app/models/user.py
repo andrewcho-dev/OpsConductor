@@ -2,7 +2,7 @@
 User models for User Service
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, ARRAY
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -10,38 +10,18 @@ from app.core.database import Base
 import uuid
 
 
-# Association table for user-role many-to-many relationship
-user_roles = Table(
-    'user_roles',
-    Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
-    Column('role_id', Integer, ForeignKey('roles.id'), primary_key=True),
-    Column('assigned_at', DateTime(timezone=True), server_default=func.now()),
-    Column('assigned_by', Integer, ForeignKey('users.id'), nullable=True)
-)
-
-# Association table for role-permission many-to-many relationship
-role_permissions = Table(
-    'role_permissions',
-    Base.metadata,
-    Column('role_id', Integer, ForeignKey('roles.id'), primary_key=True),
-    Column('permission_id', Integer, ForeignKey('permissions.id'), primary_key=True),
-    Column('granted_at', DateTime(timezone=True), server_default=func.now()),
-    Column('granted_by', Integer, ForeignKey('users.id'), nullable=True)
-)
-
-
 class User(Base):
     """
-    User model for comprehensive user management
+    User model matching the actual database schema
     """
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4, index=True)
+    uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4, index=True)
     
     # Basic Information
     email = Column(String(255), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=True)
     username = Column(String(100), unique=True, index=True, nullable=True)
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
@@ -50,7 +30,6 @@ class User(Base):
     # Status and Verification
     is_active = Column(Boolean, default=True, index=True)
     is_verified = Column(Boolean, default=False, index=True)
-    is_superuser = Column(Boolean, default=False, index=True)
     
     # Contact Information
     phone = Column(String(20), nullable=True)
@@ -65,17 +44,13 @@ class User(Base):
     
     # Metadata
     user_metadata = Column(JSONB, nullable=True, default=dict)
-    tags = Column(JSONB, nullable=True, default=list)
+    tags = Column(ARRAY(Text), nullable=True, default=list)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    last_login_at = Column(DateTime(timezone=True), nullable=True)
-    
-    # Relationships
-    roles = relationship("Role", secondary=user_roles, back_populates="users")
-    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    activity_logs = relationship("UserActivityLog", back_populates="user", cascade="all, delete-orphan")
+    created_by = Column(Integer, nullable=True)
+    updated_by = Column(Integer, nullable=True)
     
     @property
     def full_name(self):
@@ -88,88 +63,6 @@ class User(Base):
             return self.last_name
         else:
             return self.display_name or self.username or self.email
-    
-    @property
-    def permissions(self):
-        """Get all permissions for this user through roles"""
-        perms = set()
-        for role in self.roles:
-            if role.is_active:
-                for permission in role.permissions:
-                    if permission.is_active:
-                        perms.add(permission.name)
-        return list(perms)
-
-
-class Role(Base):
-    """
-    Role model for role-based access control
-    """
-    __tablename__ = "roles"
-
-    id = Column(Integer, primary_key=True, index=True)
-    role_uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4, index=True)
-    
-    # Basic Information
-    name = Column(String(100), unique=True, index=True, nullable=False)
-    display_name = Column(String(200), nullable=True)
-    description = Column(Text, nullable=True)
-    
-    # Status
-    is_active = Column(Boolean, default=True, index=True)
-    is_system = Column(Boolean, default=False, index=True)  # System roles cannot be deleted
-    
-    # Hierarchy
-    parent_role_id = Column(Integer, ForeignKey('roles.id'), nullable=True)
-    level = Column(Integer, default=0)  # Role hierarchy level
-    
-    # Metadata
-    role_metadata = Column(JSONB, nullable=True, default=dict)
-    
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
-    
-    # Relationships
-    users = relationship("User", secondary=user_roles, back_populates="roles")
-    permissions = relationship("Permission", secondary=role_permissions, back_populates="roles")
-    parent_role = relationship("Role", remote_side=[id], backref="child_roles")
-
-
-class Permission(Base):
-    """
-    Permission model for fine-grained access control
-    """
-    __tablename__ = "permissions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    permission_uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4, index=True)
-    
-    # Basic Information
-    name = Column(String(100), unique=True, index=True, nullable=False)
-    display_name = Column(String(200), nullable=True)
-    description = Column(Text, nullable=True)
-    
-    # Categorization
-    category = Column(String(50), index=True, nullable=True)  # e.g., 'users', 'targets', 'jobs'
-    resource = Column(String(50), index=True, nullable=True)  # e.g., 'user', 'target', 'job'
-    action = Column(String(50), index=True, nullable=True)    # e.g., 'create', 'read', 'update', 'delete'
-    
-    # Status
-    is_active = Column(Boolean, default=True, index=True)
-    is_system = Column(Boolean, default=False, index=True)  # System permissions cannot be deleted
-    
-    # Metadata
-    permission_metadata = Column(JSONB, nullable=True, default=dict)
-    
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
-    
-    # Relationships
-    roles = relationship("Role", secondary=role_permissions, back_populates="permissions")
 
 
 class UserProfile(Base):
@@ -208,7 +101,7 @@ class UserProfile(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    user = relationship("User", back_populates="profile")
+    user = relationship("User", backref="profile")
 
 
 class UserActivityLog(Base):
@@ -236,7 +129,7 @@ class UserActivityLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     
     # Relationships
-    user = relationship("User", back_populates="activity_logs")
+    user = relationship("User", backref="activity_logs")
 
 
 class Organization(Base):
@@ -246,7 +139,7 @@ class Organization(Base):
     __tablename__ = "organizations"
 
     id = Column(Integer, primary_key=True, index=True)
-    org_uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4, index=True)
+    uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4, index=True)
     
     # Basic Information
     name = Column(String(200), unique=True, index=True, nullable=False)
@@ -301,3 +194,45 @@ class UserOrganization(Base):
     user = relationship("User", foreign_keys=[user_id])
     organization = relationship("Organization")
     inviter = relationship("User", foreign_keys=[invited_by])
+
+
+class UserRole(Base):
+    """
+    User roles for RBAC
+    """
+    __tablename__ = "user_roles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    role_id = Column(Integer, ForeignKey('roles.id'), nullable=False, index=True)
+    
+    # Timestamps
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+    assigned_by = Column(Integer, ForeignKey('users.id'), nullable=True)
+    
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id], backref="roles")
+    role = relationship("Role", foreign_keys=[role_id])
+    assigner = relationship("User", foreign_keys=[assigned_by])
+
+
+class Role(Base):
+    """
+    Role model for RBAC
+    """
+    __tablename__ = "roles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    role_uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True)
+    name = Column(String(100), unique=True, index=True, nullable=False)
+    display_name = Column(String(200))
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    is_system = Column(Boolean, default=False)
+    level = Column(Integer, default=1)
+    parent_role_id = Column(Integer, ForeignKey('roles.id'))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    parent_role = relationship("Role", remote_side=[id])

@@ -51,8 +51,8 @@ class PermissionBase(BaseModel):
 
 class UserCreateRequest(UserBase):
     """Schema for user creation"""
-    is_superuser: bool = Field(False, description="Is superuser")
-    role_ids: List[int] = Field(default_factory=list, description="Role IDs to assign")
+    password: Optional[str] = Field(None, min_length=6, description="User password")
+    role_id: Optional[int] = Field(None, description="Role ID to assign")
     send_welcome_email: bool = Field(True, description="Send welcome email")
 
 
@@ -110,8 +110,21 @@ class PermissionUpdateRequest(BaseModel):
 
 
 class UserRoleAssignRequest(BaseModel):
-    """Schema for assigning roles to user"""
-    role_ids: List[int] = Field(..., description="Role IDs to assign")
+    """Schema for assigning role to user"""
+    role_id: int = Field(..., description="Role ID to assign")
+
+
+class UserAuthenticationRequest(BaseModel):
+    """Schema for user authentication"""
+    username: str = Field(..., description="Username or email")
+    password: str = Field(..., description="User password")
+
+
+class UserAuthenticationResponse(BaseModel):
+    """Schema for user authentication response"""
+    success: bool
+    user: Optional[Dict[str, Any]] = None
+    message: Optional[str] = None
 
 
 class RolePermissionAssignRequest(BaseModel):
@@ -193,15 +206,14 @@ class UserProfileResponse(BaseModel):
 class UserResponse(UserBase):
     """Schema for user response"""
     id: int
-    user_uuid: UUID
+    uuid: UUID
     is_active: bool
     is_verified: bool
-    is_superuser: bool
     full_name: str
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
-    roles: List[RoleResponse] = Field(default_factory=list)
+    role: Optional[RoleResponse] = None  # Single role instead of list
     profile: Optional[UserProfileResponse] = None
     permissions: List[str] = Field(default_factory=list)
 
@@ -256,7 +268,6 @@ class UserStatsResponse(BaseModel):
     total_users: int
     active_users: int
     verified_users: int
-    superusers: int
     users_created_today: int
     users_created_this_week: int
     users_created_this_month: int

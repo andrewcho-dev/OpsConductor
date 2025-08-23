@@ -7,35 +7,44 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.core.auth import get_current_user
-from app.schemas.user import UserResponse
-from app.schemas.base import PaginatedResponse
+from app.models.user import Role
+from app.schemas.user import RoleResponse
+from opsconductor_shared.auth.dependencies import get_current_user
 
 router = APIRouter()
 
 
-@router.get("/", response_model=List[dict])
+@router.get("/", response_model=List[RoleResponse])
 async def get_roles(
     skip: int = 0,
     limit: int = 100,
+    active_only: bool = True,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Get all roles"""
-    # Placeholder implementation
-    roles = [
-        {"id": 1, "name": "admin", "description": "Administrator role"},
-        {"id": 2, "name": "user", "description": "Standard user role"},
-        {"id": 3, "name": "viewer", "description": "Read-only role"}
-    ]
-    return roles[skip:skip + limit]
+    try:
+        query = db.query(Role)
+        
+        if active_only:
+            query = query.filter(Role.is_active == True)
+        
+        roles = query.order_by(Role.level).offset(skip).limit(limit).all()
+        
+        return [RoleResponse.from_orm(role) for role in roles]
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch roles: {str(e)}"
+        )
 
 
 @router.post("/", response_model=dict)
 async def create_role(
     role_data: dict,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Create a new role"""
     # Placeholder implementation
@@ -46,7 +55,7 @@ async def create_role(
 async def get_role(
     role_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Get a specific role"""
     # Placeholder implementation
@@ -63,7 +72,7 @@ async def update_role(
     role_id: int,
     role_data: dict,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Update a role"""
     # Placeholder implementation
@@ -74,7 +83,7 @@ async def update_role(
 async def delete_role(
     role_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Delete a role"""
     # Placeholder implementation

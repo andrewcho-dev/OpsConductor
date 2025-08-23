@@ -1,3 +1,0 @@
-"""
-Discovery Domain Services
-"""

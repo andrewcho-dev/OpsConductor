@@ -43,6 +43,7 @@ const EnhancedUserManagement = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({});
+  const [roles, setRoles] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [currentTab, setCurrentTab] = useState(0);
   
@@ -59,7 +60,7 @@ const EnhancedUserManagement = () => {
     username: '',
     email: '',
     password: '',
-    role: 'user',
+    role_id: null,
     first_name: '',
     last_name: '',
     phone: '',
@@ -95,7 +96,18 @@ const EnhancedUserManagement = () => {
   useEffect(() => {
     fetchUsers();
     fetchStats();
+    fetchRoles();
   }, [currentPage, pageSize, searchTerm, roleFilter, statusFilter, sortBy, sortDesc]);
+
+  const fetchRoles = async () => {
+    try {
+      const rolesData = await enhancedUserService.getRoles();
+      setRoles(rolesData || []);
+    } catch (error) {
+      console.error('Failed to fetch roles:', error);
+      showNotification('Failed to load roles', 'error');
+    }
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -213,11 +225,13 @@ const EnhancedUserManagement = () => {
   const handleOpenDialog = (user = null) => {
     if (user) {
       setEditingUser(user);
+      // Find role_id from role name
+      const userRole = roles.find(role => role.name === user.role);
       setFormData({
         username: user.username,
         email: user.email,
         password: '',
-        role: user.role,
+        role_id: userRole ? userRole.id : null,
         first_name: user.first_name || '',
         last_name: user.last_name || '',
         phone: user.phone || '',
@@ -228,11 +242,13 @@ const EnhancedUserManagement = () => {
       });
     } else {
       setEditingUser(null);
+      // Default to 'user' role
+      const defaultRole = roles.find(role => role.name === 'user');
       setFormData({
         username: '',
         email: '',
         password: '',
-        role: 'user',
+        role_id: defaultRole ? defaultRole.id : null,
         first_name: '',
         last_name: '',
         phone: '',
@@ -298,8 +314,11 @@ const EnhancedUserManagement = () => {
 
   const getRoleColor = (role) => {
     switch (role) {
-      case 'admin': return 'error';
-      case 'manager': return 'warning';
+      case 'super_admin': return 'error';
+      case 'admin': return 'warning';
+      case 'operator': return 'info';
+      case 'viewer': return 'secondary';
+      case 'user': return 'default';
       default: return 'default';
     }
   };
@@ -413,9 +432,11 @@ const EnhancedUserManagement = () => {
                   onChange={(e) => setRoleFilter(e.target.value)}
                 >
                   <MenuItem value="">All Roles</MenuItem>
-                  <MenuItem value="admin">Administrator</MenuItem>
-                  <MenuItem value="manager">Manager</MenuItem>
-                  <MenuItem value="user">User</MenuItem>
+                  {roles.map((role) => (
+                    <MenuItem key={role.id} value={role.name}>
+                      {role.display_name || role.name}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -670,13 +691,15 @@ const EnhancedUserManagement = () => {
               <FormControl fullWidth>
                 <InputLabel>Role</InputLabel>
                 <Select
-                  value={formData.role}
+                  value={formData.role_id || ''}
                   label="Role"
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, role_id: e.target.value })}
                 >
-                  <MenuItem value="user">User</MenuItem>
-                  <MenuItem value="manager">Manager</MenuItem>
-                  <MenuItem value="admin">Administrator</MenuItem>
+                  {roles.map((role) => (
+                    <MenuItem key={role.id} value={role.id}>
+                      {role.display_name || role.name}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
