@@ -83,6 +83,8 @@ class UserResponse(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     display_name: Optional[str] = None
+    phone: Optional[str] = None
+    department: Optional[str] = None
     full_name: Optional[str] = None
     is_active: bool
     is_verified: bool
@@ -102,6 +104,8 @@ class UserCreateRequest(BaseModel):
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     display_name: Optional[str] = Field(None, max_length=200)
+    phone: Optional[str] = Field(None, max_length=20)
+    department: Optional[str] = Field(None, max_length=100)
     role_id: Optional[int] = None
 
 
@@ -111,6 +115,8 @@ class UserUpdateRequest(BaseModel):
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     display_name: Optional[str] = Field(None, max_length=200)
+    phone: Optional[str] = Field(None, max_length=20)
+    department: Optional[str] = Field(None, max_length=100)
     is_active: Optional[bool] = None
     is_verified: Optional[bool] = None
     role_id: Optional[int] = None
@@ -119,6 +125,11 @@ class UserUpdateRequest(BaseModel):
 class UserRoleUpdateRequest(BaseModel):
     """Update user's role request"""
     role_id: Optional[int] = Field(None, description="Role ID to assign (null to remove)")
+
+
+class UserPasswordChangeRequest(BaseModel):
+    """Change user password request"""
+    new_password: str = Field(..., min_length=8, description="New password (minimum 8 characters)")
 
 
 # =============================================================================

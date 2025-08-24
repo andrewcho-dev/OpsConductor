@@ -48,7 +48,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 
   // Check admin requirements
   const userRole = user?.role?.name || user?.role;
-  if (requireAdmin && userRole !== 'admin') {
+  if (requireAdmin && userRole !== 'admin' && userRole !== 'super_admin') {
     console.log(`⛔ Access denied - Admin required for ${location.pathname}, user role: ${userRole}`);
     return <Navigate to="/dashboard" replace />;
   }

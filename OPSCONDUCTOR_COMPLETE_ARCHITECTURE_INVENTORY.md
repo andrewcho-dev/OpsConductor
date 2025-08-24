@@ -20,9 +20,14 @@
 - **✅ Scheduler** - Celery beat scheduler
 
 #### **Databases**
-- **✅ Main DB** - `opsconductor-postgres:5432` (legacy backend data)
+
 - **✅ Auth DB** - `opsconductor-auth-postgres:5432` (authentication data)
 - **✅ User DB** - `opsconductor-user-postgres:5432` (user management data)
+- **✅ Targets DB** - `opsconductor-targets-postgres:5432` (target management data)
+- **✅ Jobs DB** - `opsconductor-jobs-postgres:5432` (job management data)
+- **✅ Execution DB** - `opsconductor-execution-postgres:5432` (execution data)
+- **✅ Audit DB** - `opsconductor-audit-postgres:5432` (audit events data)
+- **✅ Notification DB** - `opsconductor-notification-postgres:5432` (notification data)
 
 ---
 

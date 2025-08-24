@@ -249,7 +249,7 @@ def create_roles(session, permissions):
 
 if __name__ == "__main__":
     # Database connection
-    DATABASE_URL = "postgresql://user_user:user_secure_password_2024@postgres:5432/user_db"
+    DATABASE_URL = "postgresql://user_user:user_secure_password_2024@user-postgres:5432/user_db"
     
     engine = create_engine(DATABASE_URL)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

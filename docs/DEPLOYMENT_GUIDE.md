@@ -28,7 +28,7 @@ Create production environment file:
 ```bash
 # .env.production
 # Database Configuration
-DATABASE_URL=postgresql://opsconductor:secure_password@postgres:5432/opsconductor
+
 POSTGRES_USER=opsconductor
 POSTGRES_PASSWORD=secure_password
 POSTGRES_DB=opsconductor
@@ -592,83 +592,7 @@ async def health_check(db: Session = Depends(get_db)):
 
 ## Backup and Recovery
 
-### 1. Database Backup Script
 
-```bash
-#!/bin/bash
-# backup.sh
-
-BACKUP_DIR="/backups"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-DB_NAME="opsconductor"
-
-# Create backup directory
-mkdir -p $BACKUP_DIR
-
-# Full database backup
-echo "Creating full database backup..."
-docker exec opsconductor-postgres pg_dump -U opsconductor -d $DB_NAME > $BACKUP_DIR/full_backup_$TIMESTAMP.sql
-
-# Execution data backup (for serialization recovery)
-echo "Creating execution serialization backup..."
-docker exec opsconductor-postgres pg_dump -U opsconductor -d $DB_NAME \
-  --table=jobs \
-  --table=job_executions \
-  --table=job_execution_branches \
-  --table=universal_targets \
-  > $BACKUP_DIR/execution_serials_$TIMESTAMP.sql
-
-# Compress backups
-gzip $BACKUP_DIR/full_backup_$TIMESTAMP.sql
-gzip $BACKUP_DIR/execution_serials_$TIMESTAMP.sql
-
-# Clean old backups (keep last 30 days)
-find $BACKUP_DIR -name "*.sql.gz" -mtime +30 -delete
-
-echo "Backup completed: $TIMESTAMP"
-```
-
-### 2. Recovery Procedures
-
-```bash
-#!/bin/bash
-# restore.sh
-
-BACKUP_FILE=$1
-DB_NAME="opsconductor"
-
-if [ -z "$BACKUP_FILE" ]; then
-    echo "Usage: $0 <backup_file>"
-    exit 1
-fi
-
-echo "Restoring database from $BACKUP_FILE..."
-
-# Stop application services
-docker-compose -f docker-compose.prod.yml stop backend celery celery-beat
-
-# Restore database
-if [[ $BACKUP_FILE == *.gz ]]; then
-    gunzip -c $BACKUP_FILE | docker exec -i opsconductor-postgres psql -U opsconductor -d $DB_NAME
-else
-    docker exec -i opsconductor-postgres psql -U opsconductor -d $DB_NAME < $BACKUP_FILE
-fi
-
-# Verify serialization integrity
-echo "Verifying execution serialization integrity..."
-docker exec opsconductor-postgres psql -U opsconductor -d $DB_NAME -c "
-SELECT 
-    COUNT(*) as total_executions,
-    COUNT(execution_serial) as serialized_executions,
-    COUNT(*) - COUNT(execution_serial) as missing_serials
-FROM job_executions;
-"
-
-# Restart services
-docker-compose -f docker-compose.prod.yml start backend celery celery-beat
-
-echo "Database restore completed"
-```
 
 ## Security Hardening
 

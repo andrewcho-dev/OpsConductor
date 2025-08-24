@@ -101,9 +101,14 @@ const Sidebar = () => {
     }
   ];
 
-  const filteredMenuItems = menuItems.filter(item => 
-    item.roles.includes(user?.role)
-  );
+  const filteredMenuItems = menuItems.filter(item => {
+    const userRole = user?.role?.name || user?.role;
+    // Super admin has access to all menu items
+    if (userRole === 'super_admin') {
+      return true;
+    }
+    return item.roles.includes(userRole);
+  });
 
   const handleNavigation = (path, external = false) => {
     if (external) {

@@ -85,7 +85,7 @@ Key configuration options in `.env`:
 
 ```bash
 # Database
-POSTGRES_DB=opsconductor_dev
+
 POSTGRES_USER=opsconductor
 POSTGRES_PASSWORD=opsconductor_secure_password_2024
 

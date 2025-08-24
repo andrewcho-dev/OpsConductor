@@ -51,6 +51,7 @@ const EnhancedUserManagement = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [openActivityDialog, setOpenActivityDialog] = useState(false);
   const [openBulkDialog, setOpenBulkDialog] = useState(false);
+  const [openPasswordDialog, setOpenPasswordDialog] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [viewingActivity, setViewingActivity] = useState(null);
   const [userActivity, setUserActivity] = useState(null);
@@ -60,6 +61,7 @@ const EnhancedUserManagement = () => {
     username: '',
     email: '',
     password: '',
+    confirmPassword: '',
     role_id: null,
     first_name: '',
     last_name: '',
@@ -68,6 +70,12 @@ const EnhancedUserManagement = () => {
     is_active: true,
     is_verified: false,
     must_change_password: false
+  });
+
+  // Password change form data
+  const [passwordData, setPasswordData] = useState({
+    newPassword: '',
+    confirmPassword: ''
   });
   
   // Filters and search
@@ -158,9 +166,32 @@ const EnhancedUserManagement = () => {
     setNotification({ open: true, message, severity });
   };
 
+  const validatePasswords = (password, confirmPassword) => {
+    if (!password || !confirmPassword) {
+      showNotification('Both password fields are required', 'error');
+      return false;
+    }
+    if (password !== confirmPassword) {
+      showNotification('Passwords do not match', 'error');
+      return false;
+    }
+    if (password.length < 8) {
+      showNotification('Password must be at least 8 characters long', 'error');
+      return false;
+    }
+    return true;
+  };
+
   const handleCreateUser = async () => {
     try {
-      await enhancedUserService.createUser(formData);
+      // Validate passwords for new users
+      if (!validatePasswords(formData.password, formData.confirmPassword)) {
+        return;
+      }
+      
+      // Remove confirmPassword from the data sent to API
+      const { confirmPassword, ...userData } = formData;
+      await enhancedUserService.createUser(userData);
       showNotification('User created successfully', 'success');
       handleCloseDialog();
       fetchUsers();
@@ -172,12 +203,59 @@ const EnhancedUserManagement = () => {
 
   const handleUpdateUser = async () => {
     try {
-      await enhancedUserService.updateUser(editingUser.id, formData);
+      // For updates, only validate password if it's being changed
+      if (formData.password && !validatePasswords(formData.password, formData.confirmPassword)) {
+        return;
+      }
+      
+      // Remove confirmPassword and empty password from the data sent to API
+      const { confirmPassword, ...userData } = formData;
+      if (!userData.password) {
+        delete userData.password;
+      }
+      
+      await enhancedUserService.updateUser(editingUser.id, userData);
       showNotification('User updated successfully', 'success');
       handleCloseDialog();
       fetchUsers();
     } catch (error) {
       showNotification(error.message || 'Failed to update user', 'error');
+    }
+  };
+
+  const handleOpenPasswordDialog = (user) => {
+    setEditingUser(user);
+    setPasswordData({
+      newPassword: '',
+      confirmPassword: ''
+    });
+    setOpenPasswordDialog(true);
+    handleMenuClose();
+  };
+
+  const handleClosePasswordDialog = () => {
+    setOpenPasswordDialog(false);
+    setEditingUser(null);
+    setPasswordData({
+      newPassword: '',
+      confirmPassword: ''
+    });
+  };
+
+  const handleChangePassword = async () => {
+    try {
+      if (!validatePasswords(passwordData.newPassword, passwordData.confirmPassword)) {
+        return;
+      }
+
+      await enhancedUserService.changeUserPassword(editingUser.id, {
+        new_password: passwordData.newPassword
+      });
+      
+      showNotification('Password changed successfully', 'success');
+      handleClosePasswordDialog();
+    } catch (error) {
+      showNotification(error.message || 'Failed to change password', 'error');
     }
   };
 
@@ -232,6 +310,7 @@ const EnhancedUserManagement = () => {
         username: user.username,
         email: user.email,
         password: '',
+        confirmPassword: '',
         role_id: userRole ? userRole.id : null,
         first_name: user.first_name || '',
         last_name: user.last_name || '',
@@ -249,6 +328,7 @@ const EnhancedUserManagement = () => {
         username: '',
         email: '',
         password: '',
+        confirmPassword: '',
         role_id: defaultRole ? defaultRole.id : null,
         first_name: '',
         last_name: '',
@@ -601,6 +681,10 @@ const EnhancedUserManagement = () => {
           <ListItemIcon><EditIcon /></ListItemIcon>
           <ListItemText>Edit User</ListItemText>
         </MenuItem>
+        <MenuItem onClick={() => handleOpenPasswordDialog(menuUser)}>
+          <ListItemIcon><PasswordIcon /></ListItemIcon>
+          <ListItemText>Change Password</ListItemText>
+        </MenuItem>
         <MenuItem onClick={() => { handleViewActivity(menuUser); handleMenuClose(); }}>
           <ListItemIcon><HistoryIcon /></ListItemIcon>
           <ListItemText>View Activity</ListItemText>
@@ -644,18 +728,28 @@ const EnhancedUserManagement = () => {
                 required
               />
             </Grid>
-            {!editingUser && (
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
-                />
-              </Grid>
-            )}
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label={editingUser ? "New Password (leave blank to keep current)" : "Password"}
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                required={!editingUser}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Confirm Password"
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                required={!editingUser && Boolean(formData.password)}
+                error={Boolean(formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword)}
+                helperText={formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword ? "Passwords do not match" : ""}
+              />
+            </Grid>
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -866,6 +960,55 @@ const EnhancedUserManagement = () => {
           <Button onClick={() => setOpenBulkDialog(false)}>Cancel</Button>
           <Button onClick={handleBulkAction} variant="contained" disabled={!bulkAction}>
             Execute
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Password Change Dialog */}
+      <Dialog open={openPasswordDialog} onClose={handleClosePasswordDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Change Password for {editingUser?.username}
+          <IconButton
+            onClick={handleClosePasswordDialog}
+            sx={{ position: 'absolute', right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="New Password"
+                type="password"
+                value={passwordData.newPassword}
+                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                required
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Confirm New Password"
+                type="password"
+                value={passwordData.confirmPassword}
+                onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                required
+                error={Boolean(passwordData.newPassword && passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword)}
+                helperText={passwordData.newPassword && passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword ? "Passwords do not match" : ""}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClosePasswordDialog}>Cancel</Button>
+          <Button 
+            onClick={handleChangePassword} 
+            variant="contained"
+            disabled={!passwordData.newPassword || !passwordData.confirmPassword || passwordData.newPassword !== passwordData.confirmPassword}
+          >
+            Change Password
           </Button>
         </DialogActions>
       </Dialog>

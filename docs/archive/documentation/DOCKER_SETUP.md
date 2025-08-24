@@ -43,7 +43,7 @@ https://your-domain.com
 | **nginx** | opsconductor-nginx | Reverse proxy, SSL termination | 80, 443 |
 | **frontend** | opsconductor-frontend | React application | 3000 |
 | **backend** | opsconductor-backend | FastAPI application | 8000 |
-| **postgres** | opsconductor-postgres | PostgreSQL database | 5432 |
+
 | **redis** | opsconductor-redis | Cache and message broker | 6379 |
 | **celery-worker** | opsconductor-celery-worker | Background task processing | - |
 | **scheduler** | opsconductor-scheduler | Scheduled task management | - |

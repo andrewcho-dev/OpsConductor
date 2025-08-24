@@ -68,7 +68,7 @@ We have successfully implemented a **complete microservices authentication archi
 
 - **`opsconductor-postgres`** (Internal)
   - Main PostgreSQL database
-  - Database: `opsconductor_dev`
+
   - Stores: targets, jobs, executions, etc.
 
 ### **Frontend**

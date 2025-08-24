@@ -31,6 +31,8 @@ class User(Base):
     first_name = Column(String(100))
     last_name = Column(String(100))
     display_name = Column(String(200))
+    phone = Column(String(20))
+    department = Column(String(100))
     
     # Status
     is_active = Column(Boolean, default=True)

@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.models.user import User, Role
 from app.schemas.user import (
     UserResponse, UserListResponse, UserCreateRequest, 
-    UserUpdateRequest, UserRoleUpdateRequest
+    UserUpdateRequest, UserRoleUpdateRequest, UserPasswordChangeRequest
 )
 from pydantic import BaseModel
 
@@ -116,6 +116,8 @@ async def create_user(user_data: UserCreateRequest, db: Session = Depends(get_db
         first_name=user_data.first_name,
         last_name=user_data.last_name,
         display_name=user_data.display_name,
+        phone=user_data.phone,
+        department=user_data.department,
         role_id=user_data.role_id
     )
     
@@ -161,6 +163,10 @@ async def update_user(user_id: int, user_data: UserUpdateRequest, db: Session = 
         user.last_name = user_data.last_name
     if user_data.display_name is not None:
         user.display_name = user_data.display_name
+    if user_data.phone is not None:
+        user.phone = user_data.phone
+    if user_data.department is not None:
+        user.department = user_data.department
     if user_data.is_active is not None:
         user.is_active = user_data.is_active
     if user_data.is_verified is not None:
@@ -219,6 +225,32 @@ async def update_user_role(
         "message": f"User role {'updated' if role_data.role_id else 'removed'} successfully",
         "user_id": user_id,
         "role_id": role_data.role_id
+    }
+
+
+@router.put("/{user_id}/password")
+async def change_user_password(
+    user_id: int, 
+    password_data: UserPasswordChangeRequest, 
+    db: Session = Depends(get_db)
+):
+    """Change a user's password"""
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Hash the new password
+    password_hash = pwd_context.hash(password_data.new_password)
+    
+    # Update the password
+    user.password_hash = password_hash
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": "Password changed successfully",
+        "user_id": user_id
     }
 
 
