@@ -1,37 +1,42 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
-// ✅ Use nginx as the API gateway
-const API_GATEWAY_TARGET = 'http://opsconductor-nginx:80';
-
-console.log('🔧 setupProxy.js loaded - Following official port plan');
-console.log('🎯 API Gateway target:', API_GATEWAY_TARGET);
-
 module.exports = function(app) {
-  console.log('🚀 Setting up proxy middleware according to port plan...');
+  // Use environment variables for proxy target - defaults to nginx service on Docker network
+  const proxyHost = process.env.PROXY_TARGET_HOST || 'nginx';
+  const proxyPort = process.env.PROXY_TARGET_PORT || '443';
+  const proxyProtocol = process.env.PROXY_TARGET_PROTOCOL || 'https';
+  const proxyTarget = `${proxyProtocol}://${proxyHost}:${proxyPort}`;
   
-  // Proxy service requests to nginx (which routes to microservices)
-  const services = ['/auth', '/users', '/targets', '/jobs', '/execution', '/audit', '/notifications'];
+  console.log(`🔧 Setting up proxy to: ${proxyTarget}`);
   
-  services.forEach(service => {
-    app.use(
-      service,
-      createProxyMiddleware({
-        target: API_GATEWAY_TARGET,
-        changeOrigin: true,
-        secure: false,
-        logLevel: 'info',
-        onProxyReq: (proxyReq, req, res) => {
-          console.log('📤 PROXY REQUEST:', req.method, req.url, '→', API_GATEWAY_TARGET + req.url);
-        },
-        onProxyRes: (proxyRes, req, res) => {
-          console.log('📥 PROXY RESPONSE:', proxyRes.statusCode, req.url);
-        },
-        onError: (err, req, res) => {
-          console.error('❌ PROXY ERROR:', err.message, 'for', req.url);
-        }
-      })
-    );
-  });
-  
-  console.log('✅ Proxy middleware setup complete - Following port plan!');
+  // Proxy API requests to nginx gateway using configurable target
+  app.use(
+    '/api',
+    createProxyMiddleware({
+      target: proxyTarget,
+      changeOrigin: true,
+      secure: false, // Allow self-signed certificates
+      logLevel: 'debug',
+      // Don't rewrite paths - preserve the original path including /api
+      pathRewrite: (path, req) => {
+        console.log(`🔄 Original path: ${path}`);
+        console.log(`🔄 Request URL: ${req.url}`);
+        // Return the original path with /api prefix
+        const newPath = '/api' + path;
+        console.log(`🔄 Rewritten path: ${newPath}`);
+        return newPath;
+      },
+      onProxyReq: (proxyReq, req, res) => {
+        console.log(`🔄 Proxying ${req.method} ${req.originalUrl} to ${proxyTarget}`);
+      },
+      onProxyRes: (proxyRes, req, res) => {
+        console.log(`✅ Proxy response: ${proxyRes.statusCode} for ${req.originalUrl}`);
+      },
+      onError: (err, req, res) => {
+        console.error('❌ Proxy error:', err.message);
+        console.error('❌ Request URL:', req.originalUrl);
+        console.error('❌ Target:', proxyTarget);
+      }
+    })
+  );
 };

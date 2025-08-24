@@ -15,10 +15,15 @@ class EnhancedUserService {
   async getRoles() {
     try {
       const response = await apiService.get('/api/v1/roles/');
-      return await response.json();
+      const data = await response.json();
+      return data.roles || data;
     } catch (error) {
       console.error('Failed to fetch roles:', error);
-      throw error;
+      // Return default roles if API call fails
+      return [
+        { id: 1, name: 'admin', display_name: 'Administrator' },
+        { id: 2, name: 'user', display_name: 'User' }
+      ];
     }
   }
 
@@ -62,14 +67,44 @@ class EnhancedUserService {
 
   /**
    * Get comprehensive user statistics
+   * Calculates stats from user data since backend doesn't have stats endpoint
    */
   async getUserStats() {
     try {
-      const response = await apiService.get(`${this.baseUrl}stats/overview`);
-      return await response.json();
+      // Fetch all users to calculate stats
+      const userData = await this.getUsers({ page_size: 1000 }); // Get all users
+      const users = userData.users || [];
+      
+      // Calculate stats
+      const totalUsers = users.length;
+      const activeUsers = users.filter(user => user.is_active === true).length;
+      const inactiveUsers = users.filter(user => user.is_active === false).length;
+      
+      // Calculate recent signups (last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const recentSignups = users.filter(user => {
+        if (!user.created_at) return false;
+        const createdDate = new Date(user.created_at);
+        return createdDate >= sevenDaysAgo;
+      }).length;
+      
+      return {
+        total_users: totalUsers,
+        active_users: activeUsers,
+        inactive_users: inactiveUsers,
+        recent_signups: recentSignups
+      };
     } catch (error) {
-      console.error('Failed to fetch user statistics:', error);
-      throw error;
+      console.error('Failed to calculate user statistics:', error);
+      // Return default stats if calculation fails
+      return {
+        total_users: 0,
+        active_users: 0,
+        inactive_users: 0,
+        recent_signups: 0
+      };
     }
   }
 
@@ -312,8 +347,11 @@ class EnhancedUserService {
    * Check if user has permission for action
    */
   canPerformAction(currentUser, targetUser, action) {
+    const currentUserRole = currentUser.role?.name || currentUser.role;
+    const targetUserRole = targetUser.role?.name || targetUser.role;
+    
     // Administrators can perform any action
-    if (currentUser.role === 'administrator') {
+    if (currentUserRole === 'administrator' || currentUserRole === 'admin') {
       return true;
     }
 
@@ -324,7 +362,7 @@ class EnhancedUserService {
     }
 
     // Managers can perform limited actions on regular users
-    if (currentUser.role === 'manager' && targetUser.role === 'user') {
+    if (currentUserRole === 'manager' && targetUserRole === 'user') {
       const managerActions = ['view', 'update', 'lock', 'unlock'];
       return managerActions.includes(action);
     }

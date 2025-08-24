@@ -226,7 +226,8 @@ const EnhancedUserManagement = () => {
     if (user) {
       setEditingUser(user);
       // Find role_id from role name
-      const userRole = roles.find(role => role.name === user.role);
+      const userRoleName = user.role?.name || user.role;
+      const userRole = roles.find(role => role.name === userRoleName);
       setFormData({
         username: user.username,
         email: user.email,
@@ -537,8 +538,8 @@ const EnhancedUserManagement = () => {
                   </TableCell>
                   <TableCell>
                     <Chip 
-                      label={user.role} 
-                      color={getRoleColor(user.role)} 
+                      label={user.role?.name || user.role || 'No Role'} 
+                      color={getRoleColor(user.role?.name || user.role)} 
                       size="small" 
                     />
                   </TableCell>

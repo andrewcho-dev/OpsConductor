@@ -237,12 +237,12 @@ const Sidebar = () => {
               {user.username}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Role: {user.role}
+              Role: {user.role?.name || user.role || 'No Role'}
             </Typography>
           </Box>
         )}
         {isCollapsed && user && (
-          <Tooltip title={`${user.username} (${user.role})`} placement="right" arrow>
+          <Tooltip title={`${user.username} (${user.role?.name || user.role || 'No Role'})`} placement="right" arrow>
             <Box sx={{ display: 'flex', justifyContent: 'center' }}>
               <Box
                 sx={{

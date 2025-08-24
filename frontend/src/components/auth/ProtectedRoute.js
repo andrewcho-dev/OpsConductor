@@ -13,7 +13,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
       console.log(`🔐 Route Protection Check:`, {
         path: location.pathname,
         isAuthenticated,
-        user: user ? { username: user.username, role: user.role } : null,
+        user: user ? { username: user.username, role: user.role?.name || user.role } : null,
         requireAdmin
       });
     }
@@ -47,8 +47,9 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
   }
 
   // Check admin requirements
-  if (requireAdmin && user?.role !== 'admin') {
-    console.log(`⛔ Access denied - Admin required for ${location.pathname}, user role: ${user?.role}`);
+  const userRole = user?.role?.name || user?.role;
+  if (requireAdmin && userRole !== 'admin') {
+    console.log(`⛔ Access denied - Admin required for ${location.pathname}, user role: ${userRole}`);
     return <Navigate to="/dashboard" replace />;
   }
 

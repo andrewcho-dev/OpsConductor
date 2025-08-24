@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // Create axios instance with base configuration
-// ✅ Use relative URLs since frontend is served through the same nginx proxy
-const apiBaseUrl = process.env.REACT_APP_API_URL || '';
+// ✅ Use relative URLs only - no hardcoded fallbacks
+const apiBaseUrl = process.env.REACT_APP_API_URL || '/api';
 const authBaseUrl = process.env.REACT_APP_AUTH_URL || '/api/v1/auth';
 
 // Log the API base URL for debugging

@@ -189,7 +189,7 @@ const UserActivityDashboard = () => {
                       {user.email}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                      <Chip label={user.role} color="primary" size="small" />
+                      <Chip label={user.role?.name || user.role || 'No Role'} color="primary" size="small" />
                       <Chip 
                         label={user.is_active ? 'Active' : 'Inactive'} 
                         color={user.is_active ? 'success' : 'error'} 
