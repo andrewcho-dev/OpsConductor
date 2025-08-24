@@ -1,7 +1,8 @@
 -- Notifications Service Database Initialization
 
--- Note: Database is already created by POSTGRES_DB environment variable
--- So we just connect to it and set up the schema
+-- Create database if not exists
+CREATE DATABASE IF NOT EXISTS notification_db;
+\c notification_db;
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -32,9 +33,7 @@ CREATE TABLE IF NOT EXISTS notification_templates (
     tags TEXT[],
     created_by INTEGER, -- User ID
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
-    deleted_by INTEGER
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Notification channels table (where to send notifications)
@@ -206,11 +205,9 @@ CREATE TABLE IF NOT EXISTS webhook_subscriptions (
 CREATE INDEX IF NOT EXISTS idx_notification_templates_type ON notification_templates(template_type);
 CREATE INDEX IF NOT EXISTS idx_notification_templates_active ON notification_templates(is_active);
 CREATE INDEX IF NOT EXISTS idx_notification_templates_category ON notification_templates(category);
-CREATE INDEX IF NOT EXISTS idx_notification_templates_deleted_at ON notification_templates(deleted_at);
 
 CREATE INDEX IF NOT EXISTS idx_notification_channels_type ON notification_channels(channel_type);
 CREATE INDEX IF NOT EXISTS idx_notification_channels_active ON notification_channels(is_active);
-CREATE INDEX IF NOT EXISTS idx_notification_channels_deleted_at ON notification_channels(deleted_at);
 
 CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_notification_preferences(user_id);
 

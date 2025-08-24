@@ -1,3 +1,0 @@
-2024/01/15 10:30:00 [error] 123#0: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 192.168.1.10, server: localhost, request: "GET /api/v3/health HTTP/1.1", upstream: "http://192.168.1.20:8000/api/v3/health", host: "localhost"
-2024/01/15 10:31:00 [warn] 123#0: *2 upstream server temporarily disabled while connecting to upstream, client: 192.168.1.10, server: localhost, request: "GET /api/v3/targets HTTP/1.1"
-2024/01/15 10:32:00 [error] 123#0: *3 SSL_do_handshake() failed (SSL: error:14094416:SSL routines:ssl3_read_bytes:sslv3 alert certificate unknown) while SSL handshaking, client: 192.168.1.50, server: 0.0.0.0:443

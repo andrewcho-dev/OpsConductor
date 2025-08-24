@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@localhost:5432/job_management"
     
     # Message Broker
-    rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
+    # Removed: rabbitmq_url - Using direct HTTP communication
     
     # External Services
     job_execution_service_url: str = "http://localhost:8002"

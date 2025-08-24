@@ -13,7 +13,7 @@ from app.models.job_models import Job, JobAction, JobTarget
 from opsconductor_shared.models.base import (
     JobType, JobStatus, EventType, ServiceType, PaginatedResponse
 )
-from opsconductor_shared.events.publisher import EventPublisher
+# Removed: EventPublisher - Using direct HTTP communication
 from opsconductor_shared.clients.base_client import BaseServiceClient
 from app.core.config import settings
 
@@ -25,7 +25,7 @@ class JobService:
     
     def __init__(self, db: Session):
         self.db = db
-        self.event_publisher = EventPublisher(settings.rabbitmq_url)
+        # Removed: event_publisher - Using direct HTTP communication
         
         # External service clients
         self.target_client = BaseServiceClient(

@@ -13,9 +13,9 @@ import uvicorn
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.core.events import event_consumer
+# Removed: event_consumer - Using direct HTTP communication
 from app.api.v1 import notifications, templates, alerts, health
-from opsconductor_shared.models.base import ServiceType, EventType
+# Removed: ServiceType, EventType - Using direct HTTP communication
 
 # Configure logging
 logging.basicConfig(
@@ -35,27 +35,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
     
-    # Initialize event consumer (optional - service works without it)
-    event_consumer = None
-    if settings.RABBITMQ_URL:
-        try:
-            from opsconductor_shared.events.consumer import EventConsumer
-            event_consumer = EventConsumer(
-                rabbitmq_url=settings.RABBITMQ_URL,
-                queue_name="notification_events",
-                exchange_name="opsconductor_events"
-            )
-            
-            # Register event handlers
-            # event_consumer.register_handler("job.completed", handle_job_completed)
-            # event_consumer.register_handler("job.failed", handle_job_failed)
-            
-            await event_consumer.start_consuming()
-            logger.info("Event consumer started")
-        except Exception as e:
-            logger.warning(f"Failed to start event consumer (service will continue without it): {e}")
-            event_consumer = None
-    
+    # Removed: event consumer startup - Using direct HTTP communication
     logger.info("Notification Service started successfully")
     
     yield
@@ -63,14 +43,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Notification Service...")
     
-    # Stop event consumer
-    if event_consumer:
-        try:
-            await event_consumer.stop_consuming()
-            logger.info("Event consumer stopped")
-        except Exception as e:
-            logger.warning(f"Failed to stop event consumer: {e}")
-    
+    # Removed: event consumer shutdown - Using direct HTTP communication
     logger.info("Notification Service stopped")
 
 
@@ -116,12 +89,6 @@ app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 app.include_router(templates.router, prefix="/api/v1/templates", tags=["Templates"])
 app.include_router(alerts.router, prefix="/api/v1/alerts", tags=["Alerts"])
-
-# Simple health endpoint for docker health checks
-@app.get("/health")
-async def simple_health():
-    """Simple health check endpoint"""
-    return {"status": "healthy", "service": "notification-service"}
 
 
 # Service info endpoint - standardized location

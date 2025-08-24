@@ -13,10 +13,10 @@ import uvicorn
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.core.events import event_publisher
+# Removed: event_publisher - Using direct HTTP communication
 from app.api.v1 import targets, health
-from opsconductor_shared.events.schemas import create_service_started_event
-from opsconductor_shared.models.base import ServiceType, EventType
+# Removed: create_service_started_event - Using direct HTTP communication
+# Removed: ServiceType, EventType - Using direct HTTP communication
 
 # Configure logging
 logging.basicConfig(
@@ -36,23 +36,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
     
-    # Initialize event publisher
-    if event_publisher:
-        try:
-            # Publish service started event
-            await event_publisher.publish_event(
-                event_type=EventType.SERVICE_STARTED,
-                service_name=ServiceType.UNIVERSAL_TARGETS,
-                data={
-                    "service_name": "universal-targets-service",
-                    "version": "1.0.0",
-                    "environment": settings.ENVIRONMENT
-                }
-            )
-            logger.info("Service started event published")
-        except Exception as e:
-            logger.warning(f"Failed to publish service started event: {e}")
-    
+    # Removed: event publisher initialization - Using direct HTTP communication
     logger.info("Universal Targets Service started successfully")
     
     yield
@@ -60,21 +44,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Universal Targets Service...")
     
-    # Publish service stopped event
-    if event_publisher:
-        try:
-            await event_publisher.publish_event(
-                event_type=EventType.SERVICE_STOPPED,
-                service_name=ServiceType.UNIVERSAL_TARGETS,
-                data={
-                    "service_name": "universal-targets-service",
-                    "shutdown_reason": "normal"
-                }
-            )
-            logger.info("Service stopped event published")
-        except Exception as e:
-            logger.warning(f"Failed to publish service stopped event: {e}")
-    
+    # Removed: service stopped event - Using direct HTTP communication
     logger.info("Universal Targets Service stopped")
 
 
@@ -104,22 +74,8 @@ async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unhandled errors"""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     
-    # Publish error event
-    if event_publisher:
-        try:
-            await event_publisher.publish_event(
-                event_type=EventType.SERVICE_ERROR,
-                service_name=ServiceType.UNIVERSAL_TARGETS,
-                data={
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc),
-                    "endpoint": str(request.url),
-                    "method": request.method
-                }
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish error event: {e}")
-    
+    # Log error details
+    logger.error(f"Error on {request.method} {request.url}: {type(exc).__name__}: {str(exc)}")
     return JSONResponse(
         status_code=500,
         content={

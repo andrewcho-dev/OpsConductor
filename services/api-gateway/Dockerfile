@@ -1,7 +1,7 @@
 FROM nginx:alpine
 
 # Copy custom nginx configuration  
-COPY api-gateway/nginx-microservices.conf /etc/nginx/nginx.conf
+COPY nginx-microservices.conf /etc/nginx/nginx.conf
 
 # Create log directory and install curl
 RUN mkdir -p /var/log/nginx && apk add --no-cache curl

@@ -13,19 +13,17 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY audit-events-service/requirements.txt .
+COPY ./audit-events-service/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install shared libraries (use build arg to bust cache when shared libs change)
-ARG SHARED_LIBS_CACHE_BUST=1
-RUN echo "Cache bust: $SHARED_LIBS_CACHE_BUST"
-COPY shared-libs /tmp/shared-libs
-RUN pip install --no-cache-dir -e /tmp/shared-libs
+# Install shared libraries
+COPY ./shared-libs /tmp/shared-libs
+RUN pip install -e /tmp/shared-libs
 
 # Copy application code
-COPY audit-events-service/app/ ./app/
+COPY ./audit-events-service/app/ ./app/
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app && chown -R app:app /app

@@ -1,7 +1,8 @@
 -- Targets Service Database Initialization
 
--- Note: Database is already created by POSTGRES_DB environment variable
--- So we just connect to it and set up the schema
+-- Create database if not exists
+CREATE DATABASE IF NOT EXISTS targets_db;
+\c targets_db;
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -53,9 +54,7 @@ CREATE TABLE IF NOT EXISTS target_groups (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER,
-    updated_by INTEGER,
-    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
-    deleted_by INTEGER
+    updated_by INTEGER
 );
 
 -- Target group memberships table
@@ -121,10 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_targets_type ON targets(target_type);
 CREATE INDEX IF NOT EXISTS idx_targets_status ON targets(status);
 CREATE INDEX IF NOT EXISTS idx_targets_uuid ON targets(uuid);
 CREATE INDEX IF NOT EXISTS idx_targets_owner ON targets(owner_id);
-CREATE INDEX IF NOT EXISTS idx_targets_deleted_at ON targets(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_target_groups_name ON target_groups(name);
-CREATE INDEX IF NOT EXISTS idx_target_groups_deleted_at ON target_groups(deleted_at);
-CREATE INDEX IF NOT EXISTS idx_target_credentials_deleted_at ON target_credentials(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_target_group_members_target ON target_group_members(target_id);
 CREATE INDEX IF NOT EXISTS idx_target_group_members_group ON target_group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_health_checks_target ON target_health_checks(target_id);

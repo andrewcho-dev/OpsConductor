@@ -26,8 +26,7 @@ class Settings(BaseSettings):
     # Redis Configuration (for caching and job queue)
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379/7")
     
-    # RabbitMQ Configuration
-    RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+    # Removed: RabbitMQ - Using direct HTTP communication
     
     # Celery Configuration
     CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/8")

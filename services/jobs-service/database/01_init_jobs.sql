@@ -1,7 +1,8 @@
 -- Jobs Service Database Initialization
 
--- Note: Database is already created by POSTGRES_DB environment variable
--- So we just connect to it and set up the schema
+-- Create database if not exists
+CREATE DATABASE IF NOT EXISTS jobs_db;
+\c jobs_db;
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -98,9 +99,7 @@ CREATE TABLE IF NOT EXISTS job_templates (
     is_public BOOLEAN DEFAULT FALSE,
     created_by INTEGER,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
-    deleted_by INTEGER
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Job approval workflows table
@@ -134,19 +133,15 @@ CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_schedule_type ON jobs(schedule_type);
 CREATE INDEX IF NOT EXISTS idx_jobs_created_by ON jobs(created_by);
 CREATE INDEX IF NOT EXISTS idx_jobs_uuid ON jobs(uuid);
-CREATE INDEX IF NOT EXISTS idx_jobs_deleted_at ON jobs(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_job_actions_job_id ON job_actions(job_id);
 CREATE INDEX IF NOT EXISTS idx_job_actions_order ON job_actions(job_id, order_index);
-CREATE INDEX IF NOT EXISTS idx_job_actions_deleted_at ON job_actions(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_job_targets_job_id ON job_targets(job_id);
 CREATE INDEX IF NOT EXISTS idx_job_targets_target_id ON job_targets(target_id);
 CREATE INDEX IF NOT EXISTS idx_job_schedules_job_id ON job_schedules(job_id);
 CREATE INDEX IF NOT EXISTS idx_job_schedules_active ON job_schedules(is_active);
 CREATE INDEX IF NOT EXISTS idx_job_schedules_next_run ON job_schedules(next_run_time);
-CREATE INDEX IF NOT EXISTS idx_job_schedules_deleted_at ON job_schedules(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_job_templates_category ON job_templates(category);
 CREATE INDEX IF NOT EXISTS idx_job_templates_public ON job_templates(is_public);
-CREATE INDEX IF NOT EXISTS idx_job_templates_deleted_at ON job_templates(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_job_approvals_job_id ON job_approvals(job_id);
 CREATE INDEX IF NOT EXISTS idx_job_approvals_status ON job_approvals(status);
 

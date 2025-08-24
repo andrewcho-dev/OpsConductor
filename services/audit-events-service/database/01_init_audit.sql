@@ -1,7 +1,8 @@
 -- Audit Events Service Database Initialization
 
--- Note: Database is already created by POSTGRES_DB environment variable
--- So we just connect to it and set up the schema
+-- Create database if not exists
+CREATE DATABASE IF NOT EXISTS audit_db;
+\c audit_db;
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

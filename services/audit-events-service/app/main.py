@@ -13,11 +13,9 @@ import uvicorn
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.core.events import event_consumer
-from app.api.v1 import health
-# TODO: Create missing API modules
-# from app.api.v1 import events, audit, reports
-from opsconductor_shared.models.base import ServiceType, EventType
+# Removed: event_consumer - Using direct HTTP communication
+from app.api.v1 import events, audit, reports, health
+# Removed: ServiceType, EventType - Using direct HTTP communication
 
 # Configure logging
 logging.basicConfig(
@@ -38,13 +36,7 @@ async def lifespan(app: FastAPI):
     logger.info("Database tables created/verified")
     
     # Start event consumer
-    if event_consumer:
-        try:
-            await event_consumer.start_consuming()
-            logger.info("Event consumer started")
-        except Exception as e:
-            logger.warning(f"Failed to start event consumer: {e}")
-    
+    # Removed: event consumer startup - Using direct HTTP communication
     logger.info("Audit Events Service started successfully")
     
     yield
@@ -53,13 +45,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Audit Events Service...")
     
     # Stop event consumer
-    if event_consumer:
-        try:
-            await event_consumer.stop_consuming()
-            logger.info("Event consumer stopped")
-        except Exception as e:
-            logger.warning(f"Failed to stop event consumer: {e}")
-    
+    # Removed: event consumer shutdown - Using direct HTTP communication
     logger.info("Audit Events Service stopped")
 
 
@@ -102,10 +88,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(health.router, prefix="/health", tags=["Health"])
-# TODO: Add missing routers when API modules are created
-# app.include_router(events.router, prefix="/api/v1/events", tags=["Events"])
-# app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
-# app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
+app.include_router(events.router, prefix="/api/v1/events", tags=["Events"])
+app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
+app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 
 
 # Service info endpoint - standardized location

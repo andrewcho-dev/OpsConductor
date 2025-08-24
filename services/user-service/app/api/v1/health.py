@@ -137,20 +137,7 @@ async def detailed_health_check(db: Session = Depends(get_db)):
             # Redis failure doesn't make the service unhealthy
     
     # RabbitMQ check (if configured)
-    if settings.RABBITMQ_URL:
-        try:
-            import pika
-            connection = pika.BlockingConnection(pika.URLParameters(settings.RABBITMQ_URL))
-            connection.close()
-            checks["rabbitmq"] = {
-                "status": "healthy",
-                "message": "RabbitMQ connection successful"
-            }
-        except Exception as e:
-            checks["rabbitmq"] = {
-                "status": "unhealthy",
-                "message": f"RabbitMQ connection failed: {str(e)}"
-            }
+    # Removed: RabbitMQ check - Using direct HTTP communication
             # RabbitMQ failure doesn't make the service unhealthy
     
     response = {

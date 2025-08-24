@@ -15,7 +15,7 @@ alembic==1.12.1
 redis==5.0.1
 
 # Event Publishing
-pika==1.3.2
+# Removed: pika - Using direct HTTP communication
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0

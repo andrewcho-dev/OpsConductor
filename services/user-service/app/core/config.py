@@ -26,8 +26,7 @@ class Settings(BaseSettings):
     # Redis Configuration (for caching)
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379/2")
     
-    # RabbitMQ Configuration
-    RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+    # Removed: RabbitMQ - Using direct HTTP communication
     
     # Service URLs for inter-service communication
     AUTH_SERVICE_URL: str = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")

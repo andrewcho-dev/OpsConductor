@@ -1,351 +1,538 @@
 """
-Clean Users API
-Simple, straightforward user management endpoints
+User management API endpoints for User Service
 """
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_
-from passlib.context import CryptContext
+import logging
+from typing import Optional, List
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.user import User, Role
+# Removed: publish_user_event - Using direct HTTP communication
 from app.schemas.user import (
-    UserResponse, UserListResponse, UserCreateRequest, 
-    UserUpdateRequest, UserRoleUpdateRequest, UserPasswordChangeRequest
+    UserCreateRequest, UserUpdateRequest, UserResponse, UserListResponse,
+    UserRoleAssignRequest, UserStatsResponse, UserActivityLogResponse
 )
-from pydantic import BaseModel
+from app.services.user_service import UserService
+# Removed: EventType - Using direct HTTP communication
+from opsconductor_shared.auth.dependencies import get_current_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def get_user_service(db: Session = Depends(get_db)) -> UserService:
+    """Dependency to get user service instance"""
+    return UserService(db)
+
+
+# =============================================================================
+# User CRUD Operations
+# =============================================================================
+
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    user_data: UserCreateRequest,
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Create a new user"""
+    try:
+        # Check permissions
+        if not current_user.get("is_superuser") and "users:create" not in current_user.get("permissions", []):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to create users"
+            )
+        
+        result = await user_service.create_user(
+            user_data=user_data,
+            created_by=current_user.get("id")
+        )
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+        
+        user_response = result["user"]
+        
+        # Publish user created event
+        await publish_user_event(
+            event_type=EventType.USER_CREATED,
+            data={
+                "user_id": user_response.id,
+                "email": user_response.email,
+                "username": user_response.username,
+                "created_by": current_user.get("id"),
+                "roles": [role.name for role in user_response.roles]
+            },
+            user_id=current_user.get("id")
+        )
+        
+        return user_response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create user"
+        )
+
+
+@router.get("/{user_id}", response_model=UserResponse)
+async def get_user(
+    user_id: int,
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Get user by ID"""
+    try:
+        # Check permissions - users can view their own profile or need users:read permission
+        if (user_id != current_user.get("id") and 
+            not current_user.get("is_superuser") and 
+            "users:read" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to view user"
+            )
+        
+        user = await user_service.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve user"
+        )
+
+
+@router.put("/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    update_data: UserUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Update user information"""
+    try:
+        # Check permissions - users can update their own profile or need users:update permission
+        if (user_id != current_user.get("id") and 
+            not current_user.get("is_superuser") and 
+            "users:update" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to update user"
+            )
+        
+        # Restrict certain fields for non-superusers
+        if not current_user.get("is_superuser") and user_id != current_user.get("id"):
+            # Non-superusers can't change critical fields of other users
+            restricted_fields = ["is_active", "is_verified", "is_superuser"]
+            for field in restricted_fields:
+                if getattr(update_data, field, None) is not None:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Insufficient permissions to update {field}"
+                    )
+        
+        user = await user_service.update_user(
+            user_id=user_id,
+            update_data=update_data,
+            updated_by=current_user.get("id")
+        )
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Publish user updated event
+        await publish_user_event(
+            event_type=EventType.USER_UPDATED,
+            data={
+                "user_id": user.id,
+                "email": user.email,
+                "updated_by": current_user.get("id"),
+                "updated_fields": [k for k, v in update_data.dict(exclude_unset=True).items() if v is not None]
+            },
+            user_id=current_user.get("id")
+        )
+        
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update user"
+        )
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: int,
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Delete (deactivate) a user"""
+    try:
+        # Check permissions
+        if (not current_user.get("is_superuser") and 
+            "users:delete" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to delete users"
+            )
+        
+        # Prevent self-deletion
+        if user_id == current_user.get("id"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete your own account"
+            )
+        
+        success = await user_service.delete_user(
+            user_id=user_id,
+            deleted_by=current_user.get("id")
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Publish user deleted event
+        await publish_user_event(
+            event_type=EventType.USER_DELETED,
+            data={
+                "user_id": user_id,
+                "deleted_by": current_user.get("id"),
+                "deletion_type": "soft_delete"
+            },
+            user_id=current_user.get("id")
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete user"
+        )
 
 
 @router.get("/", response_model=UserListResponse)
 async def list_users(
-    skip: int = Query(0, ge=0, description="Number of users to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Number of users to return"),
-    search: Optional[str] = Query(None, description="Search in username, email, or name"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Page size"),
+    search: Optional[str] = Query(None, description="Search term"),
     role_id: Optional[int] = Query(None, description="Filter by role ID"),
-    active_only: bool = Query(False, description="Only return active users"),
-    db: Session = Depends(get_db)
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    is_verified: Optional[bool] = Query(None, description="Filter by verified status"),
+    department: Optional[str] = Query(None, description="Filter by department"),
+    organization: Optional[str] = Query(None, description="Filter by organization"),
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
 ):
-    """List all users with optional filtering"""
-    
-    query = db.query(User).options(
-        joinedload(User.role).joinedload(Role.permissions)
-    )
-    
-    # Apply filters
-    if search:
-        search_filter = or_(
-            User.username.ilike(f"%{search}%"),
-            User.email.ilike(f"%{search}%"),
-            User.first_name.ilike(f"%{search}%"),
-            User.last_name.ilike(f"%{search}%"),
-            User.display_name.ilike(f"%{search}%")
+    """List users with filtering and pagination"""
+    try:
+        # Check permissions
+        if (not current_user.get("is_superuser") and 
+            "users:read" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to list users"
+            )
+        
+        users = await user_service.list_users(
+            page=page,
+            page_size=page_size,
+            search=search,
+            role_id=role_id,
+            is_active=is_active,
+            is_verified=is_verified,
+            department=department,
+            organization=organization
         )
-        query = query.filter(search_filter)
-    
-    if role_id is not None:
-        query = query.filter(User.role_id == role_id)
-    
-    if active_only:
-        query = query.filter(User.is_active == True)
-    
-    # Get total count
-    total = query.count()
-    
-    # Apply pagination
-    users = query.offset(skip).limit(limit).all()
-    
-    return UserListResponse(
-        users=users,
-        total=total,
-        page=skip // limit + 1,
-        page_size=limit,
-        total_pages=(total + limit - 1) // limit
-    )
-
-
-@router.get("/{user_id}", response_model=UserResponse)
-async def get_user(user_id: int, db: Session = Depends(get_db)):
-    """Get a specific user by ID"""
-    
-    user = db.query(User).options(
-        joinedload(User.role).joinedload(Role.permissions)
-    ).filter(User.id == user_id).first()
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return user
-
-
-@router.post("/", response_model=UserResponse)
-async def create_user(user_data: UserCreateRequest, db: Session = Depends(get_db)):
-    """Create a new user"""
-    
-    # Check if user already exists
-    existing_user = db.query(User).filter(
-        or_(User.email == user_data.email, User.username == user_data.username)
-    ).first()
-    
-    if existing_user:
-        if existing_user.email == user_data.email:
-            raise HTTPException(status_code=400, detail="Email already exists")
-        else:
-            raise HTTPException(status_code=400, detail="Username already exists")
-    
-    # Validate role if provided
-    if user_data.role_id:
-        role = db.query(Role).filter(Role.id == user_data.role_id).first()
-        if not role:
-            raise HTTPException(status_code=400, detail="Role not found")
-        if not role.is_active:
-            raise HTTPException(status_code=400, detail="Cannot assign inactive role")
-    
-    # Hash password
-    password_hash = pwd_context.hash(user_data.password)
-    
-    # Create user
-    user = User(
-        username=user_data.username,
-        email=user_data.email,
-        password_hash=password_hash,
-        first_name=user_data.first_name,
-        last_name=user_data.last_name,
-        display_name=user_data.display_name,
-        phone=user_data.phone,
-        department=user_data.department,
-        role_id=user_data.role_id
-    )
-    
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    
-    # Return user with role loaded
-    return db.query(User).options(
-        joinedload(User.role).joinedload(Role.permissions)
-    ).filter(User.id == user.id).first()
-
-
-@router.put("/{user_id}", response_model=UserResponse)
-async def update_user(user_id: int, user_data: UserUpdateRequest, db: Session = Depends(get_db)):
-    """Update a user"""
-    
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Check email uniqueness if changing
-    if user_data.email and user_data.email != user.email:
-        existing_user = db.query(User).filter(User.email == user_data.email).first()
-        if existing_user:
-            raise HTTPException(status_code=400, detail="Email already exists")
-    
-    # Validate role if changing
-    if user_data.role_id is not None and user_data.role_id != user.role_id:
-        if user_data.role_id:  # Not setting to null
-            role = db.query(Role).filter(Role.id == user_data.role_id).first()
-            if not role:
-                raise HTTPException(status_code=400, detail="Role not found")
-            if not role.is_active:
-                raise HTTPException(status_code=400, detail="Cannot assign inactive role")
-    
-    # Update fields
-    if user_data.email is not None:
-        user.email = user_data.email
-    if user_data.first_name is not None:
-        user.first_name = user_data.first_name
-    if user_data.last_name is not None:
-        user.last_name = user_data.last_name
-    if user_data.display_name is not None:
-        user.display_name = user_data.display_name
-    if user_data.phone is not None:
-        user.phone = user_data.phone
-    if user_data.department is not None:
-        user.department = user_data.department
-    if user_data.is_active is not None:
-        user.is_active = user_data.is_active
-    if user_data.is_verified is not None:
-        user.is_verified = user_data.is_verified
-    if user_data.role_id is not None:
-        user.role_id = user_data.role_id
-    
-    db.commit()
-    db.refresh(user)
-    
-    # Return user with role loaded
-    return db.query(User).options(
-        joinedload(User.role).joinedload(Role.permissions)
-    ).filter(User.id == user.id).first()
-
-
-@router.delete("/{user_id}")
-async def delete_user(user_id: int, db: Session = Depends(get_db)):
-    """Delete a user"""
-    
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    db.delete(user)
-    db.commit()
-    
-    return {"success": True, "message": "User deleted successfully"}
-
-
-@router.put("/{user_id}/role")
-async def update_user_role(
-    user_id: int, 
-    role_data: UserRoleUpdateRequest, 
-    db: Session = Depends(get_db)
-):
-    """Update a user's role"""
-    
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Validate role if provided
-    if role_data.role_id is not None:
-        role = db.query(Role).filter(Role.id == role_data.role_id).first()
-        if not role:
-            raise HTTPException(status_code=404, detail="Role not found")
-        if not role.is_active:
-            raise HTTPException(status_code=400, detail="Cannot assign inactive role")
-    
-    user.role_id = role_data.role_id
-    db.commit()
-    
-    return {
-        "success": True,
-        "message": f"User role {'updated' if role_data.role_id else 'removed'} successfully",
-        "user_id": user_id,
-        "role_id": role_data.role_id
-    }
-
-
-@router.put("/{user_id}/password")
-async def change_user_password(
-    user_id: int, 
-    password_data: UserPasswordChangeRequest, 
-    db: Session = Depends(get_db)
-):
-    """Change a user's password"""
-    
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Hash the new password
-    password_hash = pwd_context.hash(password_data.new_password)
-    
-    # Update the password
-    user.password_hash = password_hash
-    db.commit()
-    
-    return {
-        "success": True,
-        "message": "Password changed successfully",
-        "user_id": user_id
-    }
-
-
-@router.get("/{user_id}/permissions")
-async def get_user_permissions(user_id: int, db: Session = Depends(get_db)):
-    """Get all permissions for a user (through their role)"""
-    
-    user = db.query(User).options(
-        joinedload(User.role).joinedload(Role.permissions)
-    ).filter(User.id == user_id).first()
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    permissions = user.role.permissions if user.role else []
-    
-    return {
-        "user_id": user_id,
-        "role": user.role.name if user.role else None,
-        "permissions": [
-            {
-                "id": p.id,
-                "name": p.name,
-                "display_name": p.display_name,
-                "resource": p.resource,
-                "action": p.action,
-                "category": p.category
-            }
-            for p in permissions if p.is_active
-        ]
-    }
+        
+        return users
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list users: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve users"
+        )
 
 
 # =============================================================================
-# Authentication Endpoint (for auth-service)
+# User Role Management
 # =============================================================================
 
-class AuthenticateRequest(BaseModel):
-    username: str
-    password: str
-
-class AuthenticateResponse(BaseModel):
-    success: bool
-    user_id: Optional[int] = None
-    username: Optional[str] = None
-    email: Optional[str] = None
-    role: Optional[str] = None
-    permissions: Optional[List[str]] = None
-    message: Optional[str] = None
-
-
-@router.post("/authenticate")
-async def authenticate_user(auth_data: AuthenticateRequest, db: Session = Depends(get_db)):
-    """Authenticate user credentials (used by auth-service)"""
-    
-    # Find user by username or email
-    user = db.query(User).options(
-        joinedload(User.role).joinedload(Role.permissions)
-    ).filter(
-        or_(User.username == auth_data.username, User.email == auth_data.username)
-    ).first()
-    
-    if not user:
-        return AuthenticateResponse(
-            success=False,
-            message="Invalid username or password"
+@router.post("/{user_id}/roles", status_code=status.HTTP_200_OK)
+async def assign_user_roles(
+    user_id: int,
+    role_data: UserRoleAssignRequest,
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Assign roles to a user"""
+    try:
+        # Check permissions
+        if (not current_user.get("is_superuser") and 
+            "users:manage_roles" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to manage user roles"
+            )
+        
+        success = await user_service.assign_roles(
+            user_id=user_id,
+            role_ids=role_data.role_ids,
+            assigned_by=current_user.get("id")
         )
-    
-    # Check if user is active
-    if not user.is_active:
-        return AuthenticateResponse(
-            success=False,
-            message="Account is disabled"
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to assign roles (user not found or invalid roles)"
+            )
+        
+        # Publish role assignment event
+        await publish_user_event(
+            event_type=EventType.USER_ROLES_ASSIGNED,
+            data={
+                "user_id": user_id,
+                "role_ids": role_data.role_ids,
+                "assigned_by": current_user.get("id")
+            },
+            user_id=current_user.get("id")
         )
-    
-    # Verify password
-    if not pwd_context.verify(auth_data.password, user.password_hash):
-        return AuthenticateResponse(
-            success=False,
-            message="Invalid username or password"
+        
+        return {"success": True, "message": "Roles assigned successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to assign roles to user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to assign roles"
         )
-    
-    # Get user permissions
-    permissions = []
-    if user.role and user.role.permissions:
-        permissions = [p.name for p in user.role.permissions if p.is_active]
-    
-    return {
-        "success": True,
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "role": user.role.name if user.role else None,
-            "is_active": user.is_active,
-            "permissions": permissions
-        }
-    }
+
+
+@router.delete("/{user_id}/roles", status_code=status.HTTP_200_OK)
+async def remove_user_roles(
+    user_id: int,
+    role_data: UserRoleAssignRequest,
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Remove roles from a user"""
+    try:
+        # Check permissions
+        if (not current_user.get("is_superuser") and 
+            "users:manage_roles" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to manage user roles"
+            )
+        
+        success = await user_service.remove_roles(
+            user_id=user_id,
+            role_ids=role_data.role_ids,
+            removed_by=current_user.get("id")
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Publish role removal event
+        await publish_user_event(
+            event_type=EventType.USER_ROLES_REMOVED,
+            data={
+                "user_id": user_id,
+                "role_ids": role_data.role_ids,
+                "removed_by": current_user.get("id")
+            },
+            user_id=current_user.get("id")
+        )
+        
+        return {"success": True, "message": "Roles removed successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to remove roles from user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to remove roles"
+        )
+
+
+# =============================================================================
+# User Activity and Statistics
+# =============================================================================
+
+@router.get("/{user_id}/activity", response_model=List[UserActivityLogResponse])
+async def get_user_activity(
+    user_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Page size"),
+    activity_type: Optional[str] = Query(None, description="Filter by activity type"),
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Get user activity logs"""
+    try:
+        # Check permissions - users can view their own activity or need users:read permission
+        if (user_id != current_user.get("id") and 
+            not current_user.get("is_superuser") and 
+            "users:read" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to view user activity"
+            )
+        
+        activity_logs = await user_service.get_user_activity_logs(
+            user_id=user_id,
+            page=page,
+            page_size=page_size,
+            activity_type=activity_type
+        )
+        
+        return activity_logs
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get user activity for {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve user activity"
+        )
+
+
+@router.get("/stats/overview", response_model=UserStatsResponse)
+async def get_user_stats(
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Get user statistics overview"""
+    try:
+        # Check permissions
+        if (not current_user.get("is_superuser") and 
+            "users:read" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to view user statistics"
+            )
+        
+        stats = await user_service.get_user_stats()
+        return stats
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get user stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve user statistics"
+        )
+
+
+# =============================================================================
+# User Search and Lookup
+# =============================================================================
+
+@router.get("/by-email/{email}", response_model=UserResponse)
+async def get_user_by_email(
+    email: str,
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Get user by email address"""
+    try:
+        # Check permissions
+        if (not current_user.get("is_superuser") and 
+            "users:read" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to lookup users"
+            )
+        
+        user = await user_service.get_user_by_email(email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get user by email {email}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve user"
+        )
+
+
+@router.get("/by-username/{username}", response_model=UserResponse)
+async def get_user_by_username(
+    username: str,
+    current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Get user by username"""
+    try:
+        # Check permissions
+        if (not current_user.get("is_superuser") and 
+            "users:read" not in current_user.get("permissions", [])):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to lookup users"
+            )
+        
+        user = await user_service.get_user_by_username(username)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get user by username {username}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve user"
+        )

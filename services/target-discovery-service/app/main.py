@@ -13,9 +13,9 @@ import uvicorn
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.core.events import event_publisher
+# Removed: event_publisher - Using direct HTTP communication
 from app.api.v1 import discovery, devices, templates, health
-from opsconductor_shared.models.base import ServiceType, EventType
+# Removed: ServiceType, EventType - Using direct HTTP communication
 
 # Configure logging
 logging.basicConfig(

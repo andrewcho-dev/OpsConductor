@@ -1,5 +1,0 @@
-192.168.1.10 - - [15/Jan/2024:10:30:00 +0000] "GET / HTTP/1.1" 200 1234 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-192.168.1.10 - - [15/Jan/2024:10:30:15 +0000] "POST /api/auth/login HTTP/1.1" 200 567 "https://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-192.168.1.100 - - [15/Jan/2024:10:31:15 +0000] "POST /api/auth/login HTTP/1.1" 401 89 "https://localhost/" "curl/7.68.0"
-192.168.1.10 - - [15/Jan/2024:10:32:00 +0000] "GET /api/v3/targets HTTP/1.1" 200 2345 "https://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-192.168.1.10 - - [15/Jan/2024:10:33:00 +0000] "POST /api/v3/jobs HTTP/1.1" 201 456 "https://localhost/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
